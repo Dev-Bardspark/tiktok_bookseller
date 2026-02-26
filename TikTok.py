@@ -6,7 +6,7 @@ from psycopg2.extras import RealDictCursor
 import hashlib
 from datetime import datetime
 from enum import Enum
-import json
+import json  # Still needed for other JSON operations
 
 # ============================================================================
 # PAGE CONFIG
@@ -108,7 +108,7 @@ def get_all_genres():
     
     try:
         cur = conn.cursor()
-        # This is a bit complex with JSONB, but works
+        # This extracts all unique genre strings from the JSONB arrays
         cur.execute("""
             SELECT DISTINCT jsonb_array_elements_text(genres) as genre
             FROM arc_readers_central
@@ -248,9 +248,10 @@ elif page == "📚 ARC Readers":
                 st.markdown(f"**Name:** {reader['display_name']}")
                 st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                 
-                # Display genres
+                # FIXED: genres is already a list from the database
                 if reader['genres']:
-                    genre_list = json.loads(reader['genres'])
+                    # No json.loads() needed - it's already a Python list!
+                    genre_list = reader['genres']
                     st.markdown(f"**Genres:** {', '.join(genre_list)}")
                 
                 # Email if available
@@ -307,8 +308,9 @@ elif page == "❤️ My Saved Readers":
                     st.markdown(f"**Name:** {reader['display_name']}")
                     st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                     
+                    # FIXED: Same fix here for saved readers
                     if reader['genres']:
-                        genre_list = json.loads(reader['genres'])
+                        genre_list = reader['genres']
                         st.markdown(f"**Genres:** {', '.join(genre_list)}")
                     
                     if reader['email']:
