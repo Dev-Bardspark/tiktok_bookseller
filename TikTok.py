@@ -1,4 +1,4 @@
-# tiktok.py
+# TikTok.py
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -8,8 +8,7 @@ from datetime import datetime
 from enum import Enum
 import json
 
-# ONLY ADD THIS ONE IMPORT
-import BookReader
+# DO NOT import BookReader at the top - we'll import it only when needed
 
 # ============================================================================
 # PAGE CONFIG
@@ -68,7 +67,7 @@ init_connection()
 # DATA ACCESS FUNCTIONS
 # ============================================================================
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def get_arc_readers_by_genre(genre=None, min_followers=0):
     """Get ARC readers filtered by genre"""
     conn = get_db_connection()
@@ -79,7 +78,6 @@ def get_arc_readers_by_genre(genre=None, min_followers=0):
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         if genre and genre != "All":
-            # Use JSONB containment query
             cur.execute("""
                 SELECT * FROM arc_readers_central 
                 WHERE genres @> %s 
@@ -111,7 +109,6 @@ def get_all_genres():
     
     try:
         cur = conn.cursor()
-        # This extracts all unique genre strings from the JSONB arrays
         cur.execute("""
             SELECT DISTINCT jsonb_array_elements_text(genres) as genre
             FROM arc_readers_central
@@ -143,26 +140,30 @@ if 'current_user' not in st.session_state:
 st.sidebar.title("📱 BookTok Machine")
 st.sidebar.markdown("---")
 
-# Simple login (just for demo)
+# Simple login
 st.sidebar.subheader("👤 Author Demo")
 if st.session_state.current_user is None:
-    author_name = st.sidebar.text_input("Your name", value="Demo Author")
-    if st.sidebar.button("Login as Demo"):
+    author_name = st.sidebar.text_input("Your name", value="Demo Author", key="login_name")
+    if st.sidebar.button("Login as Demo", key="login_button"):
         st.session_state.current_user = {"id": 1, "name": author_name}
         st.rerun()
 else:
     st.sidebar.success(f"Logged in as: {st.session_state.current_user['name']}")
-    if st.sidebar.button("Logout"):
+    if st.sidebar.button("Logout", key="logout_button"):
         st.session_state.current_user = None
         st.rerun()
 
 st.sidebar.markdown("---")
 
-# Navigation - ONLY CHANGE: Add "📖 Book Reader" to the menu
+# Navigation - Added "📖 Book Reader" to menu
 page = st.sidebar.radio(
     "Menu",
-    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"]
+    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"],
+    key="navigation"
 )
+
+# Store current page in session state to help BookReader know when to render
+st.session_state.current_page = page
 
 # ============================================================================
 # DASHBOARD PAGE
@@ -172,7 +173,6 @@ if page == "🏠 Dashboard":
     st.title("📱 Your BookTok Machine")
     st.markdown("### Welcome back!")
     
-    # Get stats
     conn = get_db_connection()
     if conn:
         cur = conn.cursor()
@@ -196,42 +196,37 @@ if page == "🏠 Dashboard":
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("🔍 Find ARC Readers", use_container_width=True):
+        if st.button("🔍 Find ARC Readers", use_container_width=True, key="dashboard_find"):
             st.session_state.page = "📚 ARC Readers"
             st.rerun()
     with col2:
-        if st.button("❤️ View My Saved", use_container_width=True):
+        if st.button("❤️ View My Saved", use_container_width=True, key="dashboard_saved"):
             st.session_state.page = "❤️ My Saved Readers"
             st.rerun()
 
 # ============================================================================
-# ARC READERS PAGE (with filtering)
+# ARC READERS PAGE
 # ============================================================================
 
 elif page == "📚 ARC Readers":
     st.title("📚 ARC Reader Database")
     
-    # Get unique genres for filter
     genres = get_all_genres()
     
-    # Filters
     col1, col2 = st.columns(2)
     with col1:
-        selected_genre = st.selectbox("Filter by genre", genres)
+        selected_genre = st.selectbox("Filter by genre", genres, key="genre_filter")
     with col2:
-        min_followers = st.slider("Minimum followers", 0, 50000, 1000, step=1000)
+        min_followers = st.slider("Minimum followers", 0, 50000, 1000, step=1000, key="follower_slider")
     
-    # Search box
-    search = st.text_input("🔍 Search by username or bio", "")
+    search = st.text_input("🔍 Search by username or bio", "", key="search_input")
     
-    # Load data
     with st.spinner("Loading readers..."):
         readers = get_arc_readers_by_genre(
             selected_genre if selected_genre != "All" else None,
             min_followers
         )
     
-    # Filter by search
     if search:
         search_lower = search.lower()
         readers = [
@@ -242,7 +237,6 @@ elif page == "📚 ARC Readers":
     
     st.markdown(f"### Found {len(readers)} readers")
     
-    # Display readers
     for reader in readers:
         with st.expander(f"@{reader['username']} - {reader['follower_count']:,} followers"):
             col1, col2 = st.columns([3, 1])
@@ -251,18 +245,14 @@ elif page == "📚 ARC Readers":
                 st.markdown(f"**Name:** {reader['display_name']}")
                 st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                 
-                # FIXED: genres is already a list from the database
                 if reader['genres']:
-                    # No json.loads() needed - it's already a Python list!
                     genre_list = reader['genres']
                     st.markdown(f"**Genres:** {', '.join(genre_list)}")
                 
-                # Email if available
                 if reader['email']:
                     st.success(f"📧 {reader['email']}")
             
             with col2:
-                # Check if already saved
                 is_saved = any(r['id'] == reader['id'] for r in st.session_state.saved_readers)
                 
                 if not is_saved:
@@ -283,26 +273,25 @@ elif page == "❤️ My Saved Readers":
     if not st.session_state.saved_readers:
         st.info("You haven't saved any readers yet. Go to the ARC Readers page to find some!")
         
-        if st.button("🔍 Find ARC Readers Now"):
+        if st.button("🔍 Find ARC Readers Now", key="find_now"):
             st.session_state.page = "📚 ARC Readers"
             st.rerun()
     else:
         st.markdown(f"### You have {len(st.session_state.saved_readers)} saved readers")
         
-        # Option to export
-        if st.button("📥 Export as CSV"):
+        if st.button("📥 Export as CSV", key="export_csv"):
             df = pd.DataFrame(st.session_state.saved_readers)
             csv = df.to_csv(index=False)
             st.download_button(
                 "Download CSV",
                 csv,
                 "my_saved_readers.csv",
-                "text/csv"
+                "text/csv",
+                key="download_csv"
             )
         
         st.markdown("---")
         
-        # Display saved readers
         for i, reader in enumerate(st.session_state.saved_readers):
             with st.expander(f"@{reader['username']} - {reader['follower_count']:,} followers"):
                 col1, col2 = st.columns([3, 1])
@@ -311,7 +300,6 @@ elif page == "❤️ My Saved Readers":
                     st.markdown(f"**Name:** {reader['display_name']}")
                     st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                     
-                    # FIXED: Same fix here for saved readers
                     if reader['genres']:
                         genre_list = reader['genres']
                         st.markdown(f"**Genres:** {', '.join(genre_list)}")
@@ -378,12 +366,14 @@ Same [TROPE] vibes!
                 st.success("Template selected!")
 
 # ============================================================================
-# BOOK READER PAGE - NEW SECTION (Calls the BookReader module)
+# BOOK READER PAGE - Import and use BookReader only when on this page
 # ============================================================================
 
 elif page == "📖 Book Reader":
-    # This calls the function from BookReader.py
-     BookReader.show_manuscript_tools()
+    # Import BookReader ONLY when this page is selected
+    # This prevents duplicate widget errors
+    import BookReader
+    BookReader.show_manuscript_tools()
 
 # ============================================================================
 # FOOTER
