@@ -66,10 +66,18 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
     script_options = []
     for i, script in enumerate(scripts):
         if isinstance(script, dict):
-            hook = script.get('hook', 'No hook')[:50]
-            script_options.append(f"Script {i+1}: {hook}...")
+            # Try different possible field names for the hook/preview
+            preview = (
+                script.get('hook') or 
+                script.get('title') or 
+                script.get('headline') or 
+                script.get('text') or 
+                script.get('voiceover') or 
+                str(script)[:50]
+            )
+            script_options.append(f"Script {i+1}: {str(preview)[:50]}...")
         else:
-            script_options.append(f"Script {i+1}")
+            script_options.append(f"Script {i+1}: {str(script)[:50]}...")
     
     if script_options:
         selected_idx = st.selectbox(
@@ -84,18 +92,11 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
         # Display the full script
         with st.expander("📝 View Full Script", expanded=True):
             if isinstance(selected_script, dict):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown("**Hook:**")
-                    st.info(selected_script.get('hook', 'N/A'))
-                    st.markdown("**Visuals:**")
-                    st.write(selected_script.get('visuals', 'N/A'))
-                with col2:
-                    st.markdown("**Voiceover:**")
-                    st.info(selected_script.get('voiceover', 'N/A'))
-                    st.markdown("**Music:**")
-                    st.write(selected_script.get('music', 'N/A'))
-                st.markdown(f"**CTA:** {selected_script.get('cta', 'N/A')}")
+                # Show all fields in the dictionary
+                for key, value in selected_script.items():
+                    if value:  # Only show if value exists
+                        st.markdown(f"**{key.title()}:**")
+                        st.info(str(value))
             else:
                 st.write(selected_script)
     else:
