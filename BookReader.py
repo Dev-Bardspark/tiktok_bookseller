@@ -96,24 +96,24 @@ def show_manuscript_tools():
         
         if uploaded_file:
             # Extract text
-            with st.spinner("📄 Extracting text..."):
+            with st.spinner("📄 Extracting text from file..."):
                 manuscript_text = extract_text_from_file(uploaded_file)
             
             if manuscript_text:
                 st.success(f"✅ Extracted {len(manuscript_text)} characters")
                 
-                with st.expander("Preview"):
-                    # Show first 1000 chars as preview only
+                with st.expander("Preview first 1000 characters"):
                     st.text(manuscript_text[:1000] + "..." if len(manuscript_text) > 1000 else manuscript_text)
                 
-                # Analyze button - NO SIZE LIMIT
+                # Analyze button
                 if st.button("🔍 Analyze Manuscript", type="primary", key="analyze_button", use_container_width=True):
-                    analysis = analyze_manuscript_text(manuscript_text)
+                    with st.spinner("🔄 Analyzing manuscript with AI... (this may take a minute)"):
+                        analysis = analyze_manuscript_text(manuscript_text)
                     
                     if analysis:
                         st.session_state.manuscript_analysis = analysis
                         st.session_state.generated_assets = {}
-                        st.success("✅ Analysis complete!")
+                        st.success("✅ Analysis complete! Go to the Analysis Results tab to see results.")
                         st.rerun()
     
     # Tab 2: Analysis Results
@@ -123,20 +123,20 @@ def show_manuscript_tools():
             
             # Generate assets button
             if st.button("🚀 Generate All Marketing Assets", type="primary", key="generate_button", use_container_width=True):
-                with st.spinner("Generating assets..."):
+                with st.spinner("Generating marketing assets... (this may take a minute)"):
                     assets = generate_all_assets(st.session_state.manuscript_analysis)
                     st.session_state.generated_assets = assets
-                    st.success("✅ Assets generated!")
+                    st.success("✅ Assets generated! Go to the Generated Assets tab to see them.")
                     st.rerun()
         else:
-            st.info("No manuscript analyzed yet. Upload a file in the Upload tab.")
+            st.info("No manuscript analyzed yet. Upload a file in the Upload tab and click Analyze.")
     
     # Tab 3: Generated Assets
     with tab3:
         if st.session_state.generated_assets:
             display_assets(st.session_state.generated_assets)
         else:
-            st.info("No assets generated yet. Analyze a manuscript first.")
+            st.info("No assets generated yet. Analyze a manuscript first, then click Generate.")
 
 
 # ============================================================================
@@ -178,16 +178,21 @@ def analyze_manuscript_text(text: str) -> Dict:
     """Analyze manuscript with OpenAI using GPT-4o mini"""
     
     # Initialize the client
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return None
     
-    # Use GPT-4o mini as default (supports JSON mode and large context)
+    # Use GPT-4o mini as default
     model_to_use = st.session_state.get('model', 'gpt-4o-mini')
     
     # GPT-4o mini has 128k context - plenty for most books
     # But if it's extremely long, we'll use the first 500k chars to be safe
-    if len(text) > 500000:
+    original_length = len(text)
+    if original_length > 500000:
         text = text[:500000]
-        st.info("Using first 500,000 characters of your manuscript for analysis.")
+        st.warning(f"Manuscript is very long ({original_length} chars). Using first 500,000 characters for analysis.")
     
     prompt = f"""
     Analyze this manuscript and return JSON with:
@@ -230,48 +235,65 @@ def analyze_manuscript_text(text: str) -> Dict:
                 temperature=0.3
             )
         
-        return json.loads(response.choices[0].message.content)
+        # Parse the response
+        result = json.loads(response.choices[0].message.content)
+        return result
         
     except Exception as e:
         st.error(f"Analysis failed: {str(e)}")
+        # Show more details for debugging
+        if hasattr(e, 'response'):
+            st.error(f"Response details: {e.response.text if hasattr(e, 'response') else 'No details'}")
         return None
 
 
 def generate_book_blurb(analysis: Dict) -> str:
     """Generate book blurb"""
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return "Error initializing client"
     
     prompt = f"""
     Write a compelling book blurb (150 words) for:
     Title: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Characters: {', '.join(analysis.get('main_characters', ['']))}
-    Themes: {', '.join(analysis.get('central_themes', ['']))}
+    Characters: {', '.join(analysis.get('main_characters', [''])) if isinstance(analysis.get('main_characters'), list) else analysis.get('main_characters', '')}
+    Themes: {', '.join(analysis.get('central_themes', [''])) if isinstance(analysis.get('central_themes'), list) else analysis.get('central_themes', '')}
     Tone: {analysis.get('tone', '')}
     """
     
-    response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4o-mini'),
-        messages=[
-            {"role": "system", "content": "You are a professional copywriter specializing in book descriptions."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=st.session_state.get('temperature', 0.7),
-        max_tokens=300
-    )
-    
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model=st.session_state.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You are a professional copywriter specializing in book descriptions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=st.session_state.get('temperature', 0.7),
+            max_tokens=300
+        )
+        
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Blurb generation failed: {str(e)}")
+        return f"Error generating blurb: {str(e)}"
 
 
 def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
     """Generate TikTok video scripts"""
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return [{"error": str(e)}]
     
     prompt = f"""
     Create 3 TikTok video scripts (15-30 seconds each) for this book:
     Title: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
+    Plot Hooks: {', '.join(analysis.get('plot_hooks', [''])) if isinstance(analysis.get('plot_hooks'), list) else analysis.get('plot_hooks', '')}
     Tone: {analysis.get('tone', '')}
     
     For each script include:
@@ -284,22 +306,31 @@ def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
     Return as JSON array.
     """
     
-    response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4o-mini'),
-        messages=[
-            {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.8,
-        response_format={"type": "json_object"}
-    )
-    
-    return json.loads(response.choices[0].message.content)
+    try:
+        response = client.chat.completions.create(
+            model=st.session_state.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result if isinstance(result, list) else [result]
+    except Exception as e:
+        st.error(f"TikTok script generation failed: {str(e)}")
+        return [{"error": str(e)}]
 
 
 def generate_email_sequence(analysis: Dict) -> Dict:
     """Generate launch email sequence"""
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return {"error": str(e)}
     
     prompt = f"""
     Create 3 emails for book launch:
@@ -310,34 +341,42 @@ def generate_email_sequence(analysis: Dict) -> Dict:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
     Target Audience: {analysis.get('target_audience', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
+    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', [''])) if isinstance(analysis.get('unique_selling_points'), list) else analysis.get('unique_selling_points', '')}
     
     Return as JSON with keys: prelaunch_email, launch_email, followup_email
     Each should include subject line and body.
     """
     
-    response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4o-mini'),
-        messages=[
-            {"role": "system", "content": "You are an email marketing specialist for authors. Return JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        response_format={"type": "json_object"}
-    )
-    
-    return json.loads(response.choices[0].message.content)
+    try:
+        response = client.chat.completions.create(
+            model=st.session_state.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You are an email marketing specialist for authors. Return JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"Email sequence generation failed: {str(e)}")
+        return {"error": str(e)}
 
 
 def generate_social_posts(analysis: Dict) -> List[Dict]:
     """Generate social media posts"""
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return [{"error": str(e)}]
     
     prompt = f"""
     Create 5 social media posts to promote this book:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
+    Plot Hooks: {', '.join(analysis.get('plot_hooks', [''])) if isinstance(analysis.get('plot_hooks'), list) else analysis.get('plot_hooks', '')}
     
     For each post, include:
     - platform: (mix of Instagram, TikTok, Twitter, Facebook)
@@ -348,28 +387,37 @@ def generate_social_posts(analysis: Dict) -> List[Dict]:
     Return as JSON array.
     """
     
-    response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4o-mini'),
-        messages=[
-            {"role": "system", "content": "You are a social media manager for authors. Return JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.8,
-        response_format={"type": "json_object"}
-    )
-    
-    return json.loads(response.choices[0].message.content)
+    try:
+        response = client.chat.completions.create(
+            model=st.session_state.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You are a social media manager for authors. Return JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        return result if isinstance(result, list) else [result]
+    except Exception as e:
+        st.error(f"Social posts generation failed: {str(e)}")
+        return [{"error": str(e)}]
 
 
 def generate_ad_copy(analysis: Dict) -> Dict:
     """Generate ad copy"""
-    client = OpenAI(api_key=st.session_state.openai_api_key)
+    try:
+        client = OpenAI(api_key=st.session_state.openai_api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize OpenAI client: {str(e)}")
+        return {"error": str(e)}
     
     prompt = f"""
     Create 3 ad variations for Facebook/Amazon ads:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
+    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', [''])) if isinstance(analysis.get('unique_selling_points'), list) else analysis.get('unique_selling_points', '')}
     Target Audience: {analysis.get('target_audience', '')}
     
     For each variation, provide:
@@ -380,28 +428,55 @@ def generate_ad_copy(analysis: Dict) -> Dict:
     Return as JSON with keys: ad_variation_1, ad_variation_2, ad_variation_3
     """
     
-    response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4o-mini'),
-        messages=[
-            {"role": "system", "content": "You are a direct response copywriter for book advertising. Return JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        response_format={"type": "json_object"}
-    )
-    
-    return json.loads(response.choices[0].message.content)
+    try:
+        response = client.chat.completions.create(
+            model=st.session_state.get('model', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": "You are a direct response copywriter for book advertising. Return JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"Ad copy generation failed: {str(e)}")
+        return {"error": str(e)}
 
 
 def generate_all_assets(analysis: Dict) -> Dict:
     """Generate all marketing assets"""
     assets = {}
     
+    # Create progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("Generating book blurb...")
     assets['blurb'] = generate_book_blurb(analysis)
+    progress_bar.progress(20)
+    
+    status_text.text("Creating TikTok scripts...")
     assets['tiktok_scripts'] = generate_tiktok_scripts(analysis)
+    progress_bar.progress(40)
+    
+    status_text.text("Writing email sequence...")
     assets['emails'] = generate_email_sequence(analysis)
+    progress_bar.progress(60)
+    
+    status_text.text("Crafting social posts...")
     assets['social_posts'] = generate_social_posts(analysis)
+    progress_bar.progress(80)
+    
+    status_text.text("Generating ad copy...")
     assets['ad_copy'] = generate_ad_copy(analysis)
+    progress_bar.progress(100)
+    
+    status_text.text("✅ All assets generated!")
+    time.sleep(0.5)
+    status_text.empty()
+    progress_bar.empty()
     
     return assets
 
