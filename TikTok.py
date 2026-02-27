@@ -1,4 +1,4 @@
-# booktok_machine_supabase.py
+# tiktok.py
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -6,7 +6,10 @@ from psycopg2.extras import RealDictCursor
 import hashlib
 from datetime import datetime
 from enum import Enum
-import json  # Still needed for other JSON operations
+import json
+
+# ONLY ADD THIS ONE IMPORT
+import BookReader
 
 # ============================================================================
 # PAGE CONFIG
@@ -155,10 +158,10 @@ else:
 
 st.sidebar.markdown("---")
 
-# Navigation
+# Navigation - ONLY CHANGE: Add "📖 Book Reader" to the menu
 page = st.sidebar.radio(
     "Menu",
-    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates"]
+    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"]
 )
 
 # ============================================================================
@@ -373,6 +376,14 @@ Same [TROPE] vibes!
             if st.button(f"Use This Template", key=tid):
                 st.session_state['selected_template'] = template
                 st.success("Template selected!")
+
+# ============================================================================
+# BOOK READER PAGE - NEW SECTION (Calls the BookReader module)
+# ============================================================================
+
+elif page == "📖 Book Reader":
+    # This calls the function from BookReader.py
+    BookReader.show_manuscript_tools()
 
 # ============================================================================
 # FOOTER
