@@ -1,6 +1,6 @@
 # BookReader.py
 import streamlit as st
-import openai
+from openai import OpenAI
 import PyPDF2
 import docx
 import json
@@ -42,14 +42,13 @@ def show_manuscript_tools():
                 api_key = st.text_input(
                     "OpenAI API Key",
                     type="password",
-                    key="openai_api_key_input",  # Unique key
+                    key="openai_api_key_input",
                     help="Get your key at https://platform.openai.com"
                 )
                 
                 if api_key:
                     if st.button("Connect", key="connect_api_button"):
                         st.session_state.openai_api_key = api_key
-                        openai.api_key = api_key
                         st.session_state.api_configured = True
                         st.rerun()
             else:
@@ -104,9 +103,10 @@ def show_manuscript_tools():
                 st.success(f"✅ Extracted {len(manuscript_text)} characters")
                 
                 with st.expander("Preview"):
+                    # Show first 1000 chars as preview only
                     st.text(manuscript_text[:1000] + "..." if len(manuscript_text) > 1000 else manuscript_text)
                 
-                # Analyze button
+                # Analyze button - NO SIZE LIMIT
                 if st.button("🔍 Analyze Manuscript", type="primary", key="analyze_button", use_container_width=True):
                     analysis = analyze_manuscript_text(manuscript_text)
                     
@@ -175,34 +175,38 @@ def extract_text_from_file(uploaded_file) -> Optional[str]:
 
 
 def analyze_manuscript_text(text: str) -> Dict:
-    """Analyze manuscript with OpenAI"""
+    """Analyze manuscript with OpenAI - NO SIZE LIMIT"""
     
-    # Truncate if too long
-    if len(text) > 15000:
-        text = text[:15000] + "... [truncated]"
-        st.warning("Text truncated for API limits")
+    # Initialize the client
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
+    # For very long texts, use gpt-3.5-turbo-16k which has larger context
+    model_to_use = st.session_state.get('model', 'gpt-4')
+    if len(text) > 100000 and model_to_use == 'gpt-4':
+        st.info("Large manuscript detected. Using gpt-3.5-turbo-16k for better handling.")
+        model_to_use = 'gpt-3.5-turbo-16k'
     
     prompt = f"""
     Analyze this manuscript and return JSON with:
-    - title: The book title
-    - genre: Primary genre
-    - main_characters: List of main characters
-    - central_themes: 3-5 themes
-    - target_audience: Who would enjoy this
-    - unique_selling_points: What makes it special
-    - tone: Emotional atmosphere
+    - title: The book title (suggest one if unclear)
+    - genre: Primary genre and subgenres
+    - main_characters: List of main characters with brief descriptions
+    - central_themes: 3-5 core themes explored
+    - target_audience: Who would most enjoy this book?
+    - unique_selling_points: What makes it special/different?
+    - tone: Emotional atmosphere (e.g., suspenseful, humorous, melancholy)
     - plot_hooks: 3 compelling moments for teasers
-    - comparable_titles: 2-3 similar books
+    - comparable_titles: 2-3 well-known books similar in style/theme
     
     Manuscript:
     {text}
     """
     
     try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
+        response = client.chat.completions.create(
+            model=model_to_use,
             messages=[
-                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
+                {"role": "system", "content": "You are a literary analyst and marketing expert. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
@@ -218,21 +222,24 @@ def analyze_manuscript_text(text: str) -> Dict:
 
 def generate_book_blurb(analysis: Dict) -> str:
     """Generate book blurb"""
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
     prompt = f"""
     Write a compelling book blurb (150 words) for:
     Title: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
     Characters: {', '.join(analysis.get('main_characters', ['']))}
     Themes: {', '.join(analysis.get('central_themes', ['']))}
+    Tone: {analysis.get('tone', '')}
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=st.session_state.get('model', 'gpt-4'),
         messages=[
-            {"role": "system", "content": "You are a copywriter."},
+            {"role": "system", "content": "You are a professional copywriter specializing in book descriptions."},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7,
+        temperature=st.session_state.get('temperature', 0.7),
         max_tokens=300
     )
     
@@ -241,20 +248,29 @@ def generate_book_blurb(analysis: Dict) -> str:
 
 def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
     """Generate TikTok video scripts"""
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
     prompt = f"""
     Create 3 TikTok video scripts (15-30 seconds each) for this book:
     Title: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
     Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
+    Tone: {analysis.get('tone', '')}
     
-    For each script include: hook, visuals, voiceover, music, cta
+    For each script include:
+    - hook: The first 3 seconds to grab attention
+    - visuals: Scene descriptions
+    - voiceover: The spoken text
+    - music: Background music suggestion
+    - cta: Call to action
+    
     Return as JSON array.
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=st.session_state.get('model', 'gpt-4'),
         messages=[
-            {"role": "system", "content": "You are a viral video creator. Return JSON."},
+            {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return JSON."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.8,
@@ -266,21 +282,27 @@ def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
 
 def generate_email_sequence(analysis: Dict) -> Dict:
     """Generate launch email sequence"""
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
     prompt = f"""
     Create 3 emails for book launch:
-    1. Pre-launch teaser
-    2. Launch day announcement
-    3. Follow-up with reviews
+    1. Pre-launch teaser email
+    2. Launch day announcement email  
+    3. Follow-up email with reviews/social proof
     
     Book: {analysis.get('title', 'Untitled')}
-    Target: {analysis.get('target_audience', '')}
-    Return as JSON.
+    Genre: {analysis.get('genre', '')}
+    Target Audience: {analysis.get('target_audience', '')}
+    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
+    
+    Return as JSON with keys: prelaunch_email, launch_email, followup_email
+    Each should include subject line and body.
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=st.session_state.get('model', 'gpt-4'),
         messages=[
-            {"role": "system", "content": "You are an email marketer. Return JSON."},
+            {"role": "system", "content": "You are an email marketing specialist for authors. Return JSON."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.7,
@@ -292,19 +314,27 @@ def generate_email_sequence(analysis: Dict) -> Dict:
 
 def generate_social_posts(analysis: Dict) -> List[Dict]:
     """Generate social media posts"""
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
     prompt = f"""
-    Create 5 social media posts for:
+    Create 5 social media posts to promote this book:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
+    Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
     
-    Include platform, caption, hashtags for each.
+    For each post, include:
+    - platform: (mix of Instagram, TikTok, Twitter, Facebook)
+    - caption: The post text
+    - hashtags: 3-5 relevant hashtags
+    - visual_suggestion: What image/video to use
+    
     Return as JSON array.
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=st.session_state.get('model', 'gpt-4'),
         messages=[
-            {"role": "system", "content": "You are a social media manager. Return JSON."},
+            {"role": "system", "content": "You are a social media manager for authors. Return JSON."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.8,
@@ -316,17 +346,27 @@ def generate_social_posts(analysis: Dict) -> List[Dict]:
 
 def generate_ad_copy(analysis: Dict) -> Dict:
     """Generate ad copy"""
+    client = OpenAI(api_key=st.session_state.openai_api_key)
+    
     prompt = f"""
-    Create 3 ad variations for Facebook/Amazon:
+    Create 3 ad variations for Facebook/Amazon ads:
     Book: {analysis.get('title', 'Untitled')}
-    USP: {', '.join(analysis.get('unique_selling_points', ['']))}
-    Return as JSON with headline, text, cta for each.
+    Genre: {analysis.get('genre', '')}
+    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
+    Target Audience: {analysis.get('target_audience', '')}
+    
+    For each variation, provide:
+    - headline: Catchy headline (max 5 words)
+    - text: Primary ad text (1-2 sentences)
+    - cta: Call to action
+    
+    Return as JSON with keys: ad_variation_1, ad_variation_2, ad_variation_3
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=st.session_state.get('model', 'gpt-4'),
         messages=[
-            {"role": "system", "content": "You are an ad copywriter. Return JSON."},
+            {"role": "system", "content": "You are a direct response copywriter for book advertising. Return JSON."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.7,
@@ -360,20 +400,32 @@ def display_analysis(analysis: Dict):
         st.write(f"**Tone:** {analysis.get('tone', 'N/A')}")
         
         st.subheader("👥 Characters")
-        for char in analysis.get('main_characters', []):
-            st.write(f"• {char}")
+        characters = analysis.get('main_characters', [])
+        if isinstance(characters, list):
+            for char in characters:
+                st.write(f"• {char}")
+        else:
+            st.write(f"• {characters}")
     
     with col2:
         st.subheader("🎨 Themes")
-        for theme in analysis.get('central_themes', []):
-            st.write(f"• {theme}")
+        themes = analysis.get('central_themes', [])
+        if isinstance(themes, list):
+            for theme in themes:
+                st.write(f"• {theme}")
+        else:
+            st.write(f"• {themes}")
         
         st.subheader("🎯 Target Audience")
         st.write(analysis.get('target_audience', 'N/A'))
         
         st.subheader("📚 Comparable")
-        for comp in analysis.get('comparable_titles', []):
-            st.write(f"• {comp}")
+        comps = analysis.get('comparable_titles', [])
+        if isinstance(comps, list):
+            for comp in comps:
+                st.write(f"• {comp}")
+        else:
+            st.write(f"• {comps}")
 
 
 def display_assets(assets: Dict):
@@ -395,22 +447,63 @@ def display_assets(assets: Dict):
         st.subheader("TikTok Scripts")
         scripts = assets.get('tiktok_scripts', [])
         if isinstance(scripts, dict):
-            scripts = [scripts]
-        for i, script in enumerate(scripts, 1):
-            with st.expander(f"Script {i}"):
-                st.json(script)
+            # Handle case where API returns a dict with a scripts field
+            if 'scripts' in scripts:
+                scripts = scripts['scripts']
+            else:
+                scripts = [scripts]
+        
+        if isinstance(scripts, list):
+            for i, script in enumerate(scripts, 1):
+                with st.expander(f"Script {i}"):
+                    if isinstance(script, dict):
+                        for key, value in script.items():
+                            st.write(f"**{key}:** {value}")
+                    else:
+                        st.write(script)
+        else:
+            st.json(scripts)
     
     with tabs[2]:
         st.subheader("Email Sequence")
         emails = assets.get('emails', {})
-        st.json(emails)
+        if isinstance(emails, dict):
+            for key, value in emails.items():
+                with st.expander(key.replace('_', ' ').title()):
+                    st.write(value)
+        else:
+            st.json(emails)
     
     with tabs[3]:
         st.subheader("Social Posts")
         posts = assets.get('social_posts', [])
-        st.json(posts)
+        if isinstance(posts, dict):
+            if 'posts' in posts:
+                posts = posts['posts']
+            else:
+                posts = [posts]
+        
+        if isinstance(posts, list):
+            for i, post in enumerate(posts, 1):
+                with st.expander(f"Post {i}"):
+                    if isinstance(post, dict):
+                        for key, value in post.items():
+                            st.write(f"**{key}:** {value}")
+                    else:
+                        st.write(post)
+        else:
+            st.json(posts)
     
     with tabs[4]:
         st.subheader("Ad Copy")
         ads = assets.get('ad_copy', {})
-        st.json(ads)
+        if isinstance(ads, dict):
+            for key, value in ads.items():
+                with st.expander(key.replace('_', ' ').title()):
+                    if isinstance(value, dict):
+                        for k, v in value.items():
+                            st.write(f"**{k}:** {v}")
+                    else:
+                        st.write(value)
+        else:
+            st.json(ads)
