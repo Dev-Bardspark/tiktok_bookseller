@@ -11,8 +11,7 @@ def show_manuscript_tools():
     """Main function for manuscript analysis and marketing asset generation"""
     
     # Check if we're on the correct page to avoid duplicate widget issues
-    if st.session_state.get('current_page') != "📖 Book Reader":
-        # Don't render anything if we're not on this page
+    if st.session_state.get('current_page') != "📖 Book Analysis":
         return
     
     # Initialize session state for this module
