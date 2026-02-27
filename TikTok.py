@@ -9,11 +9,9 @@ from enum import Enum
 import json
 import VideoGenerator
 
-# DO NOT import BookReader at the top - we'll import it only when needed
-
 # ============================================================================
 # PAGE CONFIG
-# ============================================================================
+#=============================================================================
 st.set_page_config(
     page_title="BookTok Machine",
     page_icon="📱",
@@ -22,11 +20,10 @@ st.set_page_config(
 )
 
 # ============================================================================
-# COLORFUL BUTTON CSS (STATS ARE NOT AFFECTED)
+# COLORFUL BUTTON CSS
 # ============================================================================
 st.markdown("""
 <style>
-    /* Colorful buttons only - stats boxes unchanged */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white !important;
@@ -34,15 +31,7 @@ st.markdown("""
         border: none;
         padding: 15px 10px;
         border-radius: 10px;
-        transition: transform 0.2s;
     }
-    
-    .stButton > button:hover {
-        transform: scale(1.02);
-        opacity: 0.9;
-    }
-    
-    /* Disabled buttons */
     .stButton > button:disabled {
         background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
         opacity: 0.5;
@@ -51,11 +40,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# DATABASE CONNECTION (from secrets)
+# DATABASE CONNECTION
 # ============================================================================
-
 def get_db_connection():
-    """Connect to Supabase PostgreSQL"""
     try:
         conn = psycopg2.connect(
             host=st.secrets["postgres"]["host"],
@@ -70,12 +57,10 @@ def get_db_connection():
         return None
 
 # ============================================================================
-# TEST CONNECTION ON STARTUP
+# TEST CONNECTION
 # ============================================================================
-
 @st.cache_resource
 def init_connection():
-    """Test connection and cache it"""
     conn = get_db_connection()
     if conn:
         try:
@@ -90,23 +75,18 @@ def init_connection():
             conn.close()
     return True
 
-# Initialize
 init_connection()
 
 # ============================================================================
-# DATA ACCESS FUNCTIONS
+# DATA FUNCTIONS
 # ============================================================================
-
 @st.cache_data(ttl=300)
 def get_arc_readers_by_genre(genre=None, min_followers=0):
-    """Get ARC readers filtered by genre"""
     conn = get_db_connection()
     if not conn:
         return []
-    
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        
         if genre and genre != "All":
             cur.execute("""
                 SELECT * FROM arc_readers_central 
@@ -122,7 +102,6 @@ def get_arc_readers_by_genre(genre=None, min_followers=0):
                 ORDER BY follower_count DESC
                 LIMIT 100
             """, (min_followers,))
-        
         readers = cur.fetchall()
         cur.close()
         conn.close()
@@ -132,11 +111,9 @@ def get_arc_readers_by_genre(genre=None, min_followers=0):
         return []
 
 def get_all_genres():
-    """Get unique genres from database"""
     conn = get_db_connection()
     if not conn:
         return ["Romance", "Fantasy", "Thriller"]
-    
     try:
         cur = conn.cursor()
         cur.execute("""
@@ -154,25 +131,20 @@ def get_all_genres():
         return ["All", "Romance", "Fantasy", "Thriller"]
 
 # ============================================================================
-# SESSION STATE FOR SAVED READERS
+# SESSION STATE
 # ============================================================================
-
 if 'saved_readers' not in st.session_state:
     st.session_state.saved_readers = []
 
 if 'current_user' not in st.session_state:
     st.session_state.current_user = None
 
-# ============================================================================
-# INITIALIZE PAGE STATE
-# ============================================================================
 if 'page' not in st.session_state:
     st.session_state.page = "🏠 Dashboard"
 
 # ============================================================================
 # SIDEBAR
 # ============================================================================
-
 st.sidebar.title("📱 BookTok Machine")
 st.sidebar.markdown("---")
 
@@ -191,26 +163,23 @@ else:
 
 st.sidebar.markdown("---")
 
-# Navigation - Simple radio button that updates session state
+# Navigation - Use session state
 menu_options = ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"]
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
 
-# Update session state if changed
 if selected != st.session_state.page:
     st.session_state.page = selected
     st.rerun()
 
-# Store current page for other modules
 st.session_state.current_page = st.session_state.page
 
 # ============================================================================
-# DASHBOARD PAGE - Colorful buttons, normal stats below
+# DASHBOARD PAGE
 # ============================================================================
 
 if st.session_state.page == "🏠 Dashboard":
     st.title("📱 BookTok Machine")
     
-    # 4x3 button grid (colorful)
     # Row 1
     col1, col2, col3, col4 = st.columns(4)
     
@@ -234,38 +203,28 @@ if st.session_state.page == "🏠 Dashboard":
     
     # Row 2
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.button("📊 Analytics", use_container_width=True, disabled=True)
-    
     with col2:
         st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
-    
     with col3:
         st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
-    
     with col4:
         st.button("🎯 Ad Creator", use_container_width=True, disabled=True)
     
     # Row 3
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
-    
     with col2:
         st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
-    
     with col3:
         st.button("📚 Book Preview", use_container_width=True, disabled=True)
-    
     with col4:
         st.button("⭐ Reviews", use_container_width=True, disabled=True)
     
-    # Stats below buttons (NORMAL - not affected by CSS)
+    # Stats
     st.markdown("---")
-    
-    # Get stats
     conn = get_db_connection()
     if conn:
         cur = conn.cursor()
@@ -351,7 +310,6 @@ elif st.session_state.page == "❤️ Saved Readers":
     
     if not st.session_state.saved_readers:
         st.info("You haven't saved any readers yet. Go to the ARC Readers page to find some!")
-        
         if st.button("🔍 Find ARC Readers Now", key="find_now"):
             st.session_state.page = "📚 ARC Readers"
             st.rerun()
@@ -402,28 +360,16 @@ elif st.session_state.page == "❤️ Saved Readers":
 # ============================================================================
 
 elif st.session_state.page == "📖 Book Analysis":
-    try:
-        import BookReader
-        BookReader.show_manuscript_tools()
-    except ImportError as e:
-        st.error(f"Failed to import BookReader module: {e}")
-        st.info("Make sure BookReader.py is in the same directory as TikTok.py")
-    except Exception as e:
-        st.error(f"Error loading Book Analysis: {e}")
+    import BookReader
+    BookReader.show_manuscript_tools()
 
 # ============================================================================
 # VIDEO GENERATOR PAGE
 # ============================================================================
 
 elif st.session_state.page == "🎬 Video Generator":
-    try:
-        import VideoGenerator
-        VideoGenerator.show_video_generator()
-    except ImportError as e:
-        st.error(f"Failed to import VideoGenerator module: {e}")
-        st.info("Make sure VideoGenerator.py is in the same directory as TikTok.py")
-    except Exception as e:
-        st.error(f"Error loading Video Generator: {e}")
+    import VideoGenerator
+    VideoGenerator.show_video_generator()
 
 # ============================================================================
 # FOOTER
