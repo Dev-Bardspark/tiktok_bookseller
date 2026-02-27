@@ -164,6 +164,12 @@ if 'current_user' not in st.session_state:
     st.session_state.current_user = None
 
 # ============================================================================
+# INITIALIZE PAGE STATE
+# ============================================================================
+if 'page' not in st.session_state:
+    st.session_state.page = "🏠 Dashboard"
+
+# ============================================================================
 # SIDEBAR
 # ============================================================================
 
@@ -185,19 +191,13 @@ else:
 
 st.sidebar.markdown("---")
 
-# Navigation - USE THE SAME SESSION STATE VARIABLE AS BUTTONS
-if 'page' not in st.session_state:
-    st.session_state.page = "🏠 Dashboard"
+# Navigation - Simple radio button that updates session state
+menu_options = ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"]
+selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
 
-selected_page = st.sidebar.radio(
-    "Menu",
-    ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"],
-    index=["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"].index(st.session_state.page)
-)
-
-# Update session state when sidebar changes
-if selected_page != st.session_state.page:
-    st.session_state.page = selected_page
+# Update session state if changed
+if selected != st.session_state.page:
+    st.session_state.page = selected
     st.rerun()
 
 # Store current page for other modules
@@ -402,16 +402,28 @@ elif st.session_state.page == "❤️ Saved Readers":
 # ============================================================================
 
 elif st.session_state.page == "📖 Book Analysis":
-    import BookReader
-    BookReader.show_manuscript_tools()
+    try:
+        import BookReader
+        BookReader.show_manuscript_tools()
+    except ImportError as e:
+        st.error(f"Failed to import BookReader module: {e}")
+        st.info("Make sure BookReader.py is in the same directory as TikTok.py")
+    except Exception as e:
+        st.error(f"Error loading Book Analysis: {e}")
 
 # ============================================================================
 # VIDEO GENERATOR PAGE
 # ============================================================================
 
 elif st.session_state.page == "🎬 Video Generator":
-    import VideoGenerator
-    VideoGenerator.show_video_generator()
+    try:
+        import VideoGenerator
+        VideoGenerator.show_video_generator()
+    except ImportError as e:
+        st.error(f"Failed to import VideoGenerator module: {e}")
+        st.info("Make sure VideoGenerator.py is in the same directory as TikTok.py")
+    except Exception as e:
+        st.error(f"Error loading Video Generator: {e}")
 
 # ============================================================================
 # FOOTER
