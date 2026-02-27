@@ -6,10 +6,10 @@ from typing import Dict, List
 import time
 
 def show_video_generator():
-    """Browser-based video generator using OpenReel - no installation needed"""
+    """Browser-based video generator - no installation needed"""
     
     st.title("🎬 TikTok Video Generator")
-    st.markdown("Create professional BookTok videos directly in your browser - **no software to install**")
+    st.markdown("Create professional BookTok videos using free online editors")
     
     # Check if we have generated assets from BookReader
     if 'generated_assets' not in st.session_state or not st.session_state.generated_assets:
@@ -29,7 +29,7 @@ def show_video_generator():
     analysis = st.session_state.get('manuscript_analysis', {})
     book_title = analysis.get('title', 'My Book') if analysis else 'My Book'
     
-    # FIX: Safely handle genre - it might be None or not a string
+    # Safely handle genre
     genre_raw = analysis.get('genre', 'general') if analysis else 'general'
     if genre_raw is None:
         genre = 'general'
@@ -42,21 +42,21 @@ def show_video_generator():
     st.divider()
     
     # Create tabs for different approaches
-    tab1, tab2 = st.tabs(["🎬 OpenReel Editor (Recommended)", "📋 Copy/Paste Method"])
+    tab1, tab2 = st.tabs(["🎬 Video Editor (Recommended)", "📋 Copy/Paste Method"])
     
     with tab1:
-        show_openreel_integration(scripts, book_title, genre)
+        show_video_editor_guide(scripts, book_title, genre)
     
     with tab2:
         show_copy_paste_method(scripts, book_title)
 
 
-def show_openreel_integration(scripts: List, book_title: str, genre: str):
-    """Embed OpenReel video editor directly in Streamlit"""
+def show_video_editor_guide(scripts: List, book_title: str, genre: str):
+    """Guide users to free online video editors"""
     
     st.markdown("""
-    ### 🎥 OpenReel Video Editor
-    OpenReel runs entirely in your browser - **no uploads, no installations, completely free**.
+    ### 🎥 Choose a Free Video Editor
+    All these editors work in your browser - **no downloads, completely free**.
     """)
     
     # Script selector
@@ -66,7 +66,7 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
     script_options = []
     for i, script in enumerate(scripts):
         if isinstance(script, dict):
-            # Try different possible field names for the hook/preview
+            # Try different possible field names for the preview
             preview = (
                 script.get('hook') or 
                 script.get('title') or 
@@ -106,7 +106,7 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
     st.divider()
     
     # Video style guide
-    st.subheader("2️⃣ Style Guide (Copy These Settings)")
+    st.subheader("2️⃣ Style Guide")
     
     genre_styles = {
         "fantasy": {
@@ -147,7 +147,7 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
         }
     }
     
-    # FIX: Safely get style with fallback
+    # Safely get style with fallback
     genre_key = genre.lower() if genre else 'general'
     style = genre_styles.get(genre_key, {
         "colors": "Match your book cover",
@@ -171,50 +171,62 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
     
     st.divider()
     
-    # OpenReel integration
-    st.subheader("3️⃣ Open Video Editor")
+    # Editor selection
+    st.subheader("3️⃣ Choose Your Video Editor")
     
-    st.markdown("""
-    Click the button below to open OpenReel - a professional video editor that runs entirely in your browser:
+    editor_choice = st.radio(
+        "Select an editor (all are free and browser-based):",
+        [
+            "🎬 CapCut - Best for TikTok (trending sounds, effects)",
+            "🎨 Canva - Easiest to use, many templates",
+            "📹 Clipchamp - Professional, runs in browser"
+        ],
+        horizontal=False,
+        key="editor_choice"
+    )
     
-    ✨ **Features you can use:**
-    - Add text overlays with your hook and CTA
-    - Upload your book cover as the main visual
-    - Choose background music that matches your genre
-    - Add transitions between scenes
-    - Export in 9:16 TikTok format
-    """)
+    # Set URLs based on choice
+    if "CapCut" in editor_choice:
+        editor_url = "https://www.capcut.com/"
+        tutorial_url = "https://www.capcut.com/resource"
+        editor_name = "CapCut"
+    elif "Canva" in editor_choice:
+        editor_url = "https://www.canva.com/create/videos/"
+        tutorial_url = "https://www.canva.com/video-editor/"
+        editor_name = "Canva"
+    else:
+        editor_url = "https://app.clipchamp.com/"
+        tutorial_url = "https://support.clipchamp.com/"
+        editor_name = "Clipchamp"
     
-    # Direct link to OpenReel
     col1, col2 = st.columns(2)
     with col1:
         st.link_button(
-            "🎬 Open OpenReel Editor",
-            "https://www.openreel.com/",
+            f"🎬 Open {editor_name}",
+            editor_url,
             use_container_width=True,
             type="primary"
         )
-    
     with col2:
         st.link_button(
-            "📚 OpenReel Tutorial",
-            "https://www.openreel.com/resources",
+            "📚 Tutorial",
+            tutorial_url,
             use_container_width=True
         )
     
     st.divider()
     
     # Asset preparation
-    st.subheader("4️⃣ Assets to Use")
+    st.subheader("4️⃣ Your Assets")
     
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**📖 Cover Image**")
+        st.markdown("**📖 Book Cover**")
         st.info("Upload your book cover as the main visual")
         
-        # Book cover upload helper
+        # Book cover upload helper (just for preview)
         uploaded_cover = st.file_uploader(
-            "Your book cover (for reference)",
+            "Preview your cover",
             type=['png', 'jpg', 'jpeg'],
             key="cover_ref",
             label_visibility="collapsed"
@@ -226,7 +238,13 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
     with col2:
         st.markdown("**📝 Script Text**")
         if isinstance(selected_script, dict):
-            script_text = selected_script.get('voiceover', '') or selected_script.get('hook', '')
+            # Get the main text - try voiceover first, then hook, then anything
+            script_text = (
+                selected_script.get('voiceover') or 
+                selected_script.get('hook') or 
+                selected_script.get('text') or 
+                str(selected_script)
+            )
         else:
             script_text = str(selected_script)
         
@@ -237,20 +255,61 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
             key="script_text",
             label_visibility="collapsed"
         )
+        
+        # Copy button using JavaScript
+        components.html(f"""
+        <button onclick="navigator.clipboard.writeText(`{script_text}`)" 
+                style="background-color: #ff4b4b; color: white; padding: 10px; 
+                       border: none; border-radius: 5px; width: 100%; cursor: pointer;">
+            📋 Copy to Clipboard
+        </button>
+        """, height=50)
     
     st.divider()
     
-    # Success path
+    # Step-by-step guide
+    st.subheader("5️⃣ Step-by-Step Instructions")
+    
+    with st.expander(f"📋 How to use {editor_name}", expanded=True):
+        if "CapCut" in editor_choice:
+            st.markdown("""
+            **In CapCut:**
+            1. Click "Create new video"
+            2. Upload your book cover image
+            3. Click "Text" and paste your script
+            4. Use "Text-to-speech" to add voiceover
+            5. Add trending music from the library
+            6. Export in 9:16 (TikTok format)
+            """)
+        elif "Canva" in editor_choice:
+            st.markdown("""
+            **In Canva:**
+            1. Search for "TikTok video" template
+            2. Upload your book cover
+            3. Add text boxes with your script
+            4. Add elements that match your genre
+            5. Add audio from the music library
+            6. Download as MP4
+            """)
+        else:
+            st.markdown("""
+            **In Clipchamp:**
+            1. Start a new project (9:16 ratio)
+            2. Import your book cover image
+            3. Add text overlays with your script
+            4. Use the text-to-speech feature
+            5. Add background music
+            6. Export as 1080p MP4
+            """)
+    
     st.success("""
-    ### ✅ Your 5-Step Path to Finished Video:
+    ### ✅ Your Path to Finished Video:
     
-    1. **Click OpenReel Editor** above
-    2. **Upload your book cover** as the main image
-    3. **Paste your script** from the box above
-    4. **Follow the style guide** for colors and music
+    1. **Click the editor button** above
+    2. **Upload your book cover**
+    3. **Paste your script** (use the copy button)
+    4. **Follow the style guide** for colors/music
     5. **Export** as MP4 (9:16 for TikTok)
-    
-    All processing happens in your browser - no files leave your computer!
     """)
 
 
@@ -259,7 +318,7 @@ def show_copy_paste_method(scripts: List, book_title: str):
     
     st.markdown("""
     ### 📋 Copy & Paste Method
-    Use this if you prefer CapCut or another video editor.
+    Download your scripts to use in any video editor.
     """)
     
     # Create a combined text file with all scripts
@@ -296,22 +355,22 @@ def show_copy_paste_method(scripts: List, book_title: str):
     
     with col1:
         st.link_button(
-            "✂️ CapCut Online",
+            "✂️ CapCut",
             "https://www.capcut.com",
             use_container_width=True
         )
     
     with col2:
         st.link_button(
-            "🎬 Canva",
-            "https://www.canva.com",
+            "🎨 Canva",
+            "https://www.canva.com/create/videos/",
             use_container_width=True
         )
     
     with col3:
         st.link_button(
-            "📱 Clipchamp",
-            "https://clipchamp.com",
+            "📹 Clipchamp",
+            "https://app.clipchamp.com/",
             use_container_width=True
         )
     
