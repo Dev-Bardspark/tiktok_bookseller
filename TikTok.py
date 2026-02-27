@@ -156,22 +156,30 @@ else:
 
 st.sidebar.markdown("---")
 
+# Navigation - Simplified menu
 page = st.sidebar.radio(
     "Menu",
-    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader", "🎬 Video Generator"]
+    [
+        "🏠 Dashboard", 
+        "📚 ARC Readers", 
+        "❤️ Saved Readers", 
+        "📖 Book Analysis", 
+        "🎬 Video Generator"
+    ]
 )
 
-# Store current page in session state to help BookReader know when to render
+# Store current page in session state
 st.session_state.current_page = page
 
 # ============================================================================
-# DASHBOARD PAGE
+# DASHBOARD PAGE - 4x3 Button Grid
 # ============================================================================
 
 if page == "🏠 Dashboard":
-    st.title("📱 Your BookTok Machine")
-    st.markdown("### Welcome back!")
+    st.title("📱 BookTok Machine")
+    st.markdown("### Your Author Dashboard")
     
+    # Stats row
     conn = get_db_connection()
     if conn:
         cur = conn.cursor()
@@ -184,24 +192,73 @@ if page == "🏠 Dashboard":
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("ARC Readers", total_readers)
+        st.metric("ARC Readers Available", total_readers)
     with col2:
         st.metric("Saved Readers", len(st.session_state.saved_readers))
     with col3:
-        st.metric("Campaigns", "0")
+        st.metric("Books Analyzed", "0")
     
     st.markdown("---")
-    st.markdown("### 🚀 Quick Actions")
+    st.markdown("### Quick Launch")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔍 Find ARC Readers", use_container_width=True, key="dashboard_find"):
+    # 4x3 Button Grid
+    row1_col1, row1_col2, row1_col3, row1_col4 = st.columns(4)
+    row2_col1, row2_col2, row2_col3, row2_col4 = st.columns(4)
+    row3_col1, row3_col2, row3_col3, row3_col4 = st.columns(4)
+    
+    # Row 1
+    with row1_col1:
+        if st.button("📚 ARC Readers", use_container_width=True, key="dash_arc"):
             st.session_state.page = "📚 ARC Readers"
             st.rerun()
-    with col2:
-        if st.button("❤️ View My Saved", use_container_width=True, key="dashboard_saved"):
-            st.session_state.page = "❤️ My Saved Readers"
+    
+    with row1_col2:
+        if st.button("📖 Book Analysis", use_container_width=True, key="dash_analysis"):
+            st.session_state.page = "📖 Book Analysis"
             st.rerun()
+    
+    with row1_col3:
+        if st.button("🎬 Video Generator", use_container_width=True, key="dash_video"):
+            st.session_state.page = "🎬 Video Generator"
+            st.rerun()
+    
+    with row1_col4:
+        if st.button("📝 Coming Soon", use_container_width=True, key="dash_1", disabled=True):
+            pass
+    
+    # Row 2
+    with row2_col1:
+        if st.button("📊 Analytics", use_container_width=True, key="dash_2", disabled=True):
+            pass
+    
+    with row2_col2:
+        if st.button("📧 Email Campaigns", use_container_width=True, key="dash_3", disabled=True):
+            pass
+    
+    with row2_col3:
+        if st.button("📱 Social Scheduler", use_container_width=True, key="dash_4", disabled=True):
+            pass
+    
+    with row2_col4:
+        if st.button("🎯 Ad Creator", use_container_width=True, key="dash_5", disabled=True):
+            pass
+    
+    # Row 3
+    with row3_col1:
+        if st.button("📈 Sales Tracker", use_container_width=True, key="dash_6", disabled=True):
+            pass
+    
+    with row3_col2:
+        if st.button("🤖 AI Assistant", use_container_width=True, key="dash_7", disabled=True):
+            pass
+    
+    with row3_col3:
+        if st.button("📚 Book Preview", use_container_width=True, key="dash_8", disabled=True):
+            pass
+    
+    with row3_col4:
+        if st.button("⭐ Reviews", use_container_width=True, key="dash_9", disabled=True):
+            pass
 
 # ============================================================================
 # ARC READERS PAGE
@@ -263,10 +320,10 @@ elif page == "📚 ARC Readers":
                     st.button("✅ Saved", key=f"saved_{reader['id']}", disabled=True)
 
 # ============================================================================
-# MY SAVED READERS PAGE
+# SAVED READERS PAGE
 # ============================================================================
 
-elif page == "❤️ My Saved Readers":
+elif page == "❤️ Saved Readers":
     st.title("❤️ My Saved ARC Readers")
     
     if not st.session_state.saved_readers:
@@ -318,61 +375,17 @@ elif page == "❤️ My Saved Readers":
                             st.warning("No email found. Try DM on TikTok")
 
 # ============================================================================
-# TEMPLATES PAGE
+# BOOK ANALYSIS PAGE
 # ============================================================================
 
-elif page == "📝 Templates":
-    st.title("📝 Video Templates")
-    
-    templates = {
-        'pointing': {
-            'name': '🎯 Pointing at Tropes',
-            'script': """
-Looking for [TROPE 1]? ✅
-[TROPE 2]? ✅
-[TROPE 3]? ✅
-Then you need [BOOK TITLE]!
-""",
-            'difficulty': 'Easy'
-        },
-        'books_that_made_me': {
-            'name': '😭 Books That Made Me Feel',
-            'script': """
-Books that made me [EMOTION] at 2am:
-[BOOK TITLE]
-Drop your favorite below 👇
-""",
-            'difficulty': 'Easy'
-        },
-        'if_you_loved': {
-            'name': '📚 If You Loved X, Read Y',
-            'script': """
-If you loved [POPULAR BOOK],
-you NEED to read [BOOK TITLE].
-Same [TROPE] vibes!
-""",
-            'difficulty': 'Easy'
-        }
-    }
-    
-    for tid, template in templates.items():
-        with st.expander(f"{template['name']} - {template['difficulty']}"):
-            st.markdown("**Script:**")
-            st.code(template['script'])
-            
-            if st.button(f"Use This Template", key=tid):
-                st.session_state['selected_template'] = template
-                st.success("Template selected!")
-
-# ============================================================================
-# BOOK READER PAGE - Import and use BookReader only when on this page
-# ============================================================================
-
-elif page == "📖 Book Reader":
+elif page == "📖 Book Analysis":
     # Import BookReader ONLY when this page is selected
-    # This prevents duplicate widget errors
     import BookReader
     BookReader.show_manuscript_tools()
+
+# ============================================================================
+# VIDEO GENERATOR PAGE
+# ============================================================================
 
 elif page == "🎬 Video Generator":
     import VideoGenerator
