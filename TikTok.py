@@ -156,13 +156,6 @@ else:
 
 st.sidebar.markdown("---")
 
-# Navigation - Added "📖 Book Reader" to menu
-page = st.sidebar.radio(
-    "Menu",
-    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"],
-    key="navigation"
-)
-
 page = st.sidebar.radio(
     "Menu",
     ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader", "🎬 Video Generator"]
