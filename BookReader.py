@@ -53,7 +53,7 @@ def show_manuscript_tools():
                         st.rerun()
             else:
                 st.success("✅ OpenAI connected")
-                st.caption(f"Using: {st.session_state.get('model', 'gpt-4')}")
+                st.caption(f"Using: {st.session_state.get('model', 'gpt-4o-mini')}")
                 
                 if st.button("Disconnect", key="disconnect_api_button"):
                     st.session_state.api_configured = False
@@ -64,7 +64,7 @@ def show_manuscript_tools():
             if st.session_state.api_configured:
                 st.session_state.model = st.selectbox(
                     "Model",
-                    ["gpt-4", "gpt-3.5-turbo-16k"],
+                    ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo-1106"],
                     index=0,
                     key="model_select"
                 )
@@ -175,16 +175,19 @@ def extract_text_from_file(uploaded_file) -> Optional[str]:
 
 
 def analyze_manuscript_text(text: str) -> Dict:
-    """Analyze manuscript with OpenAI - NO SIZE LIMIT"""
+    """Analyze manuscript with OpenAI using GPT-4o mini"""
     
     # Initialize the client
     client = OpenAI(api_key=st.session_state.openai_api_key)
     
-    # For very long texts, use gpt-3.5-turbo-16k which has larger context
-    model_to_use = st.session_state.get('model', 'gpt-4')
-    if len(text) > 100000 and model_to_use == 'gpt-4':
-        st.info("Large manuscript detected. Using gpt-3.5-turbo-16k for better handling.")
-        model_to_use = 'gpt-3.5-turbo-16k'
+    # Use GPT-4o mini as default (supports JSON mode and large context)
+    model_to_use = st.session_state.get('model', 'gpt-4o-mini')
+    
+    # GPT-4o mini has 128k context - plenty for most books
+    # But if it's extremely long, we'll use the first 500k chars to be safe
+    if len(text) > 500000:
+        text = text[:500000]
+        st.info("Using first 500,000 characters of your manuscript for analysis.")
     
     prompt = f"""
     Analyze this manuscript and return JSON with:
@@ -203,15 +206,29 @@ def analyze_manuscript_text(text: str) -> Dict:
     """
     
     try:
-        response = client.chat.completions.create(
-            model=model_to_use,
-            messages=[
-                {"role": "system", "content": "You are a literary analyst and marketing expert. Return valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
+        # Check if model supports JSON mode
+        json_supported_models = ["gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-4-1106-preview", "gpt-3.5-turbo-1106"]
+        
+        if model_to_use in json_supported_models:
+            response = client.chat.completions.create(
+                model=model_to_use,
+                messages=[
+                    {"role": "system", "content": "You are a literary analyst and marketing expert. Return valid JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+        else:
+            # Fallback for older models
+            response = client.chat.completions.create(
+                model=model_to_use,
+                messages=[
+                    {"role": "system", "content": "You are a literary analyst and marketing expert. You must return valid JSON only, no other text."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3
+            )
         
         return json.loads(response.choices[0].message.content)
         
@@ -234,7 +251,7 @@ def generate_book_blurb(analysis: Dict) -> str:
     """
     
     response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4'),
+        model=st.session_state.get('model', 'gpt-4o-mini'),
         messages=[
             {"role": "system", "content": "You are a professional copywriter specializing in book descriptions."},
             {"role": "user", "content": prompt}
@@ -268,7 +285,7 @@ def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
     """
     
     response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4'),
+        model=st.session_state.get('model', 'gpt-4o-mini'),
         messages=[
             {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return JSON."},
             {"role": "user", "content": prompt}
@@ -300,7 +317,7 @@ def generate_email_sequence(analysis: Dict) -> Dict:
     """
     
     response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4'),
+        model=st.session_state.get('model', 'gpt-4o-mini'),
         messages=[
             {"role": "system", "content": "You are an email marketing specialist for authors. Return JSON."},
             {"role": "user", "content": prompt}
@@ -332,7 +349,7 @@ def generate_social_posts(analysis: Dict) -> List[Dict]:
     """
     
     response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4'),
+        model=st.session_state.get('model', 'gpt-4o-mini'),
         messages=[
             {"role": "system", "content": "You are a social media manager for authors. Return JSON."},
             {"role": "user", "content": prompt}
@@ -364,7 +381,7 @@ def generate_ad_copy(analysis: Dict) -> Dict:
     """
     
     response = client.chat.completions.create(
-        model=st.session_state.get('model', 'gpt-4'),
+        model=st.session_state.get('model', 'gpt-4o-mini'),
         messages=[
             {"role": "system", "content": "You are a direct response copywriter for book advertising. Return JSON."},
             {"role": "user", "content": prompt}
