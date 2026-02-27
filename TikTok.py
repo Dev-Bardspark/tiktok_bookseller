@@ -22,20 +22,19 @@ st.set_page_config(
 )
 
 # ============================================================================
-# CUSTOM CSS FOR COLORFUL BUTTONS
+# COLORFUL BUTTON CSS (STATS ARE NOT AFFECTED)
 # ============================================================================
-
 st.markdown("""
 <style>
-    /* Colorful button styles */
+    /* Colorful buttons only - stats boxes unchanged */
     .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
         font-weight: bold;
         border: none;
-        padding: 20px 10px;
+        padding: 15px 10px;
         border-radius: 10px;
         transition: transform 0.2s;
-        height: 100px;
-        font-size: 18px;
     }
     
     .stButton > button:hover {
@@ -43,54 +42,10 @@ st.markdown("""
         opacity: 0.9;
     }
     
-    /* Individual button colors */
-    div[data-testid="column"]:nth-of-type(1) .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-    
-    div[data-testid="column"]:nth-of-type(2) .stButton > button {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-    }
-    
-    div[data-testid="column"]:nth-of-type(3) .stButton > button {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        color: white;
-    }
-    
-    div[data-testid="column"]:nth-of-type(4) .stButton > button {
-        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-        color: white;
-    }
-    
     /* Disabled buttons */
     .stButton > button:disabled {
         background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
         opacity: 0.5;
-        transform: none;
-    }
-    
-    /* Stats cards */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin: 10px 0;
-    }
-    
-    .metric-card h2 {
-        font-size: 36px;
-        margin: 0;
-        color: white;
-    }
-    
-    .metric-card p {
-        font-size: 16px;
-        margin: 0;
-        opacity: 0.9;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -246,70 +201,66 @@ page = st.sidebar.radio(
 st.session_state.current_page = page
 
 # ============================================================================
-# DASHBOARD PAGE - Colorful 4x3 Button Grid with Stats Below
+# DASHBOARD PAGE - Colorful buttons, normal stats below
 # ============================================================================
 
 if page == "🏠 Dashboard":
     st.title("📱 BookTok Machine")
-    st.markdown("### Your Author Dashboard")
     
-    # 4x3 Button Grid (Stats will go below)
-    
+    # 4x3 button grid (colorful)
     # Row 1
-    st.markdown("#### Quick Actions")
-    row1_col1, row1_col2, row1_col3, row1_col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     
-    with row1_col1:
-        if st.button("📚 ARC Readers", use_container_width=True, key="dash_arc"):
+    with col1:
+        if st.button("📚 ARC Readers", use_container_width=True):
             st.session_state.page = "📚 ARC Readers"
             st.rerun()
     
-    with row1_col2:
-        if st.button("📖 Book Analysis", use_container_width=True, key="dash_analysis"):
+    with col2:
+        if st.button("📖 Book Analysis", use_container_width=True):
             st.session_state.page = "📖 Book Analysis"
             st.rerun()
     
-    with row1_col3:
-        if st.button("🎬 Video Generator", use_container_width=True, key="dash_video"):
+    with col3:
+        if st.button("🎬 Video Generator", use_container_width=True):
             st.session_state.page = "🎬 Video Generator"
             st.rerun()
     
-    with row1_col4:
-        st.button("📝 Coming Soon", use_container_width=True, key="dash_1", disabled=True)
+    with col4:
+        st.button("📝 Coming Soon", use_container_width=True, disabled=True)
     
     # Row 2
-    row2_col1, row2_col2, row2_col3, row2_col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     
-    with row2_col1:
-        st.button("📊 Analytics", use_container_width=True, key="dash_2", disabled=True)
+    with col1:
+        st.button("📊 Analytics", use_container_width=True, disabled=True)
     
-    with row2_col2:
-        st.button("📧 Email Campaigns", use_container_width=True, key="dash_3", disabled=True)
+    with col2:
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     
-    with row2_col3:
-        st.button("📱 Social Scheduler", use_container_width=True, key="dash_4", disabled=True)
+    with col3:
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     
-    with row2_col4:
-        st.button("🎯 Ad Creator", use_container_width=True, key="dash_5", disabled=True)
+    with col4:
+        st.button("🎯 Ad Creator", use_container_width=True, disabled=True)
     
     # Row 3
-    row3_col1, row3_col2, row3_col3, row3_col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     
-    with row3_col1:
-        st.button("📈 Sales Tracker", use_container_width=True, key="dash_6", disabled=True)
+    with col1:
+        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     
-    with row3_col2:
-        st.button("🤖 AI Assistant", use_container_width=True, key="dash_7", disabled=True)
+    with col2:
+        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
     
-    with row3_col3:
-        st.button("📚 Book Preview", use_container_width=True, key="dash_8", disabled=True)
+    with col3:
+        st.button("📚 Book Preview", use_container_width=True, disabled=True)
     
-    with row3_col4:
-        st.button("⭐ Reviews", use_container_width=True, key="dash_9", disabled=True)
+    with col4:
+        st.button("⭐ Reviews", use_container_width=True, disabled=True)
     
-    # Stats Section (below buttons)
+    # Stats below buttons (NORMAL - not affected by CSS)
     st.markdown("---")
-    st.markdown("### Your Stats")
     
     # Get stats
     conn = get_db_connection()
@@ -322,34 +273,12 @@ if page == "🏠 Dashboard":
     else:
         total_readers = "?"
     
-    # Display stats in colorful cards
+    books_analyzed = 1 if st.session_state.get('manuscript_analysis') else 0
+    
     col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <p>ARC Readers Available</p>
-            <h2>{total_readers}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <p>Saved Readers</p>
-            <h2>{len(st.session_state.saved_readers)}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        # Count analyzed books (you can implement this later)
-        books_analyzed = 1 if st.session_state.get('manuscript_analysis') else 0
-        st.markdown(f"""
-        <div class="metric-card">
-            <p>Books Analyzed</p>
-            <h2>{books_analyzed}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    col1.metric("ARC Readers Available", total_readers)
+    col2.metric("Saved Readers", len(st.session_state.saved_readers))
+    col3.metric("Books Analyzed", books_analyzed)
 
 # ============================================================================
 # ARC READERS PAGE
@@ -470,7 +399,6 @@ elif page == "❤️ Saved Readers":
 # ============================================================================
 
 elif page == "📖 Book Analysis":
-    # Import BookReader ONLY when this page is selected
     import BookReader
     BookReader.show_manuscript_tools()
 
