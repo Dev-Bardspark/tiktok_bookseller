@@ -25,14 +25,20 @@ def show_video_generator():
         st.warning("No TikTok scripts found in your assets.")
         return
     
-    # Get book info
+    # Get book info - with safe fallbacks
     analysis = st.session_state.get('manuscript_analysis', {})
-    book_title = analysis.get('title', 'My Book')
-    genre = analysis.get('genre', 'general')
+    book_title = analysis.get('title', 'My Book') if analysis else 'My Book'
+    
+    # FIX: Safely handle genre - it might be None or not a string
+    genre_raw = analysis.get('genre', 'general') if analysis else 'general'
+    if genre_raw is None:
+        genre = 'general'
+    else:
+        genre = str(genre_raw).lower()
     
     # Display header with book info
     st.subheader(f"📖 Creating videos for: **{book_title}**")
-    st.markdown(f"**Genre:** {genre} | **Scripts available:** {len(scripts)}")
+    st.markdown(f"**Genre:** {genre.title()} | **Scripts available:** {len(scripts)}")
     st.divider()
     
     # Create tabs for different approaches
@@ -65,32 +71,36 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
         else:
             script_options.append(f"Script {i+1}")
     
-    selected_idx = st.selectbox(
-        "Choose a script to visualize",
-        options=range(len(script_options)),
-        format_func=lambda x: script_options[x],
-        key="script_selector"
-    )
-    
-    selected_script = scripts[selected_idx]
-    
-    # Display the full script
-    with st.expander("📝 View Full Script", expanded=True):
-        if isinstance(selected_script, dict):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Hook:**")
-                st.info(selected_script.get('hook', 'N/A'))
-                st.markdown("**Visuals:**")
-                st.write(selected_script.get('visuals', 'N/A'))
-            with col2:
-                st.markdown("**Voiceover:**")
-                st.info(selected_script.get('voiceover', 'N/A'))
-                st.markdown("**Music:**")
-                st.write(selected_script.get('music', 'N/A'))
-            st.markdown(f"**CTA:** {selected_script.get('cta', 'N/A')}")
-        else:
-            st.write(selected_script)
+    if script_options:
+        selected_idx = st.selectbox(
+            "Choose a script to visualize",
+            options=range(len(script_options)),
+            format_func=lambda x: script_options[x],
+            key="script_selector"
+        )
+        
+        selected_script = scripts[selected_idx]
+        
+        # Display the full script
+        with st.expander("📝 View Full Script", expanded=True):
+            if isinstance(selected_script, dict):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Hook:**")
+                    st.info(selected_script.get('hook', 'N/A'))
+                    st.markdown("**Visuals:**")
+                    st.write(selected_script.get('visuals', 'N/A'))
+                with col2:
+                    st.markdown("**Voiceover:**")
+                    st.info(selected_script.get('voiceover', 'N/A'))
+                    st.markdown("**Music:**")
+                    st.write(selected_script.get('music', 'N/A'))
+                st.markdown(f"**CTA:** {selected_script.get('cta', 'N/A')}")
+            else:
+                st.write(selected_script)
+    else:
+        st.warning("No scripts available to select")
+        return
     
     st.divider()
     
@@ -136,7 +146,9 @@ def show_openreel_integration(scripts: List, book_title: str, genre: str):
         }
     }
     
-    style = genre_styles.get(genre.lower(), {
+    # FIX: Safely get style with fallback
+    genre_key = genre.lower() if genre else 'general'
+    style = genre_styles.get(genre_key, {
         "colors": "Match your book cover",
         "music": "Match your book's mood",
         "text_style": "Clean, readable font",
