@@ -383,7 +383,7 @@ Same [TROPE] vibes!
 
 elif page == "📖 Book Reader":
     # This calls the function from BookReader.py
-    BookReader.show_manuscript_tools()
+     BookReader.show_manuscript_tools()
 
 # ============================================================================
 # FOOTER
