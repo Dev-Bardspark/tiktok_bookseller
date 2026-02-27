@@ -185,26 +185,29 @@ else:
 
 st.sidebar.markdown("---")
 
-# Navigation - Simplified menu
-page = st.sidebar.radio(
+# Navigation - USE THE SAME SESSION STATE VARIABLE AS BUTTONS
+if 'page' not in st.session_state:
+    st.session_state.page = "🏠 Dashboard"
+
+selected_page = st.sidebar.radio(
     "Menu",
-    [
-        "🏠 Dashboard", 
-        "📚 ARC Readers", 
-        "❤️ Saved Readers", 
-        "📖 Book Analysis", 
-        "🎬 Video Generator"
-    ]
+    ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"],
+    index=["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"].index(st.session_state.page)
 )
 
-# Store current page in session state
-st.session_state.current_page = page
+# Update session state when sidebar changes
+if selected_page != st.session_state.page:
+    st.session_state.page = selected_page
+    st.rerun()
+
+# Store current page for other modules
+st.session_state.current_page = st.session_state.page
 
 # ============================================================================
 # DASHBOARD PAGE - Colorful buttons, normal stats below
 # ============================================================================
 
-if page == "🏠 Dashboard":
+if st.session_state.page == "🏠 Dashboard":
     st.title("📱 BookTok Machine")
     
     # 4x3 button grid (colorful)
@@ -284,7 +287,7 @@ if page == "🏠 Dashboard":
 # ARC READERS PAGE
 # ============================================================================
 
-elif page == "📚 ARC Readers":
+elif st.session_state.page == "📚 ARC Readers":
     st.title("📚 ARC Reader Database")
     
     genres = get_all_genres()
@@ -343,7 +346,7 @@ elif page == "📚 ARC Readers":
 # SAVED READERS PAGE
 # ============================================================================
 
-elif page == "❤️ Saved Readers":
+elif st.session_state.page == "❤️ Saved Readers":
     st.title("❤️ My Saved ARC Readers")
     
     if not st.session_state.saved_readers:
@@ -398,7 +401,7 @@ elif page == "❤️ Saved Readers":
 # BOOK ANALYSIS PAGE
 # ============================================================================
 
-elif page == "📖 Book Analysis":
+elif st.session_state.page == "📖 Book Analysis":
     import BookReader
     BookReader.show_manuscript_tools()
 
@@ -406,7 +409,7 @@ elif page == "📖 Book Analysis":
 # VIDEO GENERATOR PAGE
 # ============================================================================
 
-elif page == "🎬 Video Generator":
+elif st.session_state.page == "🎬 Video Generator":
     import VideoGenerator
     VideoGenerator.show_video_generator()
 
