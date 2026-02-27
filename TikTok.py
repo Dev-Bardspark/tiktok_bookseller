@@ -4,14 +4,16 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import json
+import plotly.express as px
 import VideoGenerator
+import LaunchTimeline
 
 # ============================================================================
 # PAGE CONFIG
-#=============================================================================
+# ============================================================================
 st.set_page_config(
     page_title="BookTok Machine",
     page_icon="📱",
@@ -35,6 +37,22 @@ st.markdown("""
     .stButton > button:disabled {
         background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
         opacity: 0.5;
+    }
+    /* Timeline card styling */
+    .timeline-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 20px;
+    }
+    .phase-badge {
+        background: rgba(255,255,255,0.2);
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        display: inline-block;
+        margin-right: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -180,6 +198,16 @@ st.session_state.current_page = st.session_state.page
 if st.session_state.page == "🏠 Dashboard":
     st.title("📱 BookTok Machine")
     
+    # ============================================================================
+    # TIMELINE WIDGET (from LaunchTimeline module)
+    # ============================================================================
+    LaunchTimeline.show_timeline_widget()
+    
+    # ============================================================================
+    # QUICK ACTIONS BUTTON GRID
+    # ============================================================================
+    st.markdown("### 🚀 Quick Actions")
+    
     # Row 1
     col1, col2, col3, col4 = st.columns(4)
     
@@ -223,8 +251,12 @@ if st.session_state.page == "🏠 Dashboard":
     with col4:
         st.button("⭐ Reviews", use_container_width=True, disabled=True)
     
-    # Stats
+    # ============================================================================
+    # STATS SECTION
+    # ============================================================================
     st.markdown("---")
+    
+    # Get stats
     conn = get_db_connection()
     if conn:
         cur = conn.cursor()
