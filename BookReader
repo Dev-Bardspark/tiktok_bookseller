@@ -1,693 +1,406 @@
-"""
-Manuscript-to-Marketing Engine - Proof of Concept
-A Streamlit app that converts uploaded manuscripts into marketing assets
-"""
-
+# tiktok.py
 import streamlit as st
+import pandas as pd
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import hashlib
+from datetime import datetime
+from enum import Enum
+import json
 import openai
 import PyPDF2
 import docx
 import os
-import json
 import time
 import io
-from datetime import datetime
 from typing import Optional, Dict, List
 import re
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
+# Import the BookReader module
+import BookReader
+
+# ============================================================================
+# PAGE CONFIG
+# ============================================================================
 st.set_page_config(
-    page_title="Book Marketing Engine",
-    page_icon="📚",
-    layout="wide"
+    page_title="BookTok Machine",
+    page_icon="📱",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state for storing manuscript analysis
-if 'manuscript_analysis' not in st.session_state:
-    st.session_state.manuscript_analysis = None
-if 'generated_assets' not in st.session_state:
-    st.session_state.generated_assets = {}
+# ============================================================================
+# DATABASE CONNECTION (from secrets)
+# ============================================================================
 
-# -------------------------------
-# API KEY HANDLING
-# -------------------------------
-def setup_api_key():
-    """Handle OpenAI API key input"""
-    with st.sidebar:
-        st.header("🔑 API Configuration")
-        api_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            help="Enter your OpenAI API key. Get one at https://platform.openai.com"
+def get_db_connection():
+    """Connect to Supabase PostgreSQL"""
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
         )
-        
-        if api_key:
-            openai.api_key = api_key
-            st.success("API key set!")
-            
-            # Model selection
-            st.session_state.model = st.selectbox(
-                "OpenAI Model",
-                ["gpt-4", "gpt-3.5-turbo-16k"],
-                index=0,
-                help="GPT-4 is better for creative tasks, GPT-3.5 is faster and cheaper"
-            )
-            
-            # Temperature control
-            st.session_state.temperature = st.slider(
-                "Creativity (Temperature)",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.7,
-                step=0.1,
-                help="Higher = more creative, Lower = more focused"
-            )
-            
-            return True
-    
-    return False
-
-# -------------------------------
-# MANUSCRIPT EXTRACTION
-# -------------------------------
-def extract_text_from_pdf(file) -> str:
-    """Extract text from uploaded PDF file"""
-    try:
-        pdf_reader = PyPDF2.PdfReader(file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-        return text
+        return conn
     except Exception as e:
-        st.error(f"Error reading PDF: {str(e)}")
-        return ""
-
-def extract_text_from_docx(file) -> str:
-    """Extract text from uploaded DOCX file"""
-    try:
-        doc = docx.Document(file)
-        text = ""
-        for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
-        return text
-    except Exception as e:
-        st.error(f"Error reading DOCX: {str(e)}")
-        return ""
-
-def extract_text_from_txt(file) -> str:
-    """Extract text from uploaded TXT file"""
-    try:
-        return file.getvalue().decode("utf-8")
-    except Exception as e:
-        st.error(f"Error reading TXT: {str(e)}")
-        return ""
-
-def extract_manuscript_text(uploaded_file) -> Optional[str]:
-    """Route to appropriate text extractor based on file type"""
-    file_type = uploaded_file.type
-    
-    if file_type == "application/pdf":
-        return extract_text_from_pdf(uploaded_file)
-    elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        return extract_text_from_docx(uploaded_file)
-    elif file_type == "text/plain":
-        return extract_text_from_txt(uploaded_file)
-    else:
-        st.error(f"Unsupported file type: {file_type}")
+        st.error(f"Database connection failed: {e}")
         return None
 
-# -------------------------------
-# AI ANALYSIS FUNCTIONS
-# -------------------------------
-def analyze_manuscript(text: str) -> Dict:
-    """
-    Use OpenAI to analyze the manuscript and extract key information
-    Based on RAG approach described in marketing assistant guides [citation:1]
-    """
-    
-    # Truncate text if too long (handle token limits)
-    max_chars = 15000  # Approx 4000 tokens
-    if len(text) > max_chars:
-        text = text[:max_chars] + "... [content truncated for analysis]"
-        st.warning("Manuscript truncated for API limits. Consider using GPT-3.5-16k for longer texts.")
-    
-    prompt = f"""
-    You are a professional book editor and marketing strategist. Analyze this manuscript and extract:
-    
-    1. TITLE: What appears to be the book's title (or suggest one if unclear)
-    2. GENRE: Primary genre and subgenres
-    3. MAIN CHARACTERS: List main characters with brief descriptions
-    4. CENTRAL THEMES: 3-5 core themes explored in the book
-    5. TARGET AUDIENCE: Who would most enjoy this book?
-    6. UNIQUE SELLING POINTS: What makes this book special/different?
-    7. TONE/MOOD: The emotional atmosphere (e.g., suspenseful, humorous, melancholy)
-    8. PLOT HOOKS: 3 compelling moments that would make great teasers
-    9. COMPARABLE TITLES: 2-3 well-known books similar in style/theme
-    
-    Manuscript text:
-    {text}
-    
-    Return your analysis as a JSON object with these keys:
-    title, genre, main_characters, central_themes, target_audience, 
-    unique_selling_points, tone, plot_hooks, comparable_titles
-    
-    For array fields, use lists. For all others, use strings.
-    """
-    
-    try:
-        with st.spinner("🧠 AI is analyzing your manuscript..."):
-            response = openai.ChatCompletion.create(
-                model=st.session_state.get('model', 'gpt-4'),
-                messages=[
-                    {"role": "system", "content": "You are a literary analyst and marketing expert. Return valid JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,  # Lower temp for analysis accuracy
-                response_format={"type": "json_object"}
-            )
-        
-        analysis = json.loads(response.choices[0].message.content)
-        return analysis
-        
-    except Exception as e:
-        st.error(f"Analysis failed: {str(e)}")
-        return None
+# ============================================================================
+# TEST CONNECTION ON STARTUP
+# ============================================================================
 
-# -------------------------------
-# ASSET GENERATION FUNCTIONS
-# -------------------------------
-def generate_book_blurb(analysis: Dict) -> str:
-    """Generate Amazon-style book blurb"""
-    
-    prompt = f"""
-    Based on this book analysis, write a compelling book blurb (150-200 words) for Amazon product pages.
-    
-    Book Details:
-    - Title: {analysis.get('title', 'Untitled')}
-    - Genre: {analysis.get('genre', 'Unknown')}
-    - Main Characters: {', '.join(analysis.get('main_characters', ['']))}
-    - Themes: {', '.join(analysis.get('central_themes', ['']))}
-    - Tone: {analysis.get('tone', '')}
-    
-    The blurb should:
-    - Hook readers in the first sentence
-    - Introduce the protagonist and their conflict
-    - Hint at stakes without spoiling
-    - End with a compelling question or statement
-    - Match the book's tone
-    
-    Return only the blurb text, no additional commentary.
-    """
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are a professional copywriter specializing in book descriptions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=st.session_state.get('temperature', 0.7),
-            max_tokens=300
-        )
-        
-        return response.choices[0].message.content
-        
-    except Exception as e:
-        return f"Error generating blurb: {str(e)}"
-
-def generate_email_sequence(analysis: Dict) -> Dict:
-    """Generate pre-launch, launch day, and follow-up emails"""
-    
-    prompt = f"""
-    Create a 3-email launch sequence for this book:
-    
-    Book: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Target Audience: {analysis.get('target_audience', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
-    
-    Generate:
-    1. PRE-LAUGH EMAIL (teaser/hype building) - 2-3 paragraphs
-    2. LAUNCH DAY EMAIL (announcement with call to action) - 2-3 paragraphs
-    3. FOLLOW-UP EMAIL (reviews/social proof) - 2-3 paragraphs
-    
-    Return as JSON with keys: prelaunch_email, launch_email, followup_email
-    Each should include subject line and body.
-    """
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are an email marketing specialist for authors."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            response_format={"type": "json_object"}
-        )
-        
-        return json.loads(response.choices[0].message.content)
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-def generate_social_media_posts(analysis: Dict) -> List[Dict]:
-    """Generate platform-specific social media content"""
-    
-    prompt = f"""
-    Create 5 social media posts to promote this book:
-    
-    Book: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
-    Comparable Titles: {', '.join(analysis.get('comparable_titles', ['']))}
-    
-    For each post, provide:
-    - Platform (mix of Instagram, TikTok, Twitter, Facebook)
-    - Post text/caption
-    - 3-5 relevant hashtags
-    - Visual suggestion for the post
-    
-    Return as array of JSON objects with keys: platform, caption, hashtags, visual_suggestion
-    """
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are a social media manager for authors."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            response_format={"type": "json_object"}
-        )
-        
-        result = json.loads(response.choices[0].message.content)
-        # Handle both array and object responses
-        if isinstance(result, dict) and 'posts' in result:
-            return result['posts']
-        elif isinstance(result, list):
-            return result
-        else:
-            return [result]
-        
-    except Exception as e:
-        return [{"error": str(e)}]
-
-def generate_video_scripts(analysis: Dict) -> List[Dict]:
-    """
-    Generate TikTok/Reels video scripts based on manuscript analysis
-    Inspired by video generation approaches in Streamlit apps [citation:2][citation:4]
-    """
-    
-    prompt = f"""
-    Create 3 TikTok/Reels video scripts (15-30 seconds each) to promote this book:
-    
-    Book: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', ['']))}
-    Tone: {analysis.get('tone', '')}
-    Target Audience: {analysis.get('target_audience', '')}
-    
-    For each script, include:
-    - Hook (first 3 seconds)
-    - Visual scene description
-    - Voiceover text
-    - Background music suggestion
-    - Call to action
-    
-    Follow TikTok best practices:
-    - Hook in first 3 seconds
-    - Fast-paced editing
-    - Text overlays for key points
-    - Clear CTA at end
-    
-    Return as array of JSON objects with keys: 
-    hook, visual_scenes, voiceover, music_suggestion, cta
-    """
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are a viral video content creator specializing in BookTok."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.9,  # Higher temp for creative video concepts
-            max_tokens=1000
-        )
-        
-        # Parse the response (may not be JSON, could be structured text)
-        content = response.choices[0].message.content
-        
-        # Try to parse as JSON if possible
+@st.cache_resource
+def init_connection():
+    """Test connection and cache it"""
+    conn = get_db_connection()
+    if conn:
         try:
-            scripts = json.loads(content)
-            return scripts if isinstance(scripts, list) else [scripts]
-        except:
-            # Return as text with parsing instruction
-            return [{"script_text": content}]
-        
-    except Exception as e:
-        return [{"error": str(e)}]
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) FROM arc_readers_central")
+            count = cur.fetchone()[0]
+            cur.close()
+            st.sidebar.success(f"✅ Connected to DB ({count} ARC readers)")
+        except Exception as e:
+            st.sidebar.error(f"DB error: {e}")
+        finally:
+            conn.close()
+    return True
 
-def generate_ad_copy(analysis: Dict) -> Dict:
-    """Generate Facebook/Amazon ad copy variants"""
-    
-    prompt = f"""
-    Create 3 ad copy variations for Facebook and Amazon ads:
-    
-    Book: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', ['']))}
-    Target Audience: {analysis.get('target_audience', '')}
-    Comparable Titles: {', '.join(analysis.get('comparable_titles', ['']))}
-    
-    For each variation, provide:
-    - Headline (max 5 words)
-    - Primary text (1-2 sentences)
-    - Call to action
-    
-    Make them compelling and conversion-focused.
-    
-    Return as JSON with keys: ad_variation_1, ad_variation_2, ad_variation_3
-    Each containing headline, text, cta
-    """
+# Initialize
+init_connection()
+
+# ============================================================================
+# DATA ACCESS FUNCTIONS
+# ============================================================================
+
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def get_arc_readers_by_genre(genre=None, min_followers=0):
+    """Get ARC readers filtered by genre"""
+    conn = get_db_connection()
+    if not conn:
+        return []
     
     try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are a direct response copywriter for book advertising."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            response_format={"type": "json_object"}
-        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        return json.loads(response.choices[0].message.content)
+        if genre and genre != "All":
+            # Use JSONB containment query
+            cur.execute("""
+                SELECT * FROM arc_readers_central 
+                WHERE genres @> %s 
+                AND follower_count >= %s
+                ORDER BY follower_count DESC
+                LIMIT 100
+            """, (json.dumps([genre]), min_followers))
+        else:
+            cur.execute("""
+                SELECT * FROM arc_readers_central 
+                WHERE follower_count >= %s
+                ORDER BY follower_count DESC
+                LIMIT 100
+            """, (min_followers,))
         
+        readers = cur.fetchall()
+        cur.close()
+        conn.close()
+        return readers
     except Exception as e:
-        return {"error": str(e)}
+        st.error(f"Error fetching readers: {e}")
+        return []
 
-def generate_author_bio(analysis: Dict) -> str:
-    """Generate author bio based on book themes"""
-    
-    prompt = f"""
-    Write a professional author bio (100-150 words) for an author who wrote this book:
-    
-    Book Title: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Themes: {', '.join(analysis.get('central_themes', ['']))}
-    
-    The bio should:
-    - Establish author credibility
-    - Connect to the book's themes
-    - Include the author's apparent interests based on the writing
-    - End with a personal touch
-    
-    Return only the bio text.
-    """
+def get_all_genres():
+    """Get unique genres from database"""
+    conn = get_db_connection()
+    if not conn:
+        return ["Romance", "Fantasy", "Thriller"]
     
     try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state.get('model', 'gpt-4'),
-            messages=[
-                {"role": "system", "content": "You are a professional author biographer."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.6,
-            max_tokens=300
-        )
-        
-        return response.choices[0].message.content
-        
+        cur = conn.cursor()
+        # This extracts all unique genre strings from the JSONB arrays
+        cur.execute("""
+            SELECT DISTINCT jsonb_array_elements_text(genres) as genre
+            FROM arc_readers_central
+            WHERE genres != '[]'::jsonb
+            ORDER BY genre
+        """)
+        genres = [row[0] for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return ["All"] + genres if genres else ["All", "Romance", "Fantasy", "Thriller"]
     except Exception as e:
-        return f"Error generating bio: {str(e)}"
+        st.error(f"Error fetching genres: {e}")
+        return ["All", "Romance", "Fantasy", "Thriller"]
 
-# -------------------------------
-# UI FUNCTIONS
-# -------------------------------
-def display_analysis(analysis: Dict):
-    """Display manuscript analysis in a clean format"""
+# ============================================================================
+# SESSION STATE FOR SAVED READERS
+# ============================================================================
+
+if 'saved_readers' not in st.session_state:
+    st.session_state.saved_readers = []
+
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = None
+
+# ============================================================================
+# SIDEBAR
+# ============================================================================
+
+st.sidebar.title("📱 BookTok Machine")
+st.sidebar.markdown("---")
+
+# Simple login (just for demo)
+st.sidebar.subheader("👤 Author Demo")
+if st.session_state.current_user is None:
+    author_name = st.sidebar.text_input("Your name", value="Demo Author")
+    if st.sidebar.button("Login as Demo"):
+        st.session_state.current_user = {"id": 1, "name": author_name}
+        st.rerun()
+else:
+    st.sidebar.success(f"Logged in as: {st.session_state.current_user['name']}")
+    if st.sidebar.button("Logout"):
+        st.session_state.current_user = None
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# Navigation - UPDATED with Book Reader option
+page = st.sidebar.radio(
+    "Menu",
+    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"]
+)
+
+# ============================================================================
+# DASHBOARD PAGE
+# ============================================================================
+
+if page == "🏠 Dashboard":
+    st.title("📱 Your BookTok Machine")
+    st.markdown("### Welcome back!")
+    
+    # Get stats
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM arc_readers_central")
+        total_readers = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    else:
+        total_readers = "?"
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("ARC Readers", total_readers)
+    with col2:
+        st.metric("Saved Readers", len(st.session_state.saved_readers))
+    with col3:
+        st.metric("Campaigns", "0")
+    
+    st.markdown("---")
+    st.markdown("### 🚀 Quick Actions")
     
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.subheader("📖 Book Overview")
-        st.write(f"**Title:** {analysis.get('title', 'N/A')}")
-        st.write(f"**Genre:** {analysis.get('genre', 'N/A')}")
-        st.write(f"**Tone:** {analysis.get('tone', 'N/A')}")
-        
-        st.subheader("👥 Main Characters")
-        for char in analysis.get('main_characters', []):
-            st.write(f"• {char}")
-        
-        st.subheader("🎯 Target Audience")
-        st.write(analysis.get('target_audience', 'N/A'))
-    
+        if st.button("🔍 Find ARC Readers", use_container_width=True):
+            st.session_state.page = "📚 ARC Readers"
+            st.rerun()
     with col2:
-        st.subheader("🎨 Central Themes")
-        for theme in analysis.get('central_themes', []):
-            st.write(f"• {theme}")
-        
-        st.subheader("✨ Unique Selling Points")
-        for usp in analysis.get('unique_selling_points', []):
-            st.write(f"• {usp}")
-        
-        st.subheader("📚 Comparable Titles")
-        for comp in analysis.get('comparable_titles', []):
-            st.write(f"• {comp}")
-
-def generate_all_assets(analysis: Dict):
-    """Generate all marketing assets with progress tracking"""
-    
-    assets = {}
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    # Step 1: Book Blurb
-    status_text.text("Generating book blurb...")
-    assets['blurb'] = generate_book_blurb(analysis)
-    progress_bar.progress(16)
-    
-    # Step 2: Email Sequence
-    status_text.text("Creating email sequence...")
-    assets['emails'] = generate_email_sequence(analysis)
-    progress_bar.progress(32)
-    
-    # Step 3: Social Media Posts
-    status_text.text("Writing social media content...")
-    assets['social_posts'] = generate_social_media_posts(analysis)
-    progress_bar.progress(48)
-    
-    # Step 4: Video Scripts
-    status_text.text("Developing TikTok video concepts...")
-    assets['video_scripts'] = generate_video_scripts(analysis)
-    progress_bar.progress(64)
-    
-    # Step 5: Ad Copy
-    status_text.text("Crafting advertisement copy...")
-    assets['ad_copy'] = generate_ad_copy(analysis)
-    progress_bar.progress(80)
-    
-    # Step 6: Author Bio
-    status_text.text("Writing author biography...")
-    assets['author_bio'] = generate_author_bio(analysis)
-    progress_bar.progress(96)
-    
-    status_text.text("✅ All assets generated!")
-    progress_bar.progress(100)
-    
-    time.sleep(0.5)
-    status_text.empty()
-    progress_bar.empty()
-    
-    return assets
-
-def display_assets(assets: Dict):
-    """Display generated assets in organized tabs"""
-    
-    tabs = st.tabs([
-        "📝 Book Blurb", 
-        "📧 Email Sequence", 
-        "📱 Social Posts", 
-        "🎬 Video Scripts",
-        "📢 Ad Copy", 
-        "👤 Author Bio"
-    ])
-    
-    # Tab 1: Book Blurb
-    with tabs[0]:
-        st.subheader("Amazon Book Description")
-        st.write(assets.get('blurb', 'Not generated'))
-        
-        # Download button
-        st.download_button(
-            "📥 Download Blurb",
-            assets.get('blurb', ''),
-            file_name="book_blurb.txt",
-            mime="text/plain"
-        )
-    
-    # Tab 2: Email Sequence
-    with tabs[1]:
-        emails = assets.get('emails', {})
-        
-        email_tabs = st.tabs(["Pre-Launch", "Launch Day", "Follow-Up"])
-        
-        with email_tabs[0]:
-            st.write(emails.get('prelaunch_email', 'Not generated'))
-        with email_tabs[1]:
-            st.write(emails.get('launch_email', 'Not generated'))
-        with email_tabs[2]:
-            st.write(emails.get('followup_email', 'Not generated'))
-        
-        # Combined download
-        email_text = f"""
-PRE-LAUNCH EMAIL:
-{emails.get('prelaunch_email', '')}
-
-LAUNCH DAY EMAIL:
-{emails.get('launch_email', '')}
-
-FOLLOW-UP EMAIL:
-{emails.get('followup_email', '')}
-        """
-        st.download_button(
-            "📥 Download All Emails",
-            email_text,
-            file_name="email_sequence.txt",
-            mime="text/plain"
-        )
-    
-    # Tab 3: Social Posts
-    with tabs[2]:
-        posts = assets.get('social_posts', [])
-        
-        for i, post in enumerate(posts, 1):
-            with st.expander(f"Post {i}: {post.get('platform', 'Social Media')}"):
-                st.write(f"**Caption:** {post.get('caption', '')}")
-                st.write(f"**Hashtags:** {post.get('hashtags', '')}")
-                st.write(f"**Visual Idea:** {post.get('visual_suggestion', '')}")
-    
-    # Tab 4: Video Scripts
-    with tabs[3]:
-        scripts = assets.get('video_scripts', [])
-        
-        for i, script in enumerate(scripts, 1):
-            with st.expander(f"Video {i}"):
-                if 'hook' in script:
-                    st.write(f"**🎣 Hook (0-3s):** {script['hook']}")
-                    st.write(f"**🎬 Visuals:** {script.get('visual_scenes', '')}")
-                    st.write(f"**🎙️ Voiceover:** {script.get('voiceover', '')}")
-                    st.write(f"**🎵 Music:** {script.get('music_suggestion', '')}")
-                    st.write(f"**👆 CTA:** {script.get('cta', '')}")
-                else:
-                    st.write(script.get('script_text', str(script)))
-    
-    # Tab 5: Ad Copy
-    with tabs[4]:
-        ads = assets.get('ad_copy', {})
-        
-        for i in range(1, 4):
-            ad_key = f"ad_variation_{i}"
-            if ad_key in ads:
-                ad = ads[ad_key]
-                with st.expander(f"Ad Variation {i}"):
-                    st.write(f"**Headline:** {ad.get('headline', '')}")
-                    st.write(f"**Text:** {ad.get('text', '')}")
-                    st.write(f"**CTA:** {ad.get('cta', '')}")
-    
-    # Tab 6: Author Bio
-    with tabs[5]:
-        st.subheader("Author Biography")
-        st.write(assets.get('author_bio', 'Not generated'))
-        
-        st.download_button(
-            "📥 Download Author Bio",
-            assets.get('author_bio', ''),
-            file_name="author_bio.txt",
-            mime="text/plain"
-        )
-
-# -------------------------------
-# MAIN APP
-# -------------------------------
-def main():
-    """Main application entry point"""
-    
-    st.title("📚 Book Marketing Engine")
-    st.markdown("""
-    Upload your manuscript and let AI generate a complete marketing suite:
-    - **Book blurb** for Amazon product pages
-    - **Email sequence** for launch campaigns  
-    - **Social media posts** for multiple platforms
-    - **TikTok/Reels video scripts** for BookTok promotion
-    - **Ad copy** for Facebook and Amazon
-    - **Author bio** for website and media kits
-    """)
-    
-    # Setup API key
-    if not setup_api_key():
-        st.warning("👈 Please enter your OpenAI API key in the sidebar to begin")
-        return
-    
-    # File upload section
-    st.header("1️⃣ Upload Your Manuscript")
-    
-    uploaded_file = st.file_uploader(
-        "Choose a file (PDF, DOCX, or TXT)",
-        type=['pdf', 'docx', 'txt'],
-        help="Upload your complete manuscript for AI analysis"
-    )
-    
-    if uploaded_file:
-        # Extract text
-        with st.spinner("📄 Extracting text from manuscript..."):
-            manuscript_text = extract_manuscript_text(uploaded_file)
-        
-        if manuscript_text:
-            st.success(f"✅ Successfully extracted {len(manuscript_text)} characters")
-            
-            # Show preview
-            with st.expander("Preview extracted text"):
-                st.text(manuscript_text[:1000] + "..." if len(manuscript_text) > 1000 else manuscript_text)
-            
-            # Analyze button
-            if st.button("🔍 Analyze Manuscript", type="primary"):
-                analysis = analyze_manuscript(manuscript_text)
-                
-                if analysis:
-                    st.session_state.manuscript_analysis = analysis
-                    st.session_state.generated_assets = {}
-                    st.success("✅ Analysis complete!")
-    
-    # Display analysis if available
-    if st.session_state.manuscript_analysis:
-        st.header("2️⃣ Manuscript Analysis")
-        display_analysis(st.session_state.manuscript_analysis)
-        
-        # Generate assets button
-        if st.button("🚀 Generate All Marketing Assets", type="primary"):
-            assets = generate_all_assets(st.session_state.manuscript_analysis)
-            st.session_state.generated_assets = assets
+        if st.button("❤️ View My Saved", use_container_width=True):
+            st.session_state.page = "❤️ My Saved Readers"
             st.rerun()
     
-    # Display generated assets
-    if st.session_state.generated_assets:
-        st.header("3️⃣ Generated Marketing Assets")
-        display_assets(st.session_state.generated_assets)
-        
-        # Export all button
-        if st.button("📦 Export All Assets (ZIP)", type="secondary"):
-            # In a real app, you'd create a ZIP file here
-            st.info("ZIP export functionality would be implemented here")
+    col3, col4 = st.columns(2)
+    with col3:
+        if st.button("📖 Book Reader Tools", use_container_width=True):
+            st.session_state.page = "📖 Book Reader"
+            st.rerun()
 
-# -------------------------------
-# RUN THE APP
-# -------------------------------
-if __name__ == "__main__":
-    main()
+# ============================================================================
+# ARC READERS PAGE (with filtering)
+# ============================================================================
+
+elif page == "📚 ARC Readers":
+    st.title("📚 ARC Reader Database")
+    
+    # Get unique genres for filter
+    genres = get_all_genres()
+    
+    # Filters
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_genre = st.selectbox("Filter by genre", genres)
+    with col2:
+        min_followers = st.slider("Minimum followers", 0, 50000, 1000, step=1000)
+    
+    # Search box
+    search = st.text_input("🔍 Search by username or bio", "")
+    
+    # Load data
+    with st.spinner("Loading readers..."):
+        readers = get_arc_readers_by_genre(
+            selected_genre if selected_genre != "All" else None,
+            min_followers
+        )
+    
+    # Filter by search
+    if search:
+        search_lower = search.lower()
+        readers = [
+            r for r in readers 
+            if search_lower in r['username'].lower() 
+            or (r['bio'] and search_lower in r['bio'].lower())
+        ]
+    
+    st.markdown(f"### Found {len(readers)} readers")
+    
+    # Display readers
+    for reader in readers:
+        with st.expander(f"@{reader['username']} - {reader['follower_count']:,} followers"):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.markdown(f"**Name:** {reader['display_name']}")
+                st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
+                
+                # FIXED: genres is already a list from the database
+                if reader['genres']:
+                    # No json.loads() needed - it's already a Python list!
+                    genre_list = reader['genres']
+                    st.markdown(f"**Genres:** {', '.join(genre_list)}")
+                
+                # Email if available
+                if reader['email']:
+                    st.success(f"📧 {reader['email']}")
+            
+            with col2:
+                # Check if already saved
+                is_saved = any(r['id'] == reader['id'] for r in st.session_state.saved_readers)
+                
+                if not is_saved:
+                    if st.button("❤️ Save", key=f"save_{reader['id']}"):
+                        st.session_state.saved_readers.append(reader)
+                        st.success("Saved!")
+                        st.rerun()
+                else:
+                    st.button("✅ Saved", key=f"saved_{reader['id']}", disabled=True)
+
+# ============================================================================
+# MY SAVED READERS PAGE
+# ============================================================================
+
+elif page == "❤️ My Saved Readers":
+    st.title("❤️ My Saved ARC Readers")
+    
+    if not st.session_state.saved_readers:
+        st.info("You haven't saved any readers yet. Go to the ARC Readers page to find some!")
+        
+        if st.button("🔍 Find ARC Readers Now"):
+            st.session_state.page = "📚 ARC Readers"
+            st.rerun()
+    else:
+        st.markdown(f"### You have {len(st.session_state.saved_readers)} saved readers")
+        
+        # Option to export
+        if st.button("📥 Export as CSV"):
+            df = pd.DataFrame(st.session_state.saved_readers)
+            csv = df.to_csv(index=False)
+            st.download_button(
+                "Download CSV",
+                csv,
+                "my_saved_readers.csv",
+                "text/csv"
+            )
+        
+        st.markdown("---")
+        
+        # Display saved readers
+        for i, reader in enumerate(st.session_state.saved_readers):
+            with st.expander(f"@{reader['username']} - {reader['follower_count']:,} followers"):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.markdown(f"**Name:** {reader['display_name']}")
+                    st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
+                    
+                    # FIXED: Same fix here for saved readers
+                    if reader['genres']:
+                        genre_list = reader['genres']
+                        st.markdown(f"**Genres:** {', '.join(genre_list)}")
+                    
+                    if reader['email']:
+                        st.success(f"📧 {reader['email']}")
+                
+                with col2:
+                    if st.button("🗑️ Remove", key=f"remove_{reader['id']}_{i}"):
+                        st.session_state.saved_readers.pop(i)
+                        st.rerun()
+                    
+                    if st.button("📤 Contact", key=f"contact_{reader['id']}_{i}"):
+                        if reader['email']:
+                            st.info(f"Email them at: {reader['email']}")
+                        else:
+                            st.warning("No email found. Try DM on TikTok")
+
+# ============================================================================
+# TEMPLATES PAGE
+# ============================================================================
+
+elif page == "📝 Templates":
+    st.title("📝 Video Templates")
+    
+    templates = {
+        'pointing': {
+            'name': '🎯 Pointing at Tropes',
+            'script': """
+Looking for [TROPE 1]? ✅
+[TROPE 2]? ✅
+[TROPE 3]? ✅
+Then you need [BOOK TITLE]!
+""",
+            'difficulty': 'Easy'
+        },
+        'books_that_made_me': {
+            'name': '😭 Books That Made Me Feel',
+            'script': """
+Books that made me [EMOTION] at 2am:
+[BOOK TITLE]
+Drop your favorite below 👇
+""",
+            'difficulty': 'Easy'
+        },
+        'if_you_loved': {
+            'name': '📚 If You Loved X, Read Y',
+            'script': """
+If you loved [POPULAR BOOK],
+you NEED to read [BOOK TITLE].
+Same [TROPE] vibes!
+""",
+            'difficulty': 'Easy'
+        }
+    }
+    
+    for tid, template in templates.items():
+        with st.expander(f"{template['name']} - {template['difficulty']}"):
+            st.markdown("**Script:**")
+            st.code(template['script'])
+            
+            if st.button(f"Use This Template", key=tid):
+                st.session_state['selected_template'] = template
+                st.success("Template selected!")
+
+# ============================================================================
+# BOOK READER PAGE - Calls the BookReader module
+# ============================================================================
+
+elif page == "📖 Book Reader":
+    # This calls the function from BookReader.py
+    BookReader.show_manuscript_tools()
+
+# ============================================================================
+# FOOTER
+# ============================================================================
+
+st.sidebar.markdown
