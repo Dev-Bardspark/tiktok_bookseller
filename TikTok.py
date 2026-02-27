@@ -7,6 +7,7 @@ import hashlib
 from datetime import datetime
 from enum import Enum
 import json
+import VideoGenerator
 
 # DO NOT import BookReader at the top - we'll import it only when needed
 
@@ -160,6 +161,11 @@ page = st.sidebar.radio(
     "Menu",
     ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader"],
     key="navigation"
+)
+
+page = st.sidebar.radio(
+    "Menu",
+    ["🏠 Dashboard", "📚 ARC Readers", "❤️ My Saved Readers", "📝 Templates", "📖 Book Reader", "🎬 Video Generator"]
 )
 
 # Store current page in session state to help BookReader know when to render
@@ -374,6 +380,10 @@ elif page == "📖 Book Reader":
     # This prevents duplicate widget errors
     import BookReader
     BookReader.show_manuscript_tools()
+
+elif page == "🎬 Video Generator":
+    import VideoGenerator
+    VideoGenerator.show_video_generator()
 
 # ============================================================================
 # FOOTER
