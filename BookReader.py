@@ -123,11 +123,14 @@ def show_manuscript_tools():
             
             # Generate assets button
             if st.button("🚀 Generate All Marketing Assets", type="primary", key="generate_button", use_container_width=True):
-                with st.spinner("Generating marketing assets... (this may take a minute)"):
+                with st.spinner("Generating marketing assets... (this may take 1-2 minutes)"):
                     assets = generate_all_assets(st.session_state.manuscript_analysis)
-                    st.session_state.generated_assets = assets
-                    st.success("✅ Assets generated! Go to the Generated Assets tab to see them.")
-                    st.rerun()
+                    if assets:
+                        st.session_state.generated_assets = assets
+                        st.success("✅ Assets generated! Go to the Generated Assets tab to see them.")
+                        st.rerun()
+                    else:
+                        st.error("Failed to generate assets. Check the error messages above.")
         else:
             st.info("No manuscript analyzed yet. Upload a file in the Upload tab and click Analyze.")
     
@@ -241,9 +244,6 @@ def analyze_manuscript_text(text: str) -> Dict:
         
     except Exception as e:
         st.error(f"Analysis failed: {str(e)}")
-        # Show more details for debugging
-        if hasattr(e, 'response'):
-            st.error(f"Response details: {e.response.text if hasattr(e, 'response') else 'No details'}")
         return None
 
 
@@ -252,16 +252,37 @@ def generate_book_blurb(analysis: Dict) -> str:
     try:
         client = OpenAI(api_key=st.session_state.openai_api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {str(e)}")
-        return "Error initializing client"
+        return f"Error initializing client: {str(e)}"
+    
+    # Safely get values
+    title = analysis.get('title', 'Untitled')
+    genre = analysis.get('genre', 'Unknown Genre')
+    
+    # Handle characters
+    characters = analysis.get('main_characters', [])
+    if isinstance(characters, list):
+        char_text = ', '.join([str(c) for c in characters[:3]])
+    else:
+        char_text = str(characters)
+    
+    # Handle themes
+    themes = analysis.get('central_themes', [])
+    if isinstance(themes, list):
+        theme_text = ', '.join([str(t) for t in themes[:3]])
+    else:
+        theme_text = str(themes)
+    
+    tone = analysis.get('tone', '')
     
     prompt = f"""
     Write a compelling book blurb (150 words) for:
-    Title: {analysis.get('title', 'Untitled')}
-    Genre: {analysis.get('genre', '')}
-    Characters: {', '.join(analysis.get('main_characters', [''])) if isinstance(analysis.get('main_characters'), list) else analysis.get('main_characters', '')}
-    Themes: {', '.join(analysis.get('central_themes', [''])) if isinstance(analysis.get('central_themes'), list) else analysis.get('central_themes', '')}
-    Tone: {analysis.get('tone', '')}
+    Title: {title}
+    Genre: {genre}
+    Characters: {char_text}
+    Themes: {theme_text}
+    Tone: {tone}
+    
+    Make it engaging and sales-focused. Include a hook, stakes, and a call to action.
     """
     
     try:
@@ -272,28 +293,34 @@ def generate_book_blurb(analysis: Dict) -> str:
                 {"role": "user", "content": prompt}
             ],
             temperature=st.session_state.get('temperature', 0.7),
-            max_tokens=300
+            max_tokens=400
         )
         
         return response.choices[0].message.content
+        
     except Exception as e:
-        st.error(f"Blurb generation failed: {str(e)}")
         return f"Error generating blurb: {str(e)}"
 
 
-def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
+def generate_tiktok_scripts(analysis: Dict) -> List:
     """Generate TikTok video scripts"""
     try:
         client = OpenAI(api_key=st.session_state.openai_api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {str(e)}")
         return [{"error": str(e)}]
+    
+    # Safely get plot hooks
+    plot_hooks = analysis.get('plot_hooks', [])
+    if isinstance(plot_hooks, list):
+        hooks_text = ', '.join([str(h) for h in plot_hooks[:3]])
+    else:
+        hooks_text = str(plot_hooks)
     
     prompt = f"""
     Create 3 TikTok video scripts (15-30 seconds each) for this book:
     Title: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', [''])) if isinstance(analysis.get('plot_hooks'), list) else analysis.get('plot_hooks', '')}
+    Plot Hooks: {hooks_text}
     Tone: {analysis.get('tone', '')}
     
     For each script include:
@@ -303,14 +330,14 @@ def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
     - music: Background music suggestion
     - cta: Call to action
     
-    Return as JSON array.
+    Return as a JSON array with 3 objects.
     """
     
     try:
         response = client.chat.completions.create(
             model=st.session_state.get('model', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return JSON."},
+                {"role": "system", "content": "You are a viral video creator specializing in BookTok. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.8,
@@ -318,9 +345,19 @@ def generate_tiktok_scripts(analysis: Dict) -> List[Dict]:
         )
         
         result = json.loads(response.choices[0].message.content)
-        return result if isinstance(result, list) else [result]
+        # Ensure we return a list
+        if isinstance(result, list):
+            return result
+        elif isinstance(result, dict):
+            # Check if it has a scripts key
+            if 'scripts' in result:
+                return result['scripts']
+            else:
+                return [result]
+        else:
+            return [{"error": "Unexpected response format"}]
+            
     except Exception as e:
-        st.error(f"TikTok script generation failed: {str(e)}")
         return [{"error": str(e)}]
 
 
@@ -329,8 +366,14 @@ def generate_email_sequence(analysis: Dict) -> Dict:
     try:
         client = OpenAI(api_key=st.session_state.openai_api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {str(e)}")
         return {"error": str(e)}
+    
+    # Safely get values
+    usp = analysis.get('unique_selling_points', [])
+    if isinstance(usp, list):
+        usp_text = ', '.join([str(u) for u in usp[:3]])
+    else:
+        usp_text = str(usp)
     
     prompt = f"""
     Create 3 emails for book launch:
@@ -341,7 +384,7 @@ def generate_email_sequence(analysis: Dict) -> Dict:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
     Target Audience: {analysis.get('target_audience', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', [''])) if isinstance(analysis.get('unique_selling_points'), list) else analysis.get('unique_selling_points', '')}
+    Unique Selling Points: {usp_text}
     
     Return as JSON with keys: prelaunch_email, launch_email, followup_email
     Each should include subject line and body.
@@ -351,7 +394,7 @@ def generate_email_sequence(analysis: Dict) -> Dict:
         response = client.chat.completions.create(
             model=st.session_state.get('model', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": "You are an email marketing specialist for authors. Return JSON."},
+                {"role": "system", "content": "You are an email marketing specialist for authors. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -359,24 +402,30 @@ def generate_email_sequence(analysis: Dict) -> Dict:
         )
         
         return json.loads(response.choices[0].message.content)
+        
     except Exception as e:
-        st.error(f"Email sequence generation failed: {str(e)}")
         return {"error": str(e)}
 
 
-def generate_social_posts(analysis: Dict) -> List[Dict]:
+def generate_social_posts(analysis: Dict) -> List:
     """Generate social media posts"""
     try:
         client = OpenAI(api_key=st.session_state.openai_api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {str(e)}")
         return [{"error": str(e)}]
+    
+    # Safely get plot hooks
+    plot_hooks = analysis.get('plot_hooks', [])
+    if isinstance(plot_hooks, list):
+        hooks_text = ', '.join([str(h) for h in plot_hooks[:3]])
+    else:
+        hooks_text = str(plot_hooks)
     
     prompt = f"""
     Create 5 social media posts to promote this book:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Plot Hooks: {', '.join(analysis.get('plot_hooks', [''])) if isinstance(analysis.get('plot_hooks'), list) else analysis.get('plot_hooks', '')}
+    Plot Hooks: {hooks_text}
     
     For each post, include:
     - platform: (mix of Instagram, TikTok, Twitter, Facebook)
@@ -384,14 +433,14 @@ def generate_social_posts(analysis: Dict) -> List[Dict]:
     - hashtags: 3-5 relevant hashtags
     - visual_suggestion: What image/video to use
     
-    Return as JSON array.
+    Return as a JSON array with 5 objects.
     """
     
     try:
         response = client.chat.completions.create(
             model=st.session_state.get('model', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": "You are a social media manager for authors. Return JSON."},
+                {"role": "system", "content": "You are a social media manager for authors. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.8,
@@ -399,9 +448,18 @@ def generate_social_posts(analysis: Dict) -> List[Dict]:
         )
         
         result = json.loads(response.choices[0].message.content)
-        return result if isinstance(result, list) else [result]
+        # Ensure we return a list
+        if isinstance(result, list):
+            return result
+        elif isinstance(result, dict):
+            if 'posts' in result:
+                return result['posts']
+            else:
+                return [result]
+        else:
+            return [{"error": "Unexpected response format"}]
+            
     except Exception as e:
-        st.error(f"Social posts generation failed: {str(e)}")
         return [{"error": str(e)}]
 
 
@@ -410,14 +468,20 @@ def generate_ad_copy(analysis: Dict) -> Dict:
     try:
         client = OpenAI(api_key=st.session_state.openai_api_key)
     except Exception as e:
-        st.error(f"Failed to initialize OpenAI client: {str(e)}")
         return {"error": str(e)}
+    
+    # Safely get USP
+    usp = analysis.get('unique_selling_points', [])
+    if isinstance(usp, list):
+        usp_text = ', '.join([str(u) for u in usp[:3]])
+    else:
+        usp_text = str(usp)
     
     prompt = f"""
     Create 3 ad variations for Facebook/Amazon ads:
     Book: {analysis.get('title', 'Untitled')}
     Genre: {analysis.get('genre', '')}
-    Unique Selling Points: {', '.join(analysis.get('unique_selling_points', [''])) if isinstance(analysis.get('unique_selling_points'), list) else analysis.get('unique_selling_points', '')}
+    Unique Selling Points: {usp_text}
     Target Audience: {analysis.get('target_audience', '')}
     
     For each variation, provide:
@@ -432,7 +496,7 @@ def generate_ad_copy(analysis: Dict) -> Dict:
         response = client.chat.completions.create(
             model=st.session_state.get('model', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": "You are a direct response copywriter for book advertising. Return JSON."},
+                {"role": "system", "content": "You are a direct response copywriter for book advertising. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -440,8 +504,8 @@ def generate_ad_copy(analysis: Dict) -> Dict:
         )
         
         return json.loads(response.choices[0].message.content)
+        
     except Exception as e:
-        st.error(f"Ad copy generation failed: {str(e)}")
         return {"error": str(e)}
 
 
@@ -453,30 +517,48 @@ def generate_all_assets(analysis: Dict) -> Dict:
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    status_text.text("Generating book blurb...")
-    assets['blurb'] = generate_book_blurb(analysis)
-    progress_bar.progress(20)
+    try:
+        # Book Blurb
+        status_text.text("📝 Generating book blurb...")
+        assets['blurb'] = generate_book_blurb(analysis)
+        progress_bar.progress(20)
+        time.sleep(0.3)
+        
+        # TikTok Scripts
+        status_text.text("🎬 Creating TikTok scripts...")
+        assets['tiktok_scripts'] = generate_tiktok_scripts(analysis)
+        progress_bar.progress(40)
+        time.sleep(0.3)
+        
+        # Email Sequence
+        status_text.text("📧 Writing email sequence...")
+        assets['emails'] = generate_email_sequence(analysis)
+        progress_bar.progress(60)
+        time.sleep(0.3)
+        
+        # Social Posts
+        status_text.text("📱 Crafting social posts...")
+        assets['social_posts'] = generate_social_posts(analysis)
+        progress_bar.progress(80)
+        time.sleep(0.3)
+        
+        # Ad Copy
+        status_text.text("📢 Generating ad copy...")
+        assets['ad_copy'] = generate_ad_copy(analysis)
+        progress_bar.progress(100)
+        time.sleep(0.3)
+        
+        status_text.text("✅ All assets generated successfully!")
+        time.sleep(1)
+        
+    except Exception as e:
+        st.error(f"Error in asset generation: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
     
-    status_text.text("Creating TikTok scripts...")
-    assets['tiktok_scripts'] = generate_tiktok_scripts(analysis)
-    progress_bar.progress(40)
-    
-    status_text.text("Writing email sequence...")
-    assets['emails'] = generate_email_sequence(analysis)
-    progress_bar.progress(60)
-    
-    status_text.text("Crafting social posts...")
-    assets['social_posts'] = generate_social_posts(analysis)
-    progress_bar.progress(80)
-    
-    status_text.text("Generating ad copy...")
-    assets['ad_copy'] = generate_ad_copy(analysis)
-    progress_bar.progress(100)
-    
-    status_text.text("✅ All assets generated!")
-    time.sleep(0.5)
-    status_text.empty()
-    progress_bar.empty()
+    finally:
+        status_text.empty()
+        progress_bar.empty()
     
     return assets
 
@@ -522,80 +604,85 @@ def display_analysis(analysis: Dict):
 
 def display_assets(assets: Dict):
     """Display generated assets"""
+    if not assets:
+        st.warning("No assets to display")
+        return
+    
     tabs = st.tabs(["📝 Blurb", "🎬 TikTok", "📧 Emails", "📱 Social", "📢 Ads"])
     
+    # Tab 1: Blurb
     with tabs[0]:
         st.subheader("Book Blurb")
         blurb_text = assets.get('blurb', 'Not generated')
-        st.write(blurb_text)
-        st.download_button(
-            "Download",
-            blurb_text,
-            "blurb.txt",
-            key="download_blurb"
-        )
+        if blurb_text and not blurb_text.startswith("Error"):
+            st.write(blurb_text)
+            st.download_button(
+                "📥 Download Blurb",
+                blurb_text,
+                "book_blurb.txt",
+                key="download_blurb"
+            )
+        else:
+            st.error(blurb_text)
     
+    # Tab 2: TikTok Scripts
     with tabs[1]:
-        st.subheader("TikTok Scripts")
+        st.subheader("TikTok Video Scripts")
         scripts = assets.get('tiktok_scripts', [])
-        if isinstance(scripts, dict):
-            # Handle case where API returns a dict with a scripts field
-            if 'scripts' in scripts:
-                scripts = scripts['scripts']
-            else:
-                scripts = [scripts]
-        
-        if isinstance(scripts, list):
+        if scripts and isinstance(scripts, list):
             for i, script in enumerate(scripts, 1):
-                with st.expander(f"Script {i}"):
+                with st.expander(f"🎬 Script {i}"):
                     if isinstance(script, dict):
                         for key, value in script.items():
-                            st.write(f"**{key}:** {value}")
+                            st.write(f"**{key.title()}:** {value}")
                     else:
                         st.write(script)
         else:
-            st.json(scripts)
+            st.info("No TikTok scripts generated")
     
+    # Tab 3: Emails
     with tabs[2]:
         st.subheader("Email Sequence")
         emails = assets.get('emails', {})
-        if isinstance(emails, dict):
+        if emails and isinstance(emails, dict):
             for key, value in emails.items():
-                with st.expander(key.replace('_', ' ').title()):
-                    st.write(value)
+                if key != "error":
+                    with st.expander(f"📧 {key.replace('_', ' ').title()}"):
+                        st.write(value)
+                else:
+                    st.error(f"Error: {value}")
         else:
-            st.json(emails)
+            st.info("No emails generated")
     
+    # Tab 4: Social Posts
     with tabs[3]:
-        st.subheader("Social Posts")
+        st.subheader("Social Media Posts")
         posts = assets.get('social_posts', [])
-        if isinstance(posts, dict):
-            if 'posts' in posts:
-                posts = posts['posts']
-            else:
-                posts = [posts]
-        
-        if isinstance(posts, list):
+        if posts and isinstance(posts, list):
             for i, post in enumerate(posts, 1):
-                with st.expander(f"Post {i}"):
+                with st.expander(f"📱 Post {i}"):
                     if isinstance(post, dict):
                         for key, value in post.items():
-                            st.write(f"**{key}:** {value}")
+                            st.write(f"**{key.title()}:** {value}")
                     else:
                         st.write(post)
         else:
-            st.json(posts)
+            st.info("No social posts generated")
     
+    # Tab 5: Ads
     with tabs[4]:
         st.subheader("Ad Copy")
         ads = assets.get('ad_copy', {})
-        if isinstance(ads, dict):
+        if ads and isinstance(ads, dict):
             for key, value in ads.items():
-                with st.expander(key.replace('_', ' ').title()):
-                    if isinstance(value, dict):
-                        for k, v in value.items():
-                            st.write(f"**{k}:** {v}")
-                    else:
-                        st.write(value)
+                if key != "error":
+                    with st.expander(f"📢 {key.replace('_', ' ').title()}"):
+                        if isinstance(value, dict):
+                            for k, v in value.items():
+                                st.write(f"**{k.title()}:** {v}")
+                        else:
+                            st.write(value)
+                else:
+                    st.error(f"Error: {value}")
         else:
-            st.json(ads)
+            st.info("No ad copy generated")
