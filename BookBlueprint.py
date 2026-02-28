@@ -129,10 +129,10 @@ def show_upload_stage():
     with st.expander("📋 Additional Information (Optional but Helpful)"):
         col1, col2 = st.columns(2)
         with col1:
-            target_genre = st.text_input("Primary Genre (if known)", placeholder="e.g., Romantasy")
-            comp_titles = st.text_area("Comparable Titles (one per line)", placeholder="Fourth Wing\nACOTAR\nSerpent & Wings of Night")
+            target_genre = st.text_input("Primary Genre (if known)", placeholder="e.g., Memoir")
+            comp_titles = st.text_area("Comparable Titles (one per line)", placeholder="Wind, Sand and Stars\nFlying Solo\nSkyward")
         with col2:
-            target_audience = st.text_input("Target Audience (if known)", placeholder="e.g., Adult fantasy romance readers")
+            target_audience = st.text_input("Target Audience (if known)", placeholder="e.g., Aviation enthusiasts, memoir readers")
             author_platform = st.multiselect("Author Platforms", ["TikTok", "Instagram", "Twitter", "Facebook", "Newsletter", "None"])
     
     if manuscript_file and cover_file:
@@ -197,50 +197,33 @@ def show_analyzing_stage():
                 st.write(f"**Mood:** {cover_analysis.get('mood', 'Unknown')}")
                 st.write(f"**Genre signals:** {cover_analysis.get('genre_signals', 'Unknown')}")
         
-        # Step 4: Deep manuscript analysis
-        status_text.text("📖 Analyzing your manuscript deeply...")
+        # Step 4: Get ACTUAL excerpts from manuscript
+        status_text.text("📖 Extracting key passages from your manuscript...")
         progress_bar.progress(50)
-        manuscript_analysis = analyze_manuscript_deeply(client, manuscript_text)
+        excerpts = extract_key_excerpts(manuscript_text)
         
-        if manuscript_analysis:
-            # Show manuscript findings
-            st.success("✅ Manuscript analyzed!")
-            with st.expander("📚 What the AI found in your book", expanded=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    characters = manuscript_analysis.get('characters', {}).get('main', [])
-                    st.write(f"**Main characters:** {len(characters)}")
-                    for c in characters[:2]:
-                        if isinstance(c, dict):
-                            st.write(f"• {c.get('name', 'Unknown')}: {c.get('role', '')}")
-                    
-                    themes = manuscript_analysis.get('themes', {}).get('primary', [])
-                    st.write(f"**Primary themes:** {', '.join(themes) if isinstance(themes, list) else themes}")
-                
-                with col2:
-                    pacing = manuscript_analysis.get('pacing', {}).get('overall', 'Unknown')
-                    st.write(f"**Pacing:** {pacing}")
-                    
-                    strengths = manuscript_analysis.get('strengths', [])
-                    if strengths:
-                        st.write(f"**Top strength:** {strengths[0]}")
+        # Show excerpts
+        st.success("✅ Key passages extracted!")
+        with st.expander("📚 Key moments from your book", expanded=True):
+            for i, excerpt in enumerate(excerpts, 1):
+                st.text(f"Excerpt {i}: {excerpt[:200]}...")
         
-        # Step 5: Generate complete blueprint with ALL real data
+        # Step 5: Generate complete blueprint using REAL excerpts
         status_text.text("🎯 Generating complete marketing blueprint...")
         progress_bar.progress(80)
         
         blueprint = generate_complete_blueprint(
             client,
             manuscript_text,
+            excerpts,
             cover_analysis,
-            manuscript_analysis,
             st.session_state.blueprint_options
         )
         
         if blueprint:
-            # Add both real analyses
+            # Add real analyses
             blueprint['cover_analysis'] = cover_analysis
-            blueprint['manuscript_analysis'] = manuscript_analysis
+            blueprint['excerpts'] = excerpts
             st.session_state.blueprint = blueprint
             
             status_text.text("✅ Blueprint generated successfully!")
@@ -256,6 +239,35 @@ def show_analyzing_stage():
         if st.button("⬅️ Back to Upload"):
             st.session_state.blueprint_stage = "upload"
             st.rerun()
+
+
+def extract_key_excerpts(full_text):
+    """Extract key passages from the manuscript"""
+    excerpts = []
+    total_length = len(full_text)
+    
+    if total_length > 1000:
+        # Opening (first 10%)
+        pos1 = int(total_length * 0.05)
+        excerpt1 = full_text[pos1:pos1 + 800]
+        excerpts.append(excerpt1)
+        
+        # Middle (around 50%)
+        pos2 = int(total_length * 0.5)
+        excerpt2 = full_text[pos2:pos2 + 800]
+        excerpts.append(excerpt2)
+        
+        # Climax/ending (around 80%)
+        pos3 = int(total_length * 0.8)
+        excerpt3 = full_text[pos3:pos3 + 800]
+        excerpts.append(excerpt3)
+        
+        # Another middle section (around 30%)
+        pos4 = int(total_length * 0.3)
+        excerpt4 = full_text[pos4:pos4 + 800]
+        excerpts.append(excerpt4)
+    
+    return excerpts
 
 
 def analyze_cover_with_vision(client, cover_base64):
@@ -277,7 +289,7 @@ def analyze_cover_with_vision(client, cover_base64):
                             - composition: describe the layout (where is the title? what imagery? how are elements arranged?)
                             - typography: describe the font style (serif, sans-serif, handwritten, bold, elegant, etc.)
                             - mood: what emotional feeling does this cover convey in 2-3 words?
-                            - genre_signals: what genre does this cover suggest? (e.g., "romantasy", "thriller", "contemporary romance")
+                            - genre_signals: what genre does this cover suggest? (e.g., "memoir", "thriller", "romance")
                             - strengths: 3 specific strengths of THIS EXACT cover based on what you see
                             - weaknesses: 3 specific weaknesses of THIS EXACT cover based on what you see
                             - suggestions: 3 specific improvements for THIS EXACT cover
@@ -305,7 +317,7 @@ def analyze_cover_with_vision(client, cover_base64):
     except Exception as e:
         st.error(f"Vision API Error: {str(e)}")
         return {
-            "colors": ["Analysis failed - check API key"],
+            "colors": ["Analysis failed"],
             "figures": "Could not analyze",
             "composition": "Analysis failed",
             "typography": "Analysis failed",
@@ -317,251 +329,170 @@ def analyze_cover_with_vision(client, cover_base64):
         }
 
 
-def analyze_manuscript_deeply(client, full_text):
-    """Deep analysis of the entire manuscript"""
-    
-    # Split into logical chunks
-    total_length = len(full_text)
-    first_part = full_text[:int(total_length * 0.1)]
-    
-    # Take middle section (around 50% mark)
-    middle_start = int(total_length * 0.4)
-    middle_end = int(total_length * 0.6)
-    middle_part = full_text[middle_start:middle_end]
-    
-    last_part = full_text[int(total_length * 0.9):]
-    
-    # Truncate if needed
-    if len(first_part) > 3000:
-        first_part = first_part[:3000]
-    if len(middle_part) > 4000:
-        middle_part = middle_part[:4000]
-    if len(last_part) > 3000:
-        last_part = last_part[:3000]
-    
-    prompt = f"""
-    You are a professional book editor and literary analyst. Analyze this book thoroughly.
-    
-    OPENING (first 10%):
-    {first_part}
-    
-    MIDDLE (representative section from around 50%):
-    {middle_part}
-    
-    ENDING (last 10%):
-    {last_part}
-    
-    Based on these samples, provide a detailed analysis as JSON:
-    
-    1. characters: {{
-        "main": [
-            {{"name": "Character name", "role": "protagonist/antagonist/love interest", 
-              "arc": "how they change", "traits": ["trait1", "trait2"]}}
-        ],
-        "supporting": ["list of supporting characters with brief description"],
-        "relationships": ["key relationships and dynamics"]
-    }}
-    
-    2. plot: {{
-        "opening_hook": "what grabs reader attention",
-        "inciting_incident": "what starts the story",
-        "major_turning_points": ["point1", "point2", "point3"],
-        "climax": "the big moment",
-        "resolution": "how it ends"
-    }}
-    
-    3. themes: {{
-        "primary": ["main theme explained"],
-        "secondary": ["other themes"],
-        "motifs": ["recurring symbols/elements"]
-    }}
-    
-    4. pacing: {{
-        "overall": "fast/medium/slow",
-        "opening_pace": "description",
-        "middle_pace": "description",
-        "ending_pace": "description",
-        "variations": ["any pace changes"]
-    }}
-    
-    5. tone_and_voice: {{
-        "narrative_voice": "first person/third limited/omniscient/etc",
-        "tone": "overall emotional atmosphere",
-        "style": "descriptive/spare/lyrical/ dialogue-heavy/etc",
-        "dialogue_style": "how characters speak"
-    }}
-    
-    6. strengths: ["3-5 specific strengths of THIS manuscript based on the actual text"]
-    
-    7. weaknesses: ["3-5 specific areas for improvement based on the actual text"]
-    
-    8. comparable_titles: [
-        {{"title": "Book Title", "similarity": "how it's similar", "difference": "how it's different"}}
-    ]
-    
-    9. target_audience: {{
-        "primary": "who will love this (age, gender, reading preferences)",
-        "appeal": "what makes it appealing to them"
-    }}
-    
-    Be SPECIFIC. Reference actual elements from the text. Don't make generic statements.
-    """
+def generate_complete_blueprint(client, full_text, excerpts, cover_analysis, options):
+    """Generate marketing blueprint using ACTUAL book excerpts"""
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.4,
-            max_tokens=3000,
-            response_format={"type": "json_object"}
-        )
-        
-        return json.loads(response.choices[0].message.content)
-        
-    except Exception as e:
-        st.error(f"Manuscript analysis error: {str(e)}")
-        return None
-
-
-def generate_complete_blueprint(client, manuscript_text, cover_analysis, manuscript_analysis, options):
-    """Generate full marketing blueprint using REAL manuscript and cover analysis"""
-    
-    try:
-        # Truncate manuscript for final prompt
-        if len(manuscript_text) > 5000:
-            manuscript_excerpt = manuscript_text[:5000] + "... [truncated]"
-        else:
-            manuscript_excerpt = manuscript_text
+        # Get book title from first few lines or use placeholder
+        first_lines = full_text[:500].split('\n')[:3]
+        book_title = "Your Book"
+        for line in first_lines:
+            if line.strip() and len(line) < 100:
+                book_title = line.strip()
+                break
         
         prompt = f"""
-        Create a complete book marketing blueprint using these REAL analyses.
+        You are a book marketing expert. Create a COMPLETE marketing blueprint for THIS SPECIFIC book.
         
-        MANUSCRIPT ANALYSIS:
-        {json.dumps(manuscript_analysis, indent=2)}
+        BOOK TITLE (from manuscript): {book_title}
+        
+        ACTUAL EXCERPTS FROM THE BOOK (use these for ALL content):
+        
+        EXCERPT 1 (opening):
+        {excerpts[0] if len(excerpts) > 0 else "No excerpt"}
+        
+        EXCERPT 2 (middle section):
+        {excerpts[1] if len(excerpts) > 1 else "No excerpt"}
+        
+        EXCERPT 3 (climax/important moment):
+        {excerpts[2] if len(excerpts) > 2 else "No excerpt"}
+        
+        EXCERPT 4 (character/theme moment):
+        {excerpts[3] if len(excerpts) > 3 else "No excerpt"}
         
         COVER ANALYSIS:
-        {json.dumps(cover_analysis, indent=2)}
+        Colors: {', '.join(cover_analysis.get('colors', []))}
+        Mood: {cover_analysis.get('mood', 'Unknown')}
+        Genre signals: {cover_analysis.get('genre_signals', 'Unknown')}
         
-        MANUSCRIPT EXCERPT (for voice reference):
-        {manuscript_excerpt[:2000]}
+        ADDITIONAL INFO PROVIDED BY AUTHOR:
+        {json.dumps(options, indent=2)}
         
-        ADDITIONAL INFO:
-        {json.dumps(options)}
-        
-        Create a comprehensive marketing blueprint with these sections as JSON:
+        Based SOLELY on the excerpts above, create a marketing blueprint with these sections as JSON:
         
         1. book_profile: {{
-            "title": "suggested title or based on content",
-            "genre": "primary genre",
-            "subgenres": ["subgenre1", "subgenre2"],
-            "tone": "from analysis",
-            "pace": "from analysis",
-            "main_characters": ["character descriptions from analysis"]
+            "title": "{book_title}",
+            "genre": "Determine from excerpts",
+            "subgenres": ["Determine from content"],
+            "tone": "Determine from writing style",
+            "pace": "Determine from excerpts",
+            "main_characters": ["List characters mentioned in excerpts"]
         }}
         
         2. reader_avatar: {{
             "primary": {{
-                "name": "Persona name",
-                "age": "age range",
-                "occupation": "typical job",
+                "name": "Create persona name",
+                "age": "appropriate age range",
+                "occupation": "relevant to book's themes",
                 "reading_habits": "how they read",
-                "what_she_seeks": "what they want from books like this",
-                "where_she_hangs_out": "social platforms",
-                "what_she_avoids": "turnoffs"
+                "what_she_seeks": "what they want based on book's content",
+                "where_she_hangs_out": "social platforms relevant to this genre",
+                "what_she_avoids": "turnoffs based on book's style"
             }}
         }}
         
         3. market_position: {{
-            "primary_shelf": "Amazon category",
-            "comp_titles": "from analysis",
-            "positioning_statement": "For fans of X who want Y"
+            "primary_shelf": "Amazon category from excerpts",
+            "comp_titles": [
+                {{"title": "Real comparable book 1", "similarity": "how it's similar to THESE excerpts", "difference": "how THIS book is different"}},
+                {{"title": "Real comparable book 2", "similarity": "how it's similar", "difference": "how THIS book is different"}}
+            ],
+            "positioning_statement": "For readers who love [specific element from excerpts]"
         }}
         
         4. keyword_cloud: {{
-            "amazon_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-            "search_volume": {{"high": ["term1"], "medium": ["term2"], "low": ["term3"]}},
-            "categories": ["category1", "category2"]
+            "amazon_keywords": ["5-7 keywords based on actual content from excerpts"],
+            "search_volume": {{"high": ["terms from content"], "medium": ["related terms"]}},
+            "categories": ["2-3 Amazon categories that fit"]
         }}
         
         5. blurb_analysis: {{
-            "score": 0-100,
-            "strengths": ["strength1", "strength2"],
-            "weaknesses": ["weakness1", "weakness2"],
-            "optimized_version": "compelling 150-word blurb"
+            "score": 75,
+            "strengths": ["3 strengths based on actual writing in excerpts"],
+            "weaknesses": ["3 areas for improvement based on excerpts"],
+            "optimized_version": "A 150-word blurb using actual phrases and moments from the excerpts"
         }}
         
         6. marketing_blueprint: {{
             "channel_strategies": {{
                 "tiktok": {{
-                    "content_pillars": ["pillar1", "pillar2", "pillar3"],
-                    "sound_suggestions": ["sound1", "sound2"],
-                    "hashtags": ["#tag1", "#tag2", "#tag3"]
+                    "content_pillars": ["3 pillars based on themes in excerpts"],
+                    "sound_suggestions": ["2 sounds matching the mood"],
+                    "hashtags": ["5 hashtags relevant to this content"]
                 }},
                 "instagram": {{
-                    "post_types": ["type1", "type2", "type3"],
-                    "reel_ideas": ["idea1", "idea2", "idea3"]
+                    "post_types": ["3 post types based on visual elements from excerpts"],
+                    "reel_ideas": ["2 reel concepts using actual moments"]
                 }},
                 "email": {{
-                    "welcome_sequence": ["email1", "email2", "email3"],
-                    "launch_sequence": ["email1", "email2", "email3"]
+                    "welcome_sequence": ["2 emails introducing the book's real content"],
+                    "launch_sequence": ["2 launch emails using excerpts"]
                 }},
                 "ads": {{
                     "amazon_ads": {{
-                        "headlines": ["headline1", "headline2", "headline3"],
-                        "keywords_to_bid": ["keyword1", "keyword2"],
-                        "negative_keywords": ["term1", "term2"]
+                        "headlines": ["3 headlines using phrases from excerpts"],
+                        "keywords_to_bid": ["keywords from content"],
+                        "negative_keywords": ["irrelevant terms"]
                     }}
                 }}
             }},
             "launch_timeline": {{
-                "6_months_out": ["task1", "task2", "task3"],
-                "3_months_out": ["task1", "task2", "task3"],
-                "1_month_out": ["task1", "task2", "task3"],
-                "launch_week": ["task1", "task2", "task3", "task4"],
-                "post_launch": ["task1", "task2", "task3"]
+                "6_months_out": ["3 tasks for this genre"],
+                "3_months_out": ["3 tasks based on content"],
+                "1_month_out": ["3 pre-launch tasks"],
+                "launch_week": ["4 launch week activities"],
+                "post_launch": ["3 follow-up tasks"]
             }}
         }}
         
         7. generated_assets: {{
-            "blurbs": ["3-5 sentence blurb version 1", "version 2", "version 3"],
+            "blurbs": [
+                "Blurb version 1 using actual phrases from excerpt 1",
+                "Blurb version 2 focusing on themes from excerpt 2",
+                "Blurb version 3 emotional hook from excerpt 3"
+            ],
             "tiktok_scripts": [
-                {{"hook": "hook text", "visuals": "visual description", "voiceover": "script", "music": "suggestion", "cta": "call to action"}},
-                {{"hook": "hook text", "visuals": "visual description", "voiceover": "script", "music": "suggestion", "cta": "call to action"}}
+                {{"hook": "Hook based on excerpt 1", "visuals": "Visual matching", "voiceover": "Script using book's language", "music": "Mood-appropriate sound", "cta": "Call to action"}},
+                {{"hook": "Hook based on excerpt 2", "visuals": "Different visual", "voiceover": "Different angle", "music": "Different sound", "cta": "Call to action"}}
             ],
             "emails": {{
-                "prelaunch": "prelaunch email content",
-                "launch": "launch day email content",
-                "followup": "follow-up email content"
+                "prelaunch": "Email about the book's inspiration from excerpts",
+                "launch": "Launch email with actual book quotes",
+                "followup": "Follow-up with reader connection"
             }},
             "social_posts": [
-                "post 1 text",
-                "post 2 text",
-                "post 3 text",
-                "post 4 text",
-                "post 5 text"
+                "Post about specific moment from excerpt 1",
+                "Post about themes from excerpt 2",
+                "Post with quote from excerpt 3",
+                "Post about writing from excerpt 4",
+                "Post connecting book to reader life"
             ],
             "ad_copy": {{
-                "variation1": "ad text 1",
-                "variation2": "ad text 2",
-                "variation3": "ad text 3"
+                "variation1": "Ad highlighting unique aspect from excerpts",
+                "variation2": "Ad focusing on emotional journey",
+                "variation3": "Ad for specific reader demographic"
             }},
             "quote_cards": [
-                {{"text": "quote from book", "visual": "visual suggestion"}},
-                {{"text": "quote from book", "visual": "visual suggestion"}},
-                {{"text": "quote from book", "visual": "visual suggestion"}}
+                {{"text": "Actual quote from excerpt 1 (max 20 words)", "visual": "Visual matching the quote's mood"}},
+                {{"text": "Actual quote from excerpt 2 (max 20 words)", "visual": "Different visual style"}},
+                {{"text": "Actual quote from excerpt 3 (max 20 words)", "visual": "Visual suggestion"}}
             ]
         }}
         
-        Use the EXACT analyses provided. Everything should reference actual elements from the book's content and cover.
+        IMPORTANT RULES:
+        1. EVERYTHING must reference the ACTUAL excerpts above
+        2. If it's an aviation memoir, use flying terms, sky imagery, travel themes
+        3. If it's a romance, use romantic language from the excerpts
+        4. If it's a thriller, use suspenseful elements from the content
+        5. DO NOT generate generic marketing - this must feel like it's ABOUT THIS SPECIFIC BOOK
+        
+        Return ONLY valid JSON.
         """
         
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a book marketing expert. Use the provided analyses exactly."},
+                {"role": "system", "content": "You are a book marketing expert. Create content SPECIFIC to this book using the actual excerpts provided."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -604,6 +535,14 @@ def show_blueprint_results():
             st.rerun()
     
     st.divider()
+    
+    # Show excerpts first so user knows what the AI saw
+    if 'excerpts' in st.session_state.blueprint:
+        with st.expander("📚 Key Passages Used for Analysis", expanded=False):
+            for i, excerpt in enumerate(st.session_state.blueprint['excerpts'], 1):
+                st.text(f"Excerpt {i}:")
+                st.write(excerpt[:300] + "..." if len(excerpt) > 300 else excerpt)
+                st.divider()
     
     # Create tabs
     tabs = st.tabs([
@@ -676,7 +615,6 @@ def show_cover_analysis(cover):
     
     st.markdown("### 🎨 Cover Analysis (From AI Vision)")
     
-    # Show what the AI actually saw
     col1, col2 = st.columns(2)
     with col1:
         st.write(f"**Colors detected:** {', '.join(cover.get('colors', ['Unknown']))}")
