@@ -10,7 +10,6 @@ import json
 import plotly.express as px
 import VideoGenerator
 import LaunchTimeline
-import BookTokCompetitorTracker  # ADD THIS IMPORT
 
 # ============================================================================
 # PAGE CONFIG
@@ -182,18 +181,8 @@ else:
 
 st.sidebar.markdown("---")
 
-# ============================================================================
-# UPDATED NAVIGATION - ADDED COMPETITOR TRACKER
-# ============================================================================
-menu_options = [
-    "🏠 Dashboard", 
-    "📚 ARC Readers", 
-    "❤️ Saved Readers", 
-    "📖 Book Analysis", 
-    "🎬 Video Generator",
-    "📊 Competitor Tracker"  # NEW OPTION ADDED HERE
-]
-
+# Navigation - Use session state
+menu_options = ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"]
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
 
 if selected != st.session_state.page:
@@ -215,7 +204,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - UPDATED WITH COMPETITOR TRACKER
+    # QUICK ACTIONS BUTTON GRID
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -238,9 +227,7 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col4:
-        if st.button("📊 Competitor Tracker", use_container_width=True):  # NEW BUTTON
-            st.session_state.page = "📊 Competitor Tracker"
-            st.rerun()
+        st.button("📝 Coming Soon", use_container_width=True, disabled=True)
     
     # Row 2
     col1, col2, col3, col4 = st.columns(4)
@@ -415,13 +402,6 @@ elif st.session_state.page == "📖 Book Analysis":
 elif st.session_state.page == "🎬 Video Generator":
     import VideoGenerator
     VideoGenerator.show_video_generator()
-
-# ============================================================================
-# NEW COMPETITOR TRACKER PAGE
-# ============================================================================
-
-elif st.session_state.page == "📊 Competitor Tracker":
-    BookTokCompetitorTracker.show_competitor_tracker()
 
 # ============================================================================
 # FOOTER
