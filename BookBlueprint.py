@@ -285,34 +285,42 @@ def split_into_chapters(text):
 
 
 def analyze_single_chapter(client, chapter_text, chapter_num):
-    """Analyze a single chapter in depth"""
+    """Analyze a single chapter in depth with SAFE data structures"""
     
     if len(chapter_text) > 4000:
         chapter_text = chapter_text[:4000]
     
     prompt = f"""
-    Analyze this chapter in detail:
+    Analyze this chapter in detail and return ONLY valid JSON.
     
     CHAPTER {chapter_num}:
     {chapter_text}
     
-    Return JSON with:
-    - summary: Brief summary of what happens
-    - characters_present: List of characters in this chapter with their role
-    - plot_development: Key plot points introduced or advanced
-    - themes: Themes explored in this chapter
-    - tone: Emotional tone of this chapter
-    - pacing: Fast/medium/slow
-    - important_quotes: 1-2 notable lines
-    - cliffhanger: Does it end on a cliffhanger?
-    - character_development: How do characters change?
+    Return JSON with EXACTLY this structure:
+    {{
+        "summary": "Brief summary of what happens",
+        "characters_present": ["character1", "character2"],
+        "plot_development": "Key plot points",
+        "themes": ["theme1", "theme2"],
+        "tone": "Emotional tone",
+        "pacing": "fast/medium/slow",
+        "important_quotes": ["quote1"],
+        "cliffhanger": true/false,
+        "character_development": "How characters change"
+    }}
+    
+    IMPORTANT: 
+    - characters_present MUST be a list, even if empty
+    - themes MUST be a list, even if empty
+    - important_quotes MUST be a list, even if empty
+    - Use ONLY valid JSON format
     """
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a literary analyst. Return valid JSON."},
+                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
@@ -321,11 +329,34 @@ def analyze_single_chapter(client, chapter_text, chapter_num):
         )
         
         result = json.loads(response.choices[0].message.content)
-        result['chapter_number'] = chapter_num
-        return result
+        
+        # SAFETY: Ensure all fields exist and are correct types
+        safe_result = {
+            "chapter_number": chapter_num,
+            "summary": str(result.get('summary', 'Summary not available')),
+            "characters_present": result.get('characters_present', []),
+            "plot_development": str(result.get('plot_development', 'Plot not available')),
+            "themes": result.get('themes', []),
+            "tone": str(result.get('tone', 'Unknown')),
+            "pacing": str(result.get('pacing', 'medium')),
+            "important_quotes": result.get('important_quotes', []),
+            "cliffhanger": bool(result.get('cliffhanger', False)),
+            "character_development": str(result.get('character_development', 'Unknown'))
+        }
+        
+        # Force list types
+        if not isinstance(safe_result['characters_present'], list):
+            safe_result['characters_present'] = []
+        if not isinstance(safe_result['themes'], list):
+            safe_result['themes'] = []
+        if not isinstance(safe_result['important_quotes'], list):
+            safe_result['important_quotes'] = []
+            
+        return safe_result
         
     except Exception as e:
         st.error(f"Error analyzing chapter {chapter_num}: {str(e)}")
+        # Return safe default with proper list types
         return {
             "chapter_number": chapter_num,
             "summary": "Analysis failed",
@@ -333,74 +364,97 @@ def analyze_single_chapter(client, chapter_text, chapter_num):
             "plot_development": "Error",
             "themes": [],
             "tone": "Unknown",
-            "pacing": "Unknown"
+            "pacing": "Unknown",
+            "important_quotes": [],
+            "cliffhanger": False,
+            "character_development": "Unknown"
         }
 
 
 def synthesize_chapter_analyses(chapter_analyses):
-    """Synthesize all chapter analyses into complete book understanding"""
+    """Synthesize all chapter analyses into complete book understanding with SAFE data handling"""
     
-    # Track character arcs across chapters
+    # Initialize with safe defaults
     character_arcs = {}
     plot_progression = []
     theme_tracking = {}
     tone_progression = []
     
     for i, chapter in enumerate(chapter_analyses):
+        if not isinstance(chapter, dict):
+            continue
+            
+        # SAFELY get characters_present - ensure it's a list
+        chars = chapter.get('characters_present', [])
+        if not isinstance(chars, list):
+            chars = []
+            
         # Track characters
-        for char in chapter.get('characters_present', []):
-            if char not in character_arcs:
-                character_arcs[char] = {
-                    'first_seen': i+1,
-                    'chapters_present': [],
-                    'development': []
-                }
-            character_arcs[char]['chapters_present'].append(i+1)
+        for char in chars:
+            if char and isinstance(char, str):  # Only process valid strings
+                if char not in character_arcs:
+                    character_arcs[char] = {
+                        'first_seen': i+1,
+                        'chapters_present': [],
+                        'development': []
+                    }
+                character_arcs[char]['chapters_present'].append(i+1)
         
-        # Track plot
+        # Track plot safely
         plot_progression.append({
             'chapter': i+1,
-            'plot': chapter.get('plot_development', ''),
-            'summary': chapter.get('summary', '')
+            'plot': str(chapter.get('plot_development', '')),
+            'summary': str(chapter.get('summary', ''))
         })
         
+        # SAFELY get themes - ensure it's a list
+        themes = chapter.get('themes', [])
+        if not isinstance(themes, list):
+            themes = []
+            
         # Track themes
-        for theme in chapter.get('themes', []):
-            if theme not in theme_tracking:
-                theme_tracking[theme] = []
-            theme_tracking[theme].append(i+1)
+        for theme in themes:
+            if theme and isinstance(theme, str):
+                if theme not in theme_tracking:
+                    theme_tracking[theme] = []
+                theme_tracking[theme].append(i+1)
         
-        # Track tone
+        # Track tone safely
         tone_progression.append({
             'chapter': i+1,
-            'tone': chapter.get('tone', 'Unknown'),
-            'pacing': chapter.get('pacing', 'Unknown')
+            'tone': str(chapter.get('tone', 'Unknown')),
+            'pacing': str(chapter.get('pacing', 'Unknown'))
         })
     
-    # Identify main characters (appear in most chapters)
+    # Identify main characters (appear in most chapters) with SAFE calculation
     main_characters = []
+    total_chapters = len(chapter_analyses) if chapter_analyses else 1
+    
     for char, data in character_arcs.items():
-        if len(data['chapters_present']) > len(chapter_analyses) * 0.3:
+        if len(data['chapters_present']) > total_chapters * 0.3:
             main_characters.append(char)
     
-    # Identify primary themes
+    # Identify primary themes with SAFE calculation
     primary_themes = []
     for theme, chapters in theme_tracking.items():
-        if len(chapters) > len(chapter_analyses) * 0.2:
+        if len(chapters) > total_chapters * 0.2:
             primary_themes.append(theme)
+    
+    # Build plot structure safely
+    plot_structure = {
+        'opening': plot_progression[0] if plot_progression else {},
+        'rising_action': plot_progression[len(plot_progression)//4:len(plot_progression)//2] if len(plot_progression) > 2 else [],
+        'climax': plot_progression[len(plot_progression)//2] if plot_progression and len(plot_progression) > len(plot_progression)//2 else {},
+        'resolution': plot_progression[-1] if plot_progression else {}
+    }
     
     return {
         'main_characters': main_characters[:5],
         'character_arcs': character_arcs,
-        'plot_structure': {
-            'opening': plot_progression[0] if plot_progression else {},
-            'rising_action': plot_progression[len(plot_progression)//4:len(plot_progression)//2],
-            'climax': plot_progression[len(plot_progression)//2] if len(plot_progression) > len(plot_progression)//2 else {},
-            'resolution': plot_progression[-1] if plot_progression else {}
-        },
+        'plot_structure': plot_structure,
         'primary_themes': primary_themes[:3],
         'tone_progression': tone_progression,
-        'chapter_count': len(chapter_analyses)
+        'chapter_count': total_chapters
     }
 
 
@@ -425,7 +479,9 @@ def analyze_cover_with_vision(client, cover_base64):
                             - genre_signals: what genre it suggests
                             - strengths: 3 specific strengths
                             - weaknesses: 3 specific weaknesses
-                            - suggestions: 3 improvements"""
+                            - suggestions: 3 improvements
+                            
+                            Return ONLY valid JSON."""
                         },
                         {
                             "type": "image_url",
@@ -441,7 +497,19 @@ def analyze_cover_with_vision(client, cover_base64):
             response_format={"type": "json_object"}
         )
         
-        return json.loads(response.choices[0].message.content)
+        result = json.loads(response.choices[0].message.content)
+        
+        # Ensure lists are lists
+        if 'colors' in result and not isinstance(result['colors'], list):
+            result['colors'] = [str(result['colors'])]
+        if 'strengths' in result and not isinstance(result['strengths'], list):
+            result['strengths'] = [str(result['strengths'])]
+        if 'weaknesses' in result and not isinstance(result['weaknesses'], list):
+            result['weaknesses'] = [str(result['weaknesses'])]
+        if 'suggestions' in result and not isinstance(result['suggestions'], list):
+            result['suggestions'] = [str(result['suggestions'])]
+            
+        return result
         
     except Exception as e:
         return {
@@ -453,7 +521,7 @@ def analyze_cover_with_vision(client, cover_base64):
             "genre_signals": "Error",
             "strengths": ["Upload successful"],
             "weaknesses": [f"Error: {str(e)[:50]}"],
-            "suggestions": ["Check API key"]
+            "suggestions": ["Check API key", "Try again", "Ensure image is valid"]
         }
 
 
@@ -462,19 +530,29 @@ def generate_complete_blueprint(client, book_analysis, cover_analysis, chapters,
     
     # Get representative excerpts from first, middle, last chapters
     excerpts = []
-    if chapters:
-        excerpts.append(chapters[0][:1000] if len(chapters[0]) > 1000 else chapters[0])
+    if chapters and len(chapters) > 0:
+        excerpts.append(str(chapters[0][:1000]) if len(str(chapters[0])) > 1000 else str(chapters[0]))
         if len(chapters) > len(chapters)//2:
-            excerpts.append(chapters[len(chapters)//2][:1000])
+            mid_idx = len(chapters)//2
+            excerpts.append(str(chapters[mid_idx][:1000]) if len(str(chapters[mid_idx])) > 1000 else str(chapters[mid_idx]))
         if len(chapters) > 1:
-            excerpts.append(chapters[-1][:1000])
+            excerpts.append(str(chapters[-1][:1000]) if len(str(chapters[-1])) > 1000 else str(chapters[-1]))
+    
+    # SAFELY get values
+    main_chars = book_analysis.get('main_characters', [])
+    if not isinstance(main_chars, list):
+        main_chars = []
+        
+    primary_themes = book_analysis.get('primary_themes', [])
+    if not isinstance(primary_themes, list):
+        primary_themes = []
     
     prompt = f"""
     You are a book marketing expert. Create a COMPLETE marketing blueprint for this book.
     
     BOOK ANALYSIS (from full chapter-by-chapter review):
-    Main characters: {', '.join(book_analysis.get('main_characters', []))}
-    Primary themes: {', '.join(book_analysis.get('primary_themes', []))}
+    Main characters: {', '.join(main_chars)}
+    Primary themes: {', '.join(primary_themes)}
     Total chapters: {book_analysis.get('chapter_count', 0)}
     
     COVER ANALYSIS:
@@ -498,7 +576,7 @@ def generate_complete_blueprint(client, book_analysis, cover_analysis, chapters,
         "subgenres": ["derived from themes"],
         "tone": "From tone progression",
         "pace": "From pacing analysis",
-        "main_characters": {book_analysis.get('main_characters', [])}
+        "main_characters": {json.dumps(main_chars)}
     }}
     
     2. reader_avatar: {{
@@ -602,6 +680,7 @@ def generate_complete_blueprint(client, book_analysis, cover_analysis, chapters,
     }}
     
     IMPORTANT: EVERYTHING must reference the ACTUAL analysis and excerpts.
+    Return ONLY valid JSON.
     """
     
     try:
@@ -616,7 +695,8 @@ def generate_complete_blueprint(client, book_analysis, cover_analysis, chapters,
             response_format={"type": "json_object"}
         )
         
-        return json.loads(response.choices[0].message.content)
+        result = json.loads(response.choices[0].message.content)
+        return result
         
     except Exception as e:
         st.error(f"Blueprint generation error: {str(e)}")
@@ -654,8 +734,15 @@ def show_blueprint_results():
     if 'book_analysis' in blueprint:
         with st.expander("📚 Full Book Analysis", expanded=False):
             book = blueprint['book_analysis']
-            st.write(f"**Main Characters:** {', '.join(book.get('main_characters', []))}")
-            st.write(f"**Primary Themes:** {', '.join(book.get('primary_themes', []))}")
+            chars = book.get('main_characters', [])
+            if not isinstance(chars, list):
+                chars = []
+            st.write(f"**Main Characters:** {', '.join(chars)}")
+            
+            themes = book.get('primary_themes', [])
+            if not isinstance(themes, list):
+                themes = []
+            st.write(f"**Primary Themes:** {', '.join(themes)}")
             st.write(f"**Plot Structure:**")
             st.json(book.get('plot_structure', {}))
     
@@ -685,31 +772,44 @@ def show_blueprint_results():
 
 
 def show_book_profile(profile):
-    if not profile:
+    if not profile or not isinstance(profile, dict):
         st.info("No profile data")
         return
+    
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### 📖 Book Details")
         st.write(f"**Title:** {profile.get('title', 'N/A')}")
         st.write(f"**Genre:** {profile.get('genre', 'N/A')}")
-        st.write(f"**Subgenres:** {', '.join(profile.get('subgenres', []))}")
+        
+        subgenres = profile.get('subgenres', [])
+        if not isinstance(subgenres, list):
+            subgenres = []
+        st.write(f"**Subgenres:** {', '.join(subgenres)}")
+        
         st.write(f"**Tone:** {profile.get('tone', 'N/A')}")
         st.write(f"**Pace:** {profile.get('pace', 'N/A')}")
     with col2:
         st.markdown("### 🎭 Main Characters")
-        for char in profile.get('main_characters', []):
+        chars = profile.get('main_characters', [])
+        if not isinstance(chars, list):
+            chars = []
+        for char in chars:
             st.write(f"• {char}")
 
 
 def show_cover_analysis(cover):
-    if not cover:
+    if not cover or not isinstance(cover, dict):
         st.info("No cover analysis")
         return
+    
     st.markdown("### 🎨 Cover Analysis")
     col1, col2 = st.columns(2)
     with col1:
-        st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
+        colors = cover.get('colors', [])
+        if not isinstance(colors, list):
+            colors = [str(colors)]
+        st.write(f"**Colors:** {', '.join(colors)}")
         st.write(f"**Composition:** {cover.get('composition', '')}")
         st.write(f"**Figures:** {cover.get('figures', '')}")
     with col2:
@@ -717,25 +817,40 @@ def show_cover_analysis(cover):
         st.write(f"**Mood:** {cover.get('mood', '')}")
         st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
     st.divider()
+    
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**✅ Strengths:**")
-        for s in cover.get('strengths', []):
+        strengths = cover.get('strengths', [])
+        if not isinstance(strengths, list):
+            strengths = [str(strengths)]
+        for s in strengths:
             st.write(f"• {s}")
     with col2:
         st.markdown("**❌ Weaknesses:**")
-        for w in cover.get('weaknesses', []):
+        weaknesses = cover.get('weaknesses', [])
+        if not isinstance(weaknesses, list):
+            weaknesses = [str(weaknesses)]
+        for w in weaknesses:
             st.write(f"• {w}")
+    
     st.markdown("**💡 Suggestions:**")
-    for s in cover.get('suggestions', []):
+    suggestions = cover.get('suggestions', [])
+    if not isinstance(suggestions, list):
+        suggestions = [str(suggestions)]
+    for s in suggestions:
         st.write(f"• {s}")
 
 
 def show_reader_avatar(avatar):
-    if not avatar:
+    if not avatar or not isinstance(avatar, dict):
         st.info("No reader avatar")
         return
+    
     primary = avatar.get('primary', {})
+    if not isinstance(primary, dict):
+        primary = {}
+        
     st.markdown("### 👤 Primary Reader")
     col1, col2 = st.columns(2)
     with col1:
@@ -749,50 +864,66 @@ def show_reader_avatar(avatar):
 
 
 def show_market_position(position):
-    if not position:
+    if not position or not isinstance(position, dict):
         st.info("No market position")
         return
+    
     st.write(f"**Shelf:** {position.get('primary_shelf', '')}")
     st.write(f"**Positioning:** {position.get('positioning_statement', '')}")
     st.markdown("### 📚 Comparable")
-    for comp in position.get('comp_titles', []):
+    
+    comps = position.get('comp_titles', [])
+    if not isinstance(comps, list):
+        comps = []
+        
+    for comp in comps:
         if isinstance(comp, dict):
-            st.write(f"• **{comp.get('title')}**")
+            st.write(f"• **{comp.get('title', '')}**")
             st.write(f"  Similar: {comp.get('similarity', '')}")
             st.write(f"  Different: {comp.get('difference', '')}")
 
 
 def show_keywords(keywords):
-    if not keywords:
+    if not keywords or not isinstance(keywords, dict):
         st.info("No keywords")
         return
+    
     st.markdown("**🔑 Amazon Keywords:**")
-    for k in keywords.get('amazon_keywords', []):
+    amazon_keywords = keywords.get('amazon_keywords', [])
+    if not isinstance(amazon_keywords, list):
+        amazon_keywords = [str(amazon_keywords)]
+    for k in amazon_keywords:
         st.write(f"• {k}")
 
 
 def show_blurb_analysis(blurb):
-    if not blurb:
+    if not blurb or not isinstance(blurb, dict):
         st.info("No blurb")
         return
-    st.metric("Score", f"{blurb.get('score', 0)}/100")
+    
+    score = blurb.get('score', 0)
+    if not isinstance(score, (int, float)):
+        score = 0
+    st.metric("Score", f"{score}/100")
     st.markdown("**✨ Optimized:**")
     st.info(blurb.get('optimized_version', ''))
 
 
 def show_channel_strategy(strategies):
-    if not strategies:
+    if not strategies or not isinstance(strategies, dict):
         st.info("No strategies")
         return
+    
     for channel, data in strategies.items():
         with st.expander(f"📱 {channel.title()}"):
             st.json(data)
 
 
 def show_timeline(timeline):
-    if not timeline:
+    if not timeline or not isinstance(timeline, dict):
         st.info("No timeline")
         return
+    
     phases = [
         ("6_months_out", "6 Months Before"),
         ("3_months_out", "3 Months Before"),
@@ -800,8 +931,11 @@ def show_timeline(timeline):
         ("launch_week", "Launch Week"),
         ("post_launch", "Post-Launch")
     ]
+    
     for key, name in phases:
         tasks = timeline.get(key, [])
+        if not isinstance(tasks, list):
+            tasks = []
         if tasks:
             with st.expander(f"📅 {name}"):
                 for task in tasks:
@@ -809,14 +943,22 @@ def show_timeline(timeline):
 
 
 def show_assets(assets):
-    if not assets:
+    if not assets or not isinstance(assets, dict):
         st.info("No assets")
         return
+    
     for asset_type, content in assets.items():
         with st.expander(f"📎 {asset_type.title()}"):
             if isinstance(content, list):
                 for item in content:
-                    st.write(item)
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            st.write(f"**{k}:** {v}")
+                    else:
+                        st.write(item)
+            elif isinstance(content, dict):
+                for k, v in content.items():
+                    st.write(f"**{k}:** {v}")
             else:
                 st.write(content)
 
