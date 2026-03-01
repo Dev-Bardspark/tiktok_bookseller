@@ -10,7 +10,6 @@ import json
 import plotly.express as px
 import VideoGenerator
 import LaunchTimeline
-import BookBlueprint  # ADDED: New Book Blueprint module
 import BookTokCompetitorTracker  # Your competitor tracker
 
 # ============================================================================
