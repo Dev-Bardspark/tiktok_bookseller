@@ -38,42 +38,42 @@ def show_analyzer():
     st.markdown("---")
     
     # API Key input with instructions
-if not st.session_state.openai_api_key:
-    with st.container():
-        st.markdown("### 🔑 OpenAI API Key")
-        
-        # API Key input FIRST (above instructions)
-        api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
-        
-        # Instructions below the input
-        with st.expander("📋 How to get an OpenAI API Key", expanded=True):
-            st.markdown("""
-            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
-            <h4>To get an OpenAI API key, follow these steps:</h4>
+    if not st.session_state.openai_api_key:
+        with st.container():
+            st.markdown("### 🔑 OpenAI API Key")
             
-            <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
-            👉 https://platform.openai.com/</div>
+            # API Key input FIRST (above instructions)
+            api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
             
-            <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
-            Log in with your existing account or create a new one.</div>
+            # Instructions below the input
+            with st.expander("📋 How to get an OpenAI API Key", expanded=True):
+                st.markdown("""
+                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
+                <h4>To get an OpenAI API key, follow these steps:</h4>
+                
+                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
+                👉 https://platform.openai.com/</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
+                Log in with your existing account or create a new one.</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
+                Click your profile icon (top right) → Select "View API keys"<br>
+                Or go directly to: https://platform.openai.com/api-keys</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
+                Click "Create new secret key" → Give it a name → Copy the key immediately</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
+                Never share your API key publicly</div>
+                </div>
+                """, unsafe_allow_html=True)
             
-            <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
-            Click your profile icon (top right) → Select "View API keys"<br>
-            Or go directly to: https://platform.openai.com/api-keys</div>
-            
-            <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
-            Click "Create new secret key" → Give it a name → Copy the key immediately</div>
-            
-            <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
-            Never share your API key publicly</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Check if key was entered
-        if api_key:
-            st.session_state.openai_api_key = api_key
-            st.rerun()
-    return
+            # Check if key was entered
+            if api_key:
+                st.session_state.openai_api_key = api_key
+                st.rerun()
+        return
     
     # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
@@ -85,8 +85,7 @@ if not st.session_state.openai_api_key:
             show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
         
         with col2:
-            st.markdown("### 💾 Save Analysis")
-            st.markdown("Save this analysis to use in the Marketing Generator")
+            st.markdown("### 💾 Save & Next")
             
             book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
             filename = st.text_input("Filename", value=f"{book_title.replace(' ', '_')}_analysis.json")
@@ -105,12 +104,18 @@ if not st.session_state.openai_api_key:
                     st.session_state.analysis_library = {}
                 
                 st.session_state.analysis_library[filename] = save_data
-                st.success(f"✅ Saved to library as {filename}")
+                st.success(f"✅ Saved!")
             
             st.markdown("---")
-            st.markdown("### 📚 Next Step")
-            st.markdown("Go to **Marketing Assets** to create campaigns from this analysis")
+            st.markdown("### 🚀 Next Step")
+            st.markdown("Create marketing campaigns from this analysis")
             
+            # Button to go to Marketing Assets
+            if st.button("🎨 Go to Marketing Assets", type="primary", use_container_width=True):
+                st.session_state.page = "🎨 Marketing Assets"
+                st.rerun()
+            
+            st.markdown("---")
             if st.button("🔄 New Analysis", use_container_width=True):
                 st.session_state.analysis_complete = False
                 st.session_state.analysis_result = None
@@ -400,26 +405,38 @@ def show_analysis_results(analysis, cover):
             for s in cover.get('suggestions', []):
                 st.write(f"• {s}")
     
-    # Book Info - Full width metrics
+    # Book Info - Fixed font sizes and display
     book_info = analysis.get('book_info', {})
     st.markdown("### 📖 Book Overview")
     
+    # Use columns with proper labels
     col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        st.metric("Title", book_info.get('title', 'N/A'), help="Book title")
+        st.markdown("**Title**")
+        title = book_info.get('title', 'Unknown')
+        st.write(title if len(title) < 30 else title[:30] + "...")
+    
     with col2:
-        st.metric("Genre", book_info.get('genre', 'N/A'), help="Primary genre")
+        st.markdown("**Genre**")
+        st.write(book_info.get('genre', 'Unknown'))
+    
     with col3:
-        st.metric("Tone", book_info.get('tone', 'N/A'), help="Emotional atmosphere")
+        st.markdown("**Tone**")
+        st.write(book_info.get('tone', 'Unknown'))
+    
     with col4:
-        st.metric("Pacing", book_info.get('pacing', 'N/A'), help="Story pace")
+        st.markdown("**Pacing**")
+        st.write(book_info.get('pacing', 'Unknown'))
     
     col1, col2 = st.columns(2)
     with col1:
-        st.write(f"**Writing Style:** {book_info.get('writing_style', 'N/A')}")
+        st.markdown("**Writing Style**")
+        st.write(book_info.get('writing_style', 'Unknown'))
     with col2:
+        st.markdown("**Subgenres**")
         subgenres = book_info.get('subgenres', [])
-        st.write(f"**Subgenres:** {', '.join(subgenres) if subgenres else 'None'}")
+        st.write(', '.join(subgenres) if subgenres else 'None')
     
     st.divider()
     
@@ -438,8 +455,10 @@ def show_analysis_results(analysis, cover):
                     with cols[j]:
                         with st.container():
                             st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
-                            st.write(char.get('description', ''))
-                            st.caption(f"Arc: {char.get('arc', '')}")
+                            desc = char.get('description', '')
+                            st.write(desc[:100] + "..." if len(desc) > 100 else desc)
+                            if char.get('arc'):
+                                st.caption(f"Arc: {char.get('arc', '')[:50]}...")
     
     # Supporting characters in expander
     if chars.get('supporting'):
@@ -517,8 +536,10 @@ def show_analysis_results(analysis, cover):
                 for comp in target['comparable_titles']:
                     if isinstance(comp, dict):
                         st.markdown(f"• **{comp.get('title', '')}**")
-                        st.caption(f"  Similar: {comp.get('similarity', '')}")
-                        st.caption(f"  Different: {comp.get('difference', '')}")
+                        if comp.get('similarity'):
+                            st.caption(f"  Similar: {comp['similarity'][:50]}...")
+                        if comp.get('difference'):
+                            st.caption(f"  Different: {comp['difference'][:50]}...")
                     else:
                         st.write(f"• {comp}")
     
@@ -532,14 +553,14 @@ def show_analysis_results(analysis, cover):
         if strengths:
             st.markdown("### ✅ Strengths")
             for s in strengths:
-                st.write(f"• {s}")
+                st.write(f"• {s[:100]}..." if len(s) > 100 else f"• {s}")
     
     with col2:
         improvements = analysis.get('areas_for_improvement', [])
         if improvements:
             st.markdown("### 📝 Areas for Improvement")
             for i in improvements:
-                st.write(f"• {i}")
+                st.write(f"• {i[:100]}..." if len(i) > 100 else f"• {i}")
     
     # Marketing Insights
     marketing = analysis.get('marketing', {})
@@ -553,17 +574,19 @@ def show_analysis_results(analysis, cover):
             if marketing.get('unique_selling_points'):
                 st.markdown("**Unique Selling Points:**")
                 for usp in marketing['unique_selling_points']:
-                    st.write(f"• {usp}")
+                    st.write(f"• {usp[:100]}..." if len(usp) > 100 else f"• {usp}")
         
         with col2:
             if marketing.get('keyword_cloud'):
                 st.markdown("**Keywords:**")
-                st.write(', '.join(marketing['keyword_cloud']))
+                keywords = marketing['keyword_cloud']
+                if isinstance(keywords, list):
+                    st.write(', '.join(keywords[:10]) + ('...' if len(keywords) > 10 else ''))
         
         if marketing.get('compelling_quotes'):
             st.markdown("**Pull Quotes:**")
-            for quote in marketing['compelling_quotes']:
-                st.info(f"“{quote}”")
+            for quote in marketing['compelling_quotes'][:3]:  # Show first 3 only
+                st.info(f"“{quote[:100]}...”" if len(quote) > 100 else f"“{quote}”")
 
 
 # For direct testing
