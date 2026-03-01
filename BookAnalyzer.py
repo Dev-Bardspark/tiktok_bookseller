@@ -12,7 +12,7 @@ from datetime import datetime
 import re
 
 def show_analyzer():
-    """Pure book analysis without marketing assets"""
+    """Complete book analysis with marketability dashboard"""
     
     if st.session_state.get('current_page') != "📖 Book Analyzer":
         return
@@ -34,8 +34,8 @@ def show_analyzer():
         st.session_state.current_book_id = None
     
     # Header
-    st.title("📖 Book Analyzer")
-    st.markdown("Upload your manuscript and cover for deep literary analysis with **marketability scoring**")
+    st.title("📖 Book Analyzer with Marketability Dashboard")
+    st.markdown("Upload your manuscript and cover for deep literary analysis with **commercial potential scoring**")
     st.markdown("---")
     
     # API Key input with instructions
@@ -43,10 +43,8 @@ def show_analyzer():
         with st.container():
             st.markdown("### 🔑 OpenAI API Key")
             
-            # API Key input FIRST (above instructions)
             api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
             
-            # Instructions below the input
             with st.expander("📋 How to get an OpenAI API Key", expanded=True):
                 st.markdown("""
                 <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
@@ -70,7 +68,6 @@ def show_analyzer():
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Check if key was entered
             if api_key:
                 st.session_state.openai_api_key = api_key
                 st.rerun()
@@ -80,16 +77,14 @@ def show_analyzer():
     if st.session_state.analysis_complete and st.session_state.analysis_result:
         st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
         
-        # Action buttons at the top with instructions
-        col1, col2, col3 = st.columns(3)
+        # Action buttons
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
             filename = f"{book_title.replace(' ', '_')}_analysis.json"
             
-            st.markdown("**Step 1**")
             if st.button("💾 Save to Library", use_container_width=True):
-                # Prepare data to save
                 save_data = {
                     "book_info": st.session_state.analysis_result,
                     "cover_analysis": st.session_state.cover_analysis,
@@ -97,34 +92,36 @@ def show_analyzer():
                     "book_id": st.session_state.current_book_id
                 }
                 
-                # Save to library in session state
                 if 'analysis_library' not in st.session_state:
                     st.session_state.analysis_library = {}
                 
                 st.session_state.analysis_library[filename] = save_data
                 st.success(f"✅ Saved!")
-            st.caption("Save this analysis to create marketing assets")
         
         with col2:
-            st.markdown("**Step 2**")
-            if st.button("🎨 Go to Marketing Assets", type="primary", use_container_width=True):
+            if st.button("🎨 Marketing Assets", use_container_width=True):
                 st.session_state.page = "🎨 Marketing Assets"
                 st.rerun()
-            st.caption("Create your marketing assets")
         
         with col3:
-            st.markdown("**Step 3**")
+            if st.button("📊 Export Report", use_container_width=True):
+                st.info("Export feature coming soon!")
+        
+        with col4:
             if st.button("🔄 New Analysis", use_container_width=True):
                 st.session_state.analysis_complete = False
                 st.session_state.analysis_result = None
                 st.session_state.cover_analysis = None
                 st.rerun()
-            st.caption("If you've made changes, run analysis again")
         
         st.markdown("---")
         
-        # Show analysis results with marketability scores prominently displayed
-        show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
+        # Show marketability dashboard FIRST
+        show_marketability_dashboard(st.session_state.analysis_result)
+        
+        # Then show complete literary analysis
+        with st.expander("📚 View Complete Literary Analysis", expanded=False):
+            show_complete_analysis(st.session_state.analysis_result, st.session_state.cover_analysis)
         
         return
     
@@ -164,28 +161,21 @@ def show_analyzer():
         
         if st.button("🔍 ANALYZE BOOK WITH MARKETABILITY SCORE", type="primary", use_container_width=True):
             with st.spinner("Analyzing your book with marketability scoring... (this takes about 45 seconds)"):
-                # Generate a simple book ID
                 st.session_state.current_book_id = f"book_{int(time.time())}"
                 
-                # Extract text
                 manuscript_text = extract_text(manuscript_file)
                 
-                # Encode cover
                 cover_bytes = cover_file.getvalue()
                 cover_base64 = base64.b64encode(cover_bytes).decode('utf-8')
                 
-                # Initialize OpenAI
                 client = OpenAI(api_key=st.session_state.openai_api_key)
                 
-                # Step 1: Analyze cover with vision
                 cover_analysis = analyze_cover(client, cover_base64)
                 st.session_state.cover_analysis = cover_analysis
                 
-                # Step 2: Deep manuscript analysis with marketability
-                analysis = analyze_manuscript_with_marketability(client, manuscript_text, cover_analysis)
+                analysis = analyze_manuscript_complete(client, manuscript_text, cover_analysis)
                 st.session_state.analysis_result = analysis
                 
-                # Mark complete
                 st.session_state.analysis_complete = True
                 st.rerun()
     else:
@@ -247,21 +237,19 @@ def analyze_cover(client, cover_base64):
         }
 
 
-def analyze_manuscript_with_marketability(client, text, cover_analysis):
-    """Single comprehensive manuscript analysis with marketability scoring"""
+def analyze_manuscript_complete(client, text, cover_analysis):
+    """Complete manuscript analysis with ALL metrics"""
     
-    # Truncate if needed
     if len(text) > 50000:
         text = text[:50000] + "... [truncated]"
     
-    # Get beginning, middle, end for context
     total_len = len(text)
     beginning = text[:min(5000, total_len//3)]
     middle = text[total_len//3:total_len//3*2][:5000]
     ending = text[-5000:]
     
     prompt = f"""
-    You are a professional literary analyst and publishing industry expert. Analyze this book in depth with special focus on its **marketability and commercial potential**.
+    You are a professional literary analyst and publishing industry expert. Analyze this book in depth with special focus on its marketability and commercial potential.
     
     COVER ANALYSIS (for context):
     {json.dumps(cover_analysis, indent=2)}
@@ -277,22 +265,11 @@ def analyze_manuscript_with_marketability(client, text, cover_analysis):
     ENDING:
     {ending}
     
-    Based on these excerpts, provide a COMPLETE analysis as JSON with the following structure.
+    Based on these excerpts, provide a COMPLETE analysis as JSON with ALL of the following sections.
     
-    CRITICAL: Include a comprehensive marketability section with numerical scores (0-100) for:
-    - Overall Marketability Score
-    - Writing Quality Score
-    - Commercial Potential Score
-    - Genre Fit Score
-    - Hook Strength Score
-    - Character Appeal Score
-    - Pacing Score
-    - Originality Score
-    - Target Audience Appeal Score
+    CRITICAL: Include numerical scores (0-100) for all marketability metrics.
     
-    For each score, provide a brief explanation and specific justification.
-    
-    Here's the complete JSON structure to return:
+    Return EXACTLY this structure:
     
     {{
         "marketability": {{
@@ -338,11 +315,11 @@ def analyze_manuscript_with_marketability(client, text, cover_analysis):
                 "searchability": "Assessment"
             }},
             "suggested_titles": [
-                {{"title": "Alternative Title 1", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
-                {{"title": "Alternative Title 2", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
-                {{"title": "Alternative Title 3", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
-                {{"title": "Alternative Title 4", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
-                {{"title": "Alternative Title 5", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}}
+                {{"title": "Alternative Title 1", "rationale": "Why this works better", "estimated_impact": "High"}},
+                {{"title": "Alternative Title 2", "rationale": "Why this works better", "estimated_impact": "High"}},
+                {{"title": "Alternative Title 3", "rationale": "Why this works better", "estimated_impact": "Medium"}},
+                {{"title": "Alternative Title 4", "rationale": "Why this works better", "estimated_impact": "Medium"}},
+                {{"title": "Alternative Title 5", "rationale": "Why this works better", "estimated_impact": "Low"}}
             ],
             "title_change_recommendation": "Should the title be changed? Why?",
             "subtitle_suggestion": "If applicable, a subtitle suggestion"
@@ -372,20 +349,29 @@ def analyze_manuscript_with_marketability(client, text, cover_analysis):
             "subgenres": ["subgenre1", "subgenre2"],
             "tone": "overall emotional tone",
             "writing_style": "descriptive/lyrical/direct/etc",
-            "pacing": "fast/medium/slow with explanation"
+            "pacing_summary": "fast/medium/slow with explanation"
         }},
         
         "characters": {{
             "main": [
-                {{"name": "name", "role": "protagonist/antagonist/etc", 
-                  "description": "who they are", 
-                  "arc": "how they change throughout the story",
-                  "motivation": "what drives them",
-                  "conflict": "internal or external struggles",
-                  "appeal_factor": "Why readers will connect"}}
+                {{
+                    "name": "name",
+                    "role": "protagonist/antagonist/etc",
+                    "description": "who they are",
+                    "arc": "how they change",
+                    "motivation": "what drives them",
+                    "conflict": "internal or external struggles",
+                    "appeal_factor": "Why readers will connect"
+                }}
             ],
             "supporting": ["list of supporting characters"],
             "relationships": ["key dynamics between characters"]
+        }},
+        
+        "character_development": {{
+            "protagonist_journey": "how the main character changes",
+            "antagonist_motivation": "what drives the opposition",
+            "supporting_arcs": ["how other characters evolve"]
         }},
         
         "narrative_arc": {{
@@ -408,12 +394,6 @@ def analyze_manuscript_with_marketability(client, text, cover_analysis):
             "primary": ["main themes with explanation"],
             "secondary": ["other themes"],
             "motifs": ["recurring elements"]
-        }},
-        
-        "character_development": {{
-            "protagonist_journey": "how the main character changes",
-            "antagonist_motivation": "what drives the opposition",
-            "supporting_arcs": ["how other characters evolve"]
         }},
         
         "pacing_analysis": {{
@@ -452,7 +432,7 @@ def analyze_manuscript_with_marketability(client, text, cover_analysis):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a literary analyst and publishing industry expert. Return valid JSON only with comprehensive marketability analysis."},
+                {"role": "system", "content": "You are a literary analyst and publishing industry expert. Return valid JSON only with ALL sections exactly as specified."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.4,
@@ -492,95 +472,198 @@ def extract_text(file) -> str:
         return ""
 
 
-def show_analysis_results(analysis, cover):
-    """Display analysis results with marketability scores prominently"""
+def show_marketability_dashboard(analysis):
+    """Display marketability dashboard with all commercial metrics"""
     
-    # MARKETABILITY SCORES - Display prominently at the top
+    st.markdown("## 📊 MARKETABILITY DASHBOARD")
+    
+    if 'marketability' not in analysis:
+        st.warning("Marketability data not available")
+        return
+    
+    market = analysis['marketability']
+    
+    # Overall score
+    overall_score = market.get('overall_score', 0)
+    overall_grade = market.get('overall_grade', 'N/A')
+    
+    if overall_score >= 80:
+        score_color = "#00cc66"
+        emoji = "🚀"
+        score_text = "EXCELLENT MARKETABILITY"
+    elif overall_score >= 70:
+        score_color = "#ffaa00"
+        emoji = "📈"
+        score_text = "GOOD MARKETABILITY"
+    elif overall_score >= 60:
+        score_color = "#ff8800"
+        emoji = "📊"
+        score_text = "FAIR MARKETABILITY"
+    else:
+        score_color = "#ff4444"
+        emoji = "⚠️"
+        score_text = "NEEDS WORK"
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"""
+        <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h1 style="font-size: 80px; margin: 0; color: white;">{overall_score}</h1>
+            <h2 style="margin: 0; color: white;">{score_text}</h2>
+            <p style="font-size: 30px; margin: 0; color: white;">Grade: {overall_grade} {emoji}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Overall assessment
+    st.markdown(f"### 📝 Overall Assessment")
+    st.info(market.get('overall_assessment', ''))
+    
+    # Individual scores
+    st.markdown("### 📈 Detailed Scores")
+    
+    scores = market.get('scores', {})
+    
+    score_items = list(scores.items())
+    for i in range(0, len(score_items), 2):
+        cols = st.columns(2)
+        for j in range(2):
+            if i + j < len(score_items):
+                score_name, score_data = score_items[i + j]
+                display_name = score_name.replace('_', ' ').title()
+                score_value = score_data.get('score', 0)
+                explanation = score_data.get('explanation', '')
+                
+                if score_value >= 80:
+                    bg_color = "#e6f7e6"
+                    border_color = "#00cc66"
+                    bar_color = "#00cc66"
+                elif score_value >= 70:
+                    bg_color = "#fff4e6"
+                    border_color = "#ffaa00"
+                    bar_color = "#ffaa00"
+                elif score_value >= 60:
+                    bg_color = "#fff0e6"
+                    border_color = "#ff8800"
+                    bar_color = "#ff8800"
+                else:
+                    bg_color = "#ffe6e6"
+                    border_color = "#ff4444"
+                    bar_color = "#ff4444"
+                
+                with cols[j]:
+                    st.markdown(f"""
+                    <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
+                        <h4 style="margin: 0 0 5px 0;">{display_name}</h4>
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <h2 style="margin: 0 10px 0 0; color: {border_color};">{score_value}</h2>
+                            <div style="flex-grow: 1; height: 10px; background-color: #ddd; border-radius: 5px;">
+                                <div style="width: {score_value}%; height: 10px; background-color: {bar_color}; border-radius: 5px;"></div>
+                            </div>
+                        </div>
+                        <p style="margin: 5px 0 0 0; font-size: 0.9em;">{explanation}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Title Analysis
+    if 'title_analysis' in analysis:
+        title_analysis = analysis['title_analysis']
+        
+        st.markdown("### 🏷️ Title Analysis & Suggestions")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            current_title = title_analysis.get('current_title', 'Unknown')
+            st.markdown(f"**Current Title:** {current_title}")
+            
+            effectiveness = title_analysis.get('title_effectiveness', {})
+            if effectiveness:
+                score = effectiveness.get('score', 0)
+                st.markdown(f"**Effectiveness Score:** {score}/100")
+                st.markdown(f"*Memorability:* {effectiveness.get('memorability', '')}")
+                st.markdown(f"*Genre Appropriateness:* {effectiveness.get('genre_appropriateness', '')}")
+                st.markdown(f"*Uniqueness:* {effectiveness.get('uniqueness', '')}")
+                st.markdown(f"*Searchability:* {effectiveness.get('searchability', '')}")
+        
+        with col2:
+            rec = title_analysis.get('title_change_recommendation', '')
+            if rec:
+                st.markdown(f"**Recommendation:** {rec}")
+            
+            subtitle = title_analysis.get('subtitle_suggestion', '')
+            if subtitle:
+                st.markdown(f"**Suggested Subtitle:** {subtitle}")
+        
+        suggestions = title_analysis.get('suggested_titles', [])
+        if suggestions:
+            st.markdown("#### 💡 Alternative Title Suggestions")
+            
+            for i, suggestion in enumerate(suggestions, 1):
+                if isinstance(suggestion, dict):
+                    impact = suggestion.get('estimated_impact', 'Medium')
+                    if impact.lower() == 'high':
+                        impact_color = "#ff4444"
+                        impact_display = "🔴 HIGH IMPACT"
+                    elif impact.lower() == 'medium':
+                        impact_color = "#ffaa00"
+                        impact_display = "🟡 MEDIUM IMPACT"
+                    else:
+                        impact_color = "#00cc66"
+                        impact_display = "🟢 LOW IMPACT"
+                    
+                    st.markdown(f"""
+                    <div style="padding: 15px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="font-size: 1.2em;">{i}. {suggestion.get('title', '')}</strong>
+                            <span style="background-color: {impact_color}; color: white; padding: 3px 10px; border-radius: 15px; font-size: 0.8em;">{impact_display}</span>
+                        </div>
+                        <p style="margin: 10px 0 0 0; color: #666;"><em>{suggestion.get('rationale', '')}</em></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+    
+    # Salability Analysis
+    if 'salability_analysis' in analysis:
+        salability = analysis['salability_analysis']
+        
+        st.markdown("### 💰 Salability Analysis")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Market Size", salability.get('estimated_market_size', 'Unknown'))
+        with col2:
+            st.metric("Series Potential", salability.get('series_potential', 'Unknown'))
+        with col3:
+            st.metric("Adaptation", salability.get('adaptation_potential', 'Unknown'))
+        with col4:
+            st.metric("Price Point", salability.get('estimated_price_point', 'Unknown'))
+        
+        format_potential = salability.get('format_potential', {})
+        if format_potential:
+            st.markdown("**Format Potential:**")
+            cols = st.columns(4)
+            formats = list(format_potential.items())
+            for i, (fmt, potential) in enumerate(formats[:4]):
+                with cols[i]:
+                    if potential.lower() == 'high':
+                        color = "#00cc66"
+                    elif potential.lower() == 'medium':
+                        color = "#ffaa00"
+                    else:
+                        color = "#ff4444"
+                    st.markdown(f"**{fmt.title()}:** <span style='color: {color}; font-weight: bold;'>{potential}</span>", unsafe_allow_html=True)
+        
+        st.markdown("---")
+    
+    # Comparable successes
     if 'marketability' in analysis:
         market = analysis['marketability']
         
-        # Create a visually striking score card
-        st.markdown("## 📊 MARKETABILITY ANALYSIS")
-        
-        # Overall score in a big box
-        overall_score = market.get('overall_score', 0)
-        overall_grade = market.get('overall_grade', 'N/A')
-        
-        # Determine color based on score
-        if overall_score >= 80:
-            score_color = "#00cc66"  # Green
-            emoji = "🚀"
-            score_text = "EXCELLENT MARKETABILITY"
-        elif overall_score >= 70:
-            score_color = "#ffaa00"  # Orange/Yellow
-            emoji = "📈"
-            score_text = "GOOD MARKETABILITY"
-        elif overall_score >= 60:
-            score_color = "#ff8800"  # Dark Orange
-            emoji = "📊"
-            score_text = "FAIR MARKETABILITY"
-        else:
-            score_color = "#ff4444"  # Red
-            emoji = "⚠️"
-            score_text = "NEEDS WORK"
-        
-        # Display main score card
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            st.markdown(f"""
-            <div style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px solid {score_color};">
-                <h1 style="font-size: 60px; margin: 0; color: {score_color};">{overall_score}</h1>
-                <h2 style="margin: 0; color: {score_color};">{score_text}</h2>
-                <p style="font-size: 24px; margin: 0;">Grade: {overall_grade} {emoji}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown(f"**Overall Assessment:** {market.get('overall_assessment', '')}")
-        st.markdown("---")
-        
-        # Individual scores in a grid
-        st.markdown("### 📈 Detailed Scores")
-        
-        scores = market.get('scores', {})
-        
-        # Create 4 rows of 2 columns each for 8 scores
-        score_items = list(scores.items())
-        for i in range(0, len(score_items), 2):
-            cols = st.columns(2)
-            for j in range(2):
-                if i + j < len(score_items):
-                    score_name, score_data = score_items[i + j]
-                    # Format the score name for display
-                    display_name = score_name.replace('_', ' ').title()
-                    score_value = score_data.get('score', 0)
-                    explanation = score_data.get('explanation', '')
-                    
-                    # Color code individual scores
-                    if score_value >= 80:
-                        bg_color = "#e6f7e6"
-                        border_color = "#00cc66"
-                    elif score_value >= 70:
-                        bg_color = "#fff4e6"
-                        border_color = "#ffaa00"
-                    elif score_value >= 60:
-                        bg_color = "#fff0e6"
-                        border_color = "#ff8800"
-                    else:
-                        bg_color = "#ffe6e6"
-                        border_color = "#ff4444"
-                    
-                    with cols[j]:
-                        st.markdown(f"""
-                        <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
-                            <h4 style="margin: 0 0 5px 0;">{display_name}</h4>
-                            <h2 style="margin: 0; color: {border_color};">{score_value}</h2>
-                            <p style="margin: 5px 0 0 0; font-size: 0.9em;">{explanation}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Comparable successes and market analysis
         col1, col2 = st.columns(2)
         
         with col1:
@@ -588,10 +671,13 @@ def show_analysis_results(analysis, cover):
             comps = market.get('comparable_successes', [])
             for comp in comps:
                 if isinstance(comp, dict):
-                    st.markdown(f"**{comp.get('title', '')}**")
-                    st.write(f"*Similarity:* {comp.get('similarity', '')}")
-                    st.write(f"*Why it succeeded:* {comp.get('why_it_succeeded', '')}")
-                    st.markdown("---")
+                    st.markdown(f"""
+                    <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-bottom: 10px;">
+                        <strong>{comp.get('title', '')}</strong><br>
+                        <span style="color: #666;">Similarity: {comp.get('similarity', '')}</span><br>
+                        <span style="color: #666;">Why it succeeded: {comp.get('why_it_succeeded', '')}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
         
         with col2:
             st.markdown("### 🔍 Market Position")
@@ -600,134 +686,62 @@ def show_analysis_results(analysis, cover):
             
             st.markdown("**Potential Challenges:**")
             for challenge in market.get('potential_challenges', []):
-                st.write(f"• {challenge}")
-        
-        st.markdown("---")
+                st.markdown(f"• {challenge}")
     
-    # WRITING QUALITY DETAILED
+    st.markdown("---")
+    
+    # Writing Quality (condensed)
     if 'writing_quality_detailed' in analysis:
         writing = analysis['writing_quality_detailed']
         
-        st.markdown("### ✍️ Writing Quality Deep Dive")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
-            st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
-            st.markdown(f"**Description:** {writing.get('description', '')}")
-        
-        with col2:
-            st.markdown(f"**Voice:** {writing.get('voice', '')}")
-            st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**✅ Writing Strengths:**")
-            for strength in writing.get('strengths', []):
-                st.write(f"• {strength}")
-        
-        with col2:
-            st.markdown("**📝 Needed Improvements:**")
-            for imp in writing.get('improvements', []):
-                st.write(f"• {imp}")
-        
-        st.markdown("---")
-    
-    # TITLE ANALYSIS
-    if 'title_analysis' in analysis:
-        title_analysis = analysis['title_analysis']
-        
-        st.markdown("### 🏷️ Title Analysis")
-        
-        current_title = title_analysis.get('current_title', 'Unknown')
-        st.markdown(f"**Current Title:** {current_title}")
-        
-        # Title effectiveness
-        effectiveness = title_analysis.get('title_effectiveness', {})
-        if effectiveness:
-            score = effectiveness.get('score', 0)
-            st.markdown(f"**Title Effectiveness Score:** {score}/100")
+        with st.expander("✍️ Writing Quality Details", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
+                st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
+                st.markdown(f"**Description:** {writing.get('description', '')}")
+            with col2:
+                st.markdown(f"**Voice:** {writing.get('voice', '')}")
+                st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
             
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown(f"*Memorability:* {effectiveness.get('memorability', '')}")
-                st.markdown(f"*Genre Appropriateness:* {effectiveness.get('genre_appropriateness', '')}")
+                st.markdown("**✅ Writing Strengths:**")
+                for s in writing.get('strengths', []):
+                    st.write(f"• {s}")
             with col2:
-                st.markdown(f"*Uniqueness:* {effectiveness.get('uniqueness', '')}")
-                st.markdown(f"*Searchability:* {effectiveness.get('searchability', '')}")
+                st.markdown("**📝 Needed Improvements:**")
+                for i in writing.get('improvements', []):
+                    st.write(f"• {i}")
+    
+    # Marketing insights (condensed)
+    if 'marketing' in analysis:
+        marketing = analysis['marketing']
         
-        # Title suggestions
-        suggestions = title_analysis.get('suggested_titles', [])
-        if suggestions:
-            st.markdown("**💡 Suggested Alternative Titles:**")
+        with st.expander("📈 Marketing Insights", expanded=False):
+            if marketing.get('unique_selling_points'):
+                st.markdown("**Unique Selling Points:**")
+                for usp in marketing['unique_selling_points']:
+                    st.write(f"• {usp}")
             
-            for i, suggestion in enumerate(suggestions, 1):
-                if isinstance(suggestion, dict):
-                    impact = suggestion.get('estimated_impact', 'Medium')
-                    # Color code impact
-                    if impact.lower() == 'high':
-                        impact_display = "🔴 HIGH IMPACT"
-                    elif impact.lower() == 'medium':
-                        impact_display = "🟡 MEDIUM IMPACT"
-                    else:
-                        impact_display = "🟢 LOW IMPACT"
-                    
-                    st.markdown(f"""
-                    <div style="padding: 10px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
-                        <strong>{i}. {suggestion.get('title', '')}</strong> - {impact_display}<br>
-                        <em>{suggestion.get('rationale', '')}</em>
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Recommendation
-        rec = title_analysis.get('title_change_recommendation', '')
-        if rec:
-            st.markdown(f"**Recommendation:** {rec}")
-        
-        subtitle = title_analysis.get('subtitle_suggestion', '')
-        if subtitle:
-            st.markdown(f"**Suggested Subtitle:** {subtitle}")
-        
-        st.markdown("---")
+            if marketing.get('keyword_cloud'):
+                st.markdown("**Keywords:**")
+                st.write(', '.join(marketing['keyword_cloud']))
+            
+            if marketing.get('compelling_quotes'):
+                st.markdown("**Pull Quotes:**")
+                for quote in marketing['compelling_quotes']:
+                    st.info(f"“{quote}”")
+            
+            if marketing.get('blurb_suggestion'):
+                st.markdown("**Suggested Blurb:**")
+                st.write(marketing['blurb_suggestion'])
+
+
+def show_complete_analysis(analysis, cover):
+    """Display complete literary analysis with ALL original metrics"""
     
-    # SALABILITY ANALYSIS
-    if 'salability_analysis' in analysis:
-        salability = analysis['salability_analysis']
-        
-        st.markdown("### 💰 Salability Analysis")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Market Size", salability.get('estimated_market_size', 'Unknown'))
-        with col2:
-            st.metric("Series Potential", salability.get('series_potential', 'Unknown'))
-        with col3:
-            st.metric("Adaptation Potential", salability.get('adaptation_potential', 'Unknown'))
-        
-        st.markdown(f"**Target Retailers:** {', '.join(salability.get('target_retailers', []))}")
-        
-        # Format potential
-        format_potential = salability.get('format_potential', {})
-        if format_potential:
-            st.markdown("**Format Potential:**")
-            cols = st.columns(4)
-            formats = list(format_potential.items())
-            for i, (fmt, potential) in enumerate(formats[:4]):
-                with cols[i]:
-                    st.markdown(f"**{fmt.title()}:** {potential}")
-        
-        # Comparable bestsellers
-        comps = salability.get('comparable_bestsellers', [])
-        if comps:
-            st.markdown("**Comparable Bestsellers:**")
-            for comp in comps:
-                if isinstance(comp, dict):
-                    st.markdown(f"• **{comp.get('title', '')}** - {comp.get('similarity', '')} (Est. {comp.get('copies_sold', 'Unknown')} copies)")
-        
-        st.markdown("---")
-    
-    # Cover Analysis - Full width at top
+    # Cover Analysis
     if cover:
         with st.expander("🎨 Cover Analysis", expanded=False):
             col1, col2, col3 = st.columns(3)
@@ -741,8 +755,6 @@ def show_analysis_results(analysis, cover):
                 st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
                 if cover.get('has_figure'):
                     st.write(f"**Figure:** {cover.get('figure_description', '')}")
-            
-            st.divider()
             
             col1, col2 = st.columns(2)
             with col1:
@@ -758,32 +770,19 @@ def show_analysis_results(analysis, cover):
             for s in cover.get('suggestions', []):
                 st.write(f"• {s}")
     
-    # Book Info - Proper font sizes (not huge)
+    # Book Info
     book_info = analysis.get('book_info', {})
     st.markdown("### 📖 Book Overview")
     
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown("**Title**")
-        st.write(book_info.get('title', 'Unknown'))
-    with col2:
-        st.markdown("**Genre**")
-        st.write(book_info.get('genre', 'Unknown'))
-    with col3:
-        st.markdown("**Tone**")
-        st.write(book_info.get('tone', 'Unknown'))
-    with col4:
-        st.markdown("**Pacing**")
-        st.write(book_info.get('pacing', 'Unknown'))
-    
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Writing Style**")
-        st.write(book_info.get('writing_style', 'Unknown'))
+        st.markdown(f"**Title:** {book_info.get('title', 'Unknown')}")
+        st.markdown(f"**Genre:** {book_info.get('genre', 'Unknown')}")
+        st.markdown(f"**Subgenres:** {', '.join(book_info.get('subgenres', []))}")
     with col2:
-        st.markdown("**Subgenres**")
-        subgenres = book_info.get('subgenres', [])
-        st.write(', '.join(subgenres) if subgenres else 'None')
+        st.markdown(f"**Tone:** {book_info.get('tone', 'Unknown')}")
+        st.markdown(f"**Writing Style:** {book_info.get('writing_style', 'Unknown')}")
+        st.markdown(f"**Pacing Summary:** {book_info.get('pacing_summary', 'Unknown')}")
     
     st.divider()
     
@@ -796,17 +795,13 @@ def show_analysis_results(analysis, cover):
         with col1:
             st.markdown("**Exposition**")
             st.write(narrative.get('exposition', 'Not specified'))
-            
             st.markdown("**Rising Action**")
             st.write(narrative.get('rising_action', 'Not specified'))
-            
             st.markdown("**Climax**")
             st.write(narrative.get('climax', 'Not specified'))
-        
         with col2:
             st.markdown("**Falling Action**")
             st.write(narrative.get('falling_action', 'Not specified'))
-            
             st.markdown("**Resolution**")
             st.write(narrative.get('resolution', 'Not specified'))
         
@@ -819,28 +814,24 @@ def show_analysis_results(analysis, cover):
     main_chars = chars.get('main', [])
     if main_chars:
         st.markdown("**Main Characters**")
-        for i in range(0, len(main_chars), 2):
-            cols = st.columns(2)
-            for j in range(2):
-                if i + j < len(main_chars):
-                    char = main_chars[i + j]
-                    with cols[j]:
-                        with st.container():
-                            st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
-                            st.write(f"*Description:* {char.get('description', '')}")
-                            if char.get('motivation'):
-                                st.write(f"*Motivation:* {char.get('motivation')}")
-                            if char.get('conflict'):
-                                st.write(f"*Conflict:* {char.get('conflict')}")
-                            if char.get('arc'):
-                                st.write(f"*Arc:* {char.get('arc')}")
-                            if char.get('appeal_factor'):
-                                st.write(f"*Appeal:* {char.get('appeal_factor')}")
+        for char in main_chars:
+            with st.container():
+                st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
+                st.markdown(f"*Description:* {char.get('description', '')}")
+                if char.get('motivation'):
+                    st.markdown(f"*Motivation:* {char.get('motivation')}")
+                if char.get('conflict'):
+                    st.markdown(f"*Conflict:* {char.get('conflict')}")
+                if char.get('arc'):
+                    st.markdown(f"*Arc:* {char.get('arc')}")
+                if char.get('appeal_factor'):
+                    st.markdown(f"*Appeal:* {char.get('appeal_factor')}")
+                st.markdown("---")
     
     # Character Development
     dev = analysis.get('character_development', {})
     if dev:
-        with st.expander("📈 Character Development"):
+        with st.expander("📈 Character Development", expanded=False):
             if dev.get('protagonist_journey'):
                 st.markdown(f"**Protagonist Journey:** {dev['protagonist_journey']}")
             if dev.get('antagonist_motivation'):
@@ -850,23 +841,23 @@ def show_analysis_results(analysis, cover):
                 for arc in dev['supporting_arcs']:
                     st.write(f"• {arc}")
     
+    # Supporting Characters
     if chars.get('supporting'):
-        with st.expander("👥 Supporting Characters"):
+        with st.expander("👥 Supporting Characters", expanded=False):
             for char in chars.get('supporting', []):
                 st.write(f"• {char}")
     
+    # Relationships
     if chars.get('relationships'):
-        with st.expander("🔄 Key Relationships"):
+        with st.expander("🔄 Key Relationships", expanded=False):
             for rel in chars.get('relationships', []):
                 st.write(f"• {rel}")
     
     st.divider()
     
-    # Plot & Themes
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        plot = analysis.get('plot', {})
+    # Plot
+    plot = analysis.get('plot', {})
+    if plot:
         st.markdown("### 📊 Plot")
         
         if plot.get('opening_hook'):
@@ -889,9 +880,12 @@ def show_analysis_results(analysis, cover):
             st.markdown("**Subplots:**")
             for subplot in plot['subplots']:
                 st.write(f"• {subplot}")
+        
+        st.divider()
     
-    with col2:
-        themes = analysis.get('themes', {})
+    # Themes
+    themes = analysis.get('themes', {})
+    if themes:
         st.markdown("### 🎨 Themes")
         
         if themes.get('primary'):
@@ -908,13 +902,14 @@ def show_analysis_results(analysis, cover):
             st.markdown("**Motifs:**")
             for motif in themes['motifs']:
                 st.write(f"• {motif}")
-    
-    st.divider()
+        
+        st.divider()
     
     # Pacing Analysis
     pacing = analysis.get('pacing_analysis', {})
     if pacing:
-        st.markdown("### ⏱️ Pacing")
+        st.markdown("### ⏱️ Pacing Analysis")
+        
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Overall", pacing.get('overall', 'Unknown'))
@@ -927,6 +922,25 @@ def show_analysis_results(analysis, cover):
             st.write(f"**Tension Curve:** {pacing['tension_curve']}")
         
         st.divider()
+    
+    # Strengths & Improvements
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        strengths = analysis.get('strengths', [])
+        if strengths:
+            st.markdown("### ✅ Strengths")
+            for s in strengths:
+                st.write(f"• {s}")
+    
+    with col2:
+        improvements = analysis.get('areas_for_improvement', [])
+        if improvements:
+            st.markdown("### 📝 Areas to Improve")
+            for i in improvements:
+                st.write(f"• {i}")
+    
+    st.divider()
     
     # Target Audience
     target = analysis.get('target_audience', {})
@@ -952,55 +966,6 @@ def show_analysis_results(analysis, cover):
                             st.write(f"  *Similar:* {comp['similarity']}")
                         if comp.get('difference'):
                             st.write(f"  *Different:* {comp['difference']}")
-    
-    st.divider()
-    
-    # Strengths & Improvements
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        strengths = analysis.get('strengths', [])
-        if strengths:
-            st.markdown("### ✅ Strengths")
-            for s in strengths:
-                st.write(f"• {s}")
-    
-    with col2:
-        improvements = analysis.get('areas_for_improvement', [])
-        if improvements:
-            st.markdown("### 📝 Areas to Improve")
-            for i in improvements:
-                st.write(f"• {i}")
-    
-    # Marketing Insights
-    marketing = analysis.get('marketing', {})
-    if marketing:
-        st.divider()
-        st.markdown("### 📈 Marketing Insights")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if marketing.get('unique_selling_points'):
-                st.markdown("**Unique Selling Points:**")
-                for usp in marketing['unique_selling_points']:
-                    st.write(f"• {usp}")
-        
-        with col2:
-            if marketing.get('keyword_cloud'):
-                st.markdown("**Keywords:**")
-                keywords = marketing['keyword_cloud']
-                if isinstance(keywords, list):
-                    st.write(', '.join(keywords))
-        
-        if marketing.get('compelling_quotes'):
-            st.markdown("**Pull Quotes:**")
-            for quote in marketing['compelling_quotes']:
-                st.info(f"“{quote}”")
-        
-        if marketing.get('blurb_suggestion'):
-            with st.expander("📝 Suggested Blurb"):
-                st.write(marketing['blurb_suggestion'])
 
 
 # For direct testing
