@@ -8,7 +8,7 @@ from datetime import datetime
 def show_generator():
     """Generate marketing assets from saved analysis"""
     
-    if st.session_state.get('current_page') != "🎨 Marketing Generator":
+    if st.session_state.get('current_page') != "🎨 Marketing Assets":
         return
     
     # Initialize session state
