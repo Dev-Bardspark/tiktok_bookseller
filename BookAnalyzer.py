@@ -38,38 +38,42 @@ def show_analyzer():
     st.markdown("---")
     
     # API Key input with instructions
-    if not st.session_state.openai_api_key:
-        with st.container():
-            st.markdown("### 🔑 OpenAI API Key")
+if not st.session_state.openai_api_key:
+    with st.container():
+        st.markdown("### 🔑 OpenAI API Key")
+        
+        # API Key input FIRST (above instructions)
+        api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
+        
+        # Instructions below the input
+        with st.expander("📋 How to get an OpenAI API Key", expanded=True):
+            st.markdown("""
+            <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
+            <h4>To get an OpenAI API key, follow these steps:</h4>
             
-            with st.expander("📋 How to get an OpenAI API Key", expanded=True):
-                st.markdown("""
-                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
-                <h4>To get an OpenAI API key, follow these steps:</h4>
-                
-                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
-                👉 https://platform.openai.com/</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
-                Log in with your existing account or create a new one.</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
-                Click your profile icon (top right) → Select "View API keys"<br>
-                Or go directly to: https://platform.openai.com/api-keys</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
-                Click "Create new secret key" → Give it a name → Copy the key immediately</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
-                Never share your API key publicly</div>
-                </div>
-                """, unsafe_allow_html=True)
+            <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
+            👉 https://platform.openai.com/</div>
             
-            api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
-            if api_key:
-                st.session_state.openai_api_key = api_key
-                st.rerun()
-        return
+            <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
+            Log in with your existing account or create a new one.</div>
+            
+            <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
+            Click your profile icon (top right) → Select "View API keys"<br>
+            Or go directly to: https://platform.openai.com/api-keys</div>
+            
+            <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
+            Click "Create new secret key" → Give it a name → Copy the key immediately</div>
+            
+            <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
+            Never share your API key publicly</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Check if key was entered
+        if api_key:
+            st.session_state.openai_api_key = api_key
+            st.rerun()
+    return
     
     # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
