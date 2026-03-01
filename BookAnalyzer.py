@@ -8,7 +8,6 @@ import time
 import base64
 from PIL import Image
 import io
-import os
 from datetime import datetime
 
 def show_analyzer():
@@ -38,23 +37,47 @@ def show_analyzer():
     st.markdown("Upload your manuscript and cover for deep literary analysis")
     st.markdown("---")
     
-    # API Key input
+    # API Key input with instructions
     if not st.session_state.openai_api_key:
         with st.container():
             st.markdown("### 🔑 OpenAI API Key")
+            
+            with st.expander("📋 How to get an OpenAI API Key", expanded=True):
+                st.markdown("""
+                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
+                <h4>To get an OpenAI API key, follow these steps:</h4>
+                
+                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
+                👉 https://platform.openai.com/</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
+                Log in with your existing account or create a new one.</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
+                Click your profile icon (top right) → Select "View API keys"<br>
+                Or go directly to: https://platform.openai.com/api-keys</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
+                Click "Create new secret key" → Give it a name → Copy the key immediately</div>
+                
+                <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
+                Never share your API key publicly</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
             if api_key:
                 st.session_state.openai_api_key = api_key
                 st.rerun()
         return
     
-    # If analysis is complete, show results and save option
+    # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
         st.success("✅ Analysis complete! Your book has been analyzed.")
         
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([3, 1])
+        
         with col1:
-            # Show results
             show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
         
         with col2:
@@ -64,7 +87,7 @@ def show_analyzer():
             book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
             filename = st.text_input("Filename", value=f"{book_title.replace(' ', '_')}_analysis.json")
             
-            if st.button("💾 Save to File", use_container_width=True):
+            if st.button("💾 Save to Library", use_container_width=True):
                 # Prepare data to save
                 save_data = {
                     "book_info": st.session_state.analysis_result,
@@ -73,29 +96,16 @@ def show_analyzer():
                     "book_id": st.session_state.current_book_id
                 }
                 
-                # Save to session state for download
-                st.session_state.saved_analysis = json.dumps(save_data, indent=2)
-                
-                # Also save to a "library" in session state
+                # Save to library in session state
                 if 'analysis_library' not in st.session_state:
                     st.session_state.analysis_library = {}
                 
                 st.session_state.analysis_library[filename] = save_data
-                
-                st.success(f"✅ Saved as {filename}")
-            
-            # Download button
-            if 'saved_analysis' in st.session_state:
-                st.download_button(
-                    "📥 Download JSON",
-                    st.session_state.saved_analysis,
-                    filename,
-                    "application/json"
-                )
+                st.success(f"✅ Saved to library as {filename}")
             
             st.markdown("---")
             st.markdown("### 📚 Next Step")
-            st.markdown("Go to **Marketing Generator** to create assets from this analysis")
+            st.markdown("Go to **Marketing Assets** to create campaigns from this analysis")
             
             if st.button("🔄 New Analysis", use_container_width=True):
                 st.session_state.analysis_complete = False
@@ -353,88 +363,203 @@ def extract_text(file) -> str:
 
 
 def show_analysis_results(analysis, cover):
-    """Display analysis results"""
+    """Display analysis results in full-width layout"""
     
-    # Cover Analysis Summary
+    # Cover Analysis - Full width at top
     if cover:
         with st.expander("🎨 Cover Analysis", expanded=False):
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
                 st.write(f"**Mood:** {cover.get('mood', '')}")
-                st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
             with col2:
                 st.write(f"**Typography:** {cover.get('typography', '')}")
                 st.write(f"**Composition:** {cover.get('composition', '')}")
+            with col3:
+                st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
                 if cover.get('has_figure'):
                     st.write(f"**Figure:** {cover.get('figure_description', '')}")
+            
+            st.divider()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**✅ Strengths:**")
+                for s in cover.get('strengths', []):
+                    st.write(f"• {s}")
+            with col2:
+                st.markdown("**❌ Weaknesses:**")
+                for w in cover.get('weaknesses', []):
+                    st.write(f"• {w}")
+            
+            st.markdown("**💡 Suggestions:**")
+            for s in cover.get('suggestions', []):
+                st.write(f"• {s}")
     
-    # Book Info
+    # Book Info - Full width metrics
     book_info = analysis.get('book_info', {})
+    st.markdown("### 📖 Book Overview")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Title", book_info.get('title', 'N/A'), help="Book title")
+    with col2:
+        st.metric("Genre", book_info.get('genre', 'N/A'), help="Primary genre")
+    with col3:
+        st.metric("Tone", book_info.get('tone', 'N/A'), help="Emotional atmosphere")
+    with col4:
+        st.metric("Pacing", book_info.get('pacing', 'N/A'), help="Story pace")
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("### 📖 Book Info")
-        st.write(f"**Title:** {book_info.get('title', 'N/A')}")
-        st.write(f"**Genre:** {book_info.get('genre', 'N/A')}")
-        st.write(f"**Subgenres:** {', '.join(book_info.get('subgenres', []))}")
+        st.write(f"**Writing Style:** {book_info.get('writing_style', 'N/A')}")
     with col2:
-        st.write(f"**Tone:** {book_info.get('tone', 'N/A')}")
-        st.write(f"**Style:** {book_info.get('writing_style', 'N/A')}")
-        st.write(f"**Pacing:** {book_info.get('pacing', 'N/A')}")
+        subgenres = book_info.get('subgenres', [])
+        st.write(f"**Subgenres:** {', '.join(subgenres) if subgenres else 'None'}")
     
-    # Characters
+    st.divider()
+    
+    # Characters - Grid layout
     chars = analysis.get('characters', {})
-    with st.expander("👥 Characters", expanded=True):
-        for char in chars.get('main', []):
-            st.markdown(f"**{char.get('name', 'Unknown')}** ({char.get('role', '')})")
-            st.write(char.get('description', ''))
-            st.write(f"*Arc:* {char.get('arc', '')}")
-            st.divider()
+    st.markdown("### 👥 Main Characters")
     
-    # Plot & Themes
+    main_chars = chars.get('main', [])
+    if main_chars:
+        # Create rows of 3 characters
+        for i in range(0, len(main_chars), 3):
+            cols = st.columns(3)
+            for j in range(3):
+                if i + j < len(main_chars):
+                    char = main_chars[i + j]
+                    with cols[j]:
+                        with st.container():
+                            st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
+                            st.write(char.get('description', ''))
+                            st.caption(f"Arc: {char.get('arc', '')}")
+    
+    # Supporting characters in expander
+    if chars.get('supporting'):
+        with st.expander("👥 Supporting Characters"):
+            for char in chars.get('supporting', []):
+                st.write(f"• {char}")
+    
+    if chars.get('relationships'):
+        with st.expander("🔄 Key Relationships"):
+            for rel in chars.get('relationships', []):
+                st.write(f"• {rel}")
+    
+    st.divider()
+    
+    # Plot & Themes side by side
     col1, col2 = st.columns(2)
+    
     with col1:
         plot = analysis.get('plot', {})
-        st.markdown("### 📊 Plot")
-        st.write(f"**Opening:** {plot.get('opening_hook', '')}")
-        st.write(f"**Inciting Incident:** {plot.get('inciting_incident', '')}")
-        st.write("**Major Points:**")
-        for point in plot.get('major_plot_points', []):
-            st.write(f"• {point}")
-        st.write(f"**Climax:** {plot.get('climax', '')}")
-        st.write(f"**Resolution:** {plot.get('resolution', '')}")
+        st.markdown("### 📊 Plot Structure")
+        
+        if plot.get('opening_hook'):
+            st.markdown(f"**Opening Hook:** {plot['opening_hook']}")
+        
+        if plot.get('inciting_incident'):
+            st.markdown(f"**Inciting Incident:** {plot['inciting_incident']}")
+        
+        if plot.get('major_plot_points'):
+            st.markdown("**Major Plot Points:**")
+            for point in plot['major_plot_points']:
+                st.write(f"• {point}")
+        
+        if plot.get('climax'):
+            st.markdown(f"**Climax:** {plot['climax']}")
+        
+        if plot.get('resolution'):
+            st.markdown(f"**Resolution:** {plot['resolution']}")
     
     with col2:
         themes = analysis.get('themes', {})
-        st.markdown("### 🎨 Themes")
-        st.write("**Primary:**")
-        for theme in themes.get('primary', []):
-            st.write(f"• {theme}")
-        st.write("**Secondary:**")
-        for theme in themes.get('secondary', []):
-            st.write(f"• {theme}")
+        st.markdown("### 🎨 Themes & Motifs")
+        
+        if themes.get('primary'):
+            st.markdown("**Primary Themes:**")
+            for theme in themes['primary']:
+                st.write(f"• {theme}")
+        
+        if themes.get('secondary'):
+            st.markdown("**Secondary Themes:**")
+            for theme in themes['secondary']:
+                st.write(f"• {theme}")
+        
+        if themes.get('motifs'):
+            st.markdown("**Motifs:**")
+            for motif in themes['motifs']:
+                st.write(f"• {motif}")
+    
+    st.divider()
     
     # Target Audience
     target = analysis.get('target_audience', {})
-    with st.expander("🎯 Target Audience"):
-        st.write(f"**Primary:** {target.get('primary', 'N/A')}")
-        st.write(f"**Appeal:** {target.get('appeal', 'N/A')}")
-        st.write("**Comparable Titles:**")
-        for comp in target.get('comparable_titles', []):
-            st.write(f"• **{comp.get('title', '')}**")
-            st.write(f"  Similar: {comp.get('similarity', '')}")
-            st.write(f"  Different: {comp.get('difference', '')}")
+    if target:
+        st.markdown("### 🎯 Target Audience")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if target.get('primary'):
+                st.markdown(f"**Primary:** {target['primary']}")
+            if target.get('appeal'):
+                st.markdown(f"**Appeal:** {target['appeal']}")
+        
+        with col2:
+            if target.get('comparable_titles'):
+                st.markdown("**Comparable Titles:**")
+                for comp in target['comparable_titles']:
+                    if isinstance(comp, dict):
+                        st.markdown(f"• **{comp.get('title', '')}**")
+                        st.caption(f"  Similar: {comp.get('similarity', '')}")
+                        st.caption(f"  Different: {comp.get('difference', '')}")
+                    else:
+                        st.write(f"• {comp}")
     
-    # Strengths & Improvements
+    st.divider()
+    
+    # Strengths & Areas for Improvement
     col1, col2 = st.columns(2)
+    
     with col1:
-        st.markdown("### ✅ Strengths")
-        for s in analysis.get('strengths', []):
-            st.write(f"• {s}")
+        strengths = analysis.get('strengths', [])
+        if strengths:
+            st.markdown("### ✅ Strengths")
+            for s in strengths:
+                st.write(f"• {s}")
+    
     with col2:
-        st.markdown("### 📝 Areas to Improve")
-        for i in analysis.get('areas_for_improvement', []):
-            st.write(f"• {i}")
+        improvements = analysis.get('areas_for_improvement', [])
+        if improvements:
+            st.markdown("### 📝 Areas for Improvement")
+            for i in improvements:
+                st.write(f"• {i}")
+    
+    # Marketing Insights
+    marketing = analysis.get('marketing', {})
+    if marketing:
+        st.divider()
+        st.markdown("### 📈 Marketing Insights")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if marketing.get('unique_selling_points'):
+                st.markdown("**Unique Selling Points:**")
+                for usp in marketing['unique_selling_points']:
+                    st.write(f"• {usp}")
+        
+        with col2:
+            if marketing.get('keyword_cloud'):
+                st.markdown("**Keywords:**")
+                st.write(', '.join(marketing['keyword_cloud']))
+        
+        if marketing.get('compelling_quotes'):
+            st.markdown("**Pull Quotes:**")
+            for quote in marketing['compelling_quotes']:
+                st.info(f"“{quote}”")
 
 
 # For direct testing
