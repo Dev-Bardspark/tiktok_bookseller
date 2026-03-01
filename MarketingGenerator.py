@@ -39,55 +39,66 @@ def show_generator():
                 st.rerun()
         return
     
-    # Two-column layout
-    col1, col2 = st.columns([1, 1])
+   # Two-column layout
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown("### 📂 Available Analyses")
     
-    with col1:
-        st.markdown("### 📂 Load Analysis")
+    # Check if there are any saved analyses from Book Analyzer
+    if 'analysis_library' not in st.session_state:
+        st.session_state.analysis_library = {}
+    
+    if st.session_state.analysis_library:
+        book_titles = list(st.session_state.analysis_library.keys())
         
-        # Option 1: Load from session library
-        if 'analysis_library' in st.session_state and st.session_state.analysis_library:
-            st.markdown("**From current session:**")
-            book_titles = list(st.session_state.analysis_library.keys())
-            selected = st.selectbox("Choose a book", book_titles)
+        if book_titles:
+            selected = st.selectbox(
+                "Choose a book to generate assets for:",
+                book_titles,
+                key="book_selector"
+            )
             
-            if st.button("📂 Load Selected", use_container_width=True):
+            if st.button("📂 Load Selected Book", use_container_width=True):
                 st.session_state.loaded_analysis = st.session_state.analysis_library[selected]
                 st.session_state.generated_assets = None
                 st.session_state.edited_assets = None
                 st.rerun()
+        else:
+            st.info("No books in library yet")
+    else:
+        st.info("No books analyzed yet. Go to **Book Analyzer** first.")
         
-        # Option 2: Upload JSON file
-        st.markdown("**Or upload JSON file:**")
-        uploaded_file = st.file_uploader(
-            "Upload analysis JSON",
-            type=['json'],
-            key="analysis_file"
-        )
+        # Helpful button
+        if st.button("📖 Go to Book Analyzer", use_container_width=True):
+            st.session_state.page = "📖 Book Analyzer"
+            st.rerun()
+
+with col2:
+    if st.session_state.loaded_analysis:
+        st.markdown("### 📖 Loaded Book")
+        # Safely navigate the nested structure
+        book_info = st.session_state.loaded_analysis
+        if isinstance(book_info, dict):
+            # Handle different possible structures
+            if 'book_info' in book_info and isinstance(book_info['book_info'], dict):
+                book_info = book_info['book_info'].get('book_info', book_info['book_info'])
+            elif 'book_info' in book_info:
+                book_info = book_info['book_info']
         
-        if uploaded_file:
-            try:
-                loaded = json.load(uploaded_file)
-                st.session_state.loaded_analysis = loaded
-                st.session_state.generated_assets = None
-                st.session_state.edited_assets = None
-                st.success("✅ Analysis loaded!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
-    
-    with col2:
-        if st.session_state.loaded_analysis:
-            st.markdown("### 📖 Loaded Book")
-            book_info = st.session_state.loaded_analysis.get('book_info', {}).get('book_info', {})
-            st.write(f"**Title:** {book_info.get('title', 'Unknown')}")
-            st.write(f"**Genre:** {book_info.get('genre', 'Unknown')}")
-            
-            # Show preview of analysis
-            with st.expander("Preview Analysis"):
-                st.json(st.session_state.loaded_analysis)
-    
-    st.markdown("---")
+        title = "Unknown"
+        genre = "Unknown"
+        
+        if isinstance(book_info, dict):
+            title = book_info.get('title', 'Unknown')
+            genre = book_info.get('genre', 'Unknown')
+        
+        st.write(f"**Title:** {title}")
+        st.write(f"**Genre:** {genre}")
+        
+        # Show preview of analysis
+        with st.expander("Preview Analysis"):
+            st.json(st.session_state.loaded_analysis)
     
     # Generate assets section
     if st.session_state.loaded_analysis:
