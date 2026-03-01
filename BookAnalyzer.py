@@ -26,9 +26,15 @@ def show_analyzer():
     if 'cover_analysis' not in st.session_state:
         st.session_state.cover_analysis = None
     
+    if 'generated_assets' not in st.session_state:
+        st.session_state.generated_assets = None
+    
+    if 'analysis_complete' not in st.session_state:
+        st.session_state.analysis_complete = False
+    
     # Header
-    st.title("📖 Book Analyzer")
-    st.markdown("Upload your manuscript and cover for complete AI analysis")
+    st.title("📖 Book Analyzer & Marketing Engine")
+    st.markdown("Upload your manuscript and cover for complete AI analysis and marketing assets")
     st.markdown("---")
     
     # API Key input
@@ -39,6 +45,37 @@ def show_analyzer():
             if api_key:
                 st.session_state.openai_api_key = api_key
                 st.rerun()
+        return
+    
+    # If analysis is complete, show results with tabs
+    if st.session_state.analysis_complete and st.session_state.analysis_result:
+        # Success message
+        st.success("✅ Analysis complete! Your book has been analyzed and marketing assets generated.")
+        
+        # Create tabs for Analysis and Assets
+        tab1, tab2 = st.tabs(["📊 Book Analysis", "🚀 Marketing Assets"])
+        
+        with tab1:
+            show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
+        
+        with tab2:
+            if st.session_state.generated_assets:
+                show_assets(st.session_state.generated_assets)
+            else:
+                if st.button("🎬 Generate Marketing Assets", type="primary"):
+                    with st.spinner("Generating marketing assets..."):
+                        client = OpenAI(api_key=st.session_state.openai_api_key)
+                        assets = generate_all_assets(client, st.session_state.analysis_result)
+                        st.session_state.generated_assets = assets
+                        st.rerun()
+        
+        # Button for new analysis
+        if st.button("🔄 Analyze Another Book", use_container_width=True):
+            st.session_state.analysis_complete = False
+            st.session_state.analysis_result = None
+            st.session_state.cover_analysis = None
+            st.session_state.generated_assets = None
+            st.rerun()
         return
     
     # Main upload area
@@ -72,8 +109,8 @@ def show_analyzer():
     
     # Analyze button
     if manuscript_file and cover_file:
-        if st.button("🔍 ANALYZE BOOK", type="primary", use_container_width=True):
-            with st.spinner("Analyzing your book... (this takes about 30 seconds)"):
+        if st.button("🔍 ANALYZE BOOK & GENERATE ASSETS", type="primary", use_container_width=True):
+            with st.spinner("Analyzing your book... (this takes about 60 seconds)"):
                 # Extract text
                 manuscript_text = extract_text(manuscript_file)
                 
@@ -88,11 +125,16 @@ def show_analyzer():
                 cover_analysis = analyze_cover(client, cover_base64)
                 st.session_state.cover_analysis = cover_analysis
                 
-                # Step 2: Deep manuscript analysis (single comprehensive call)
+                # Step 2: Deep manuscript analysis
                 analysis = analyze_manuscript_deep(client, manuscript_text, cover_analysis)
                 st.session_state.analysis_result = analysis
                 
-                st.success("✅ Analysis complete!")
+                # Step 3: Generate marketing assets
+                assets = generate_all_assets(client, analysis)
+                st.session_state.generated_assets = assets
+                
+                # Mark complete
+                st.session_state.analysis_complete = True
                 st.rerun()
     else:
         st.info("👆 Please upload both manuscript and cover to begin")
@@ -156,10 +198,9 @@ def analyze_cover(client, cover_base64):
 def analyze_manuscript_deep(client, text, cover_analysis):
     """Single comprehensive manuscript analysis"""
     
-    # Truncate if needed (gpt-4o-mini has 128k context, so this is generous)
+    # Truncate if needed
     if len(text) > 50000:
         text = text[:50000] + "... [truncated]"
-        st.warning("Long manuscript truncated to 50,000 characters")
     
     # Get beginning, middle, end for context
     total_len = len(text)
@@ -234,20 +275,8 @@ def analyze_manuscript_deep(client, text, cover_analysis):
     8. marketing: {{
         "unique_selling_points": ["what makes it special"],
         "keyword_cloud": ["amazon_keywords"],
-        "compelling_quotes": ["3 actual or potential pull quotes"],
-        "blurb": "150-word compelling book description"
+        "compelling_quotes": ["3 actual or potential pull quotes"]
     }}
-    
-    9. tiktok_strategy: {{
-        "content_pillars": ["3 angles for videos"],
-        "script_ideas": [
-            {{"hook": "attention grabber", "visual": "what to show", "voiceover": "script"}},
-            {{"hook": "another angle", "visual": "what to show", "voiceover": "script"}}
-        ],
-        "hashtags": ["relevant hashtags"]
-    }}
-    
-    Be specific. Reference actual elements from the excerpts. Make this feel like a REAL analysis of THIS book.
     """
     
     try:
@@ -266,6 +295,111 @@ def analyze_manuscript_deep(client, text, cover_analysis):
         
     except Exception as e:
         st.error(f"Analysis failed: {str(e)}")
+        return None
+
+
+def generate_all_assets(client, analysis):
+    """Generate all marketing assets from analysis"""
+    
+    prompt = f"""
+    Based on this book analysis, create marketing assets.
+    
+    ANALYSIS:
+    {json.dumps(analysis, indent=2)}
+    
+    Return JSON with:
+    
+    1. blurb: "150-word compelling book description"
+    
+    2. tiktok_scripts: [
+        {{
+            "hook": "attention grabber",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action"
+        }},
+        {{
+            "hook": "another angle",
+            "visuals": "what to show", 
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action"
+        }}
+    ]
+    
+    3. emails: {{
+        "prelaunch": {{
+            "subject": "email subject",
+            "body": "email content"
+        }},
+        "launch": {{
+            "subject": "email subject",
+            "body": "email content"
+        }},
+        "followup": {{
+            "subject": "email subject",
+            "body": "email content"
+        }}
+    }}
+    
+    4. social_posts: [
+        {{
+            "platform": "Instagram",
+            "caption": "post text",
+            "hashtags": ["#tag1", "#tag2"]
+        }},
+        {{
+            "platform": "TikTok",
+            "caption": "video caption",
+            "hashtags": ["#tag1", "#tag2"]
+        }},
+        {{
+            "platform": "Twitter",
+            "caption": "tweet text",
+            "hashtags": ["#tag1"]
+        }}
+    ]
+    
+    5. ad_copy: {{
+        "amazon_ad": {{
+            "headline": "catchy headline",
+            "text": "ad text"
+        }},
+        "facebook_ad": {{
+            "headline": "catchy headline",
+            "text": "ad text"
+        }}
+    }}
+    
+    6. quote_cards: [
+        {{
+            "quote": "powerful quote from book",
+            "visual_suggestion": "image description"
+        }},
+        {{
+            "quote": "another quote",
+            "visual_suggestion": "image description"
+        }}
+    ]
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a marketing expert. Return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=3000,
+            response_format={"type": "json_object"}
+        )
+        
+        return json.loads(response.choices[0].message.content)
+        
+    except Exception as e:
+        st.error(f"Asset generation failed: {str(e)}")
         return None
 
 
@@ -294,31 +428,8 @@ def extract_text(file) -> str:
         return ""
 
 
-def show_results():
+def show_analysis_results(analysis, cover):
     """Display analysis results"""
-    
-    if not st.session_state.analysis_result:
-        st.info("No analysis yet. Upload and analyze a book first.")
-        return
-    
-    analysis = st.session_state.analysis_result
-    cover = st.session_state.cover_analysis
-    
-    # Title and export
-    title = analysis.get('book_info', {}).get('title', 'Your Book')
-    st.success(f"✅ Analysis Complete: **{title}**")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📋 Copy Summary", use_container_width=True):
-            st.info("Copy to clipboard feature coming")
-    with col2:
-        if st.button("🔄 New Analysis", use_container_width=True):
-            st.session_state.analysis_result = None
-            st.session_state.cover_analysis = None
-            st.rerun()
-    
-    st.divider()
     
     # Cover Analysis Summary
     if cover:
@@ -333,138 +444,155 @@ def show_results():
                 st.write(f"**Composition:** {cover.get('composition', '')}")
                 if cover.get('has_figure'):
                     st.write(f"**Figure:** {cover.get('figure_description', '')}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**✅ Strengths:**")
+                for s in cover.get('strengths', []):
+                    st.write(f"• {s}")
+            with col2:
+                st.markdown("**❌ Weaknesses:**")
+                for w in cover.get('weaknesses', []):
+                    st.write(f"• {w}")
     
-    # Main tabs
-    tabs = st.tabs([
-        "📖 Book Info", "👥 Characters", "📊 Plot & Themes",
-        "🎯 Target Market", "📝 Marketing", "🎬 TikTok Strategy"
-    ])
+    # Book Info
+    book_info = analysis.get('book_info', {})
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 📖 Book Info")
+        st.write(f"**Title:** {book_info.get('title', 'N/A')}")
+        st.write(f"**Genre:** {book_info.get('genre', 'N/A')}")
+        st.write(f"**Subgenres:** {', '.join(book_info.get('subgenres', []))}")
+    with col2:
+        st.write(f"**Tone:** {book_info.get('tone', 'N/A')}")
+        st.write(f"**Style:** {book_info.get('writing_style', 'N/A')}")
+        st.write(f"**Pacing:** {book_info.get('pacing', 'N/A')}")
     
-    # Tab 1: Book Info
-    with tabs[0]:
-        book_info = analysis.get('book_info', {})
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**Title:** " + book_info.get('title', 'N/A'))
-            st.markdown("**Genre:** " + book_info.get('genre', 'N/A'))
-            st.markdown("**Subgenres:** " + ', '.join(book_info.get('subgenres', [])))
-        with col2:
-            st.markdown("**Tone:** " + book_info.get('tone', 'N/A'))
-            st.markdown("**Writing Style:** " + book_info.get('writing_style', 'N/A'))
-            st.markdown("**Pacing:** " + book_info.get('pacing', 'N/A'))
-    
-    # Tab 2: Characters
-    with tabs[1]:
-        chars = analysis.get('characters', {})
-        st.markdown("### Main Characters")
+    # Characters
+    chars = analysis.get('characters', {})
+    with st.expander("👥 Characters", expanded=True):
         for char in chars.get('main', []):
-            with st.expander(f"**{char.get('name', 'Unknown')}** - {char.get('role', '')}"):
-                st.write(char.get('description', ''))
-                st.write(f"*Arc:* {char.get('arc', '')}")
-        
-        if chars.get('supporting'):
-            st.markdown("### Supporting Characters")
-            for char in chars.get('supporting', []):
-                st.write(f"• {char}")
-        
-        if chars.get('relationships'):
-            st.markdown("### Key Relationships")
-            for rel in chars.get('relationships', []):
-                st.write(f"• {rel}")
+            st.markdown(f"**{char.get('name', 'Unknown')}** ({char.get('role', '')})")
+            st.write(char.get('description', ''))
+            st.write(f"*Arc:* {char.get('arc', '')}")
+            st.divider()
     
-    # Tab 3: Plot & Themes
-    with tabs[2]:
+    # Plot & Themes
+    col1, col2 = st.columns(2)
+    with col1:
         plot = analysis.get('plot', {})
+        st.markdown("### 📊 Plot")
+        st.write(f"**Opening:** {plot.get('opening_hook', '')}")
+        st.write(f"**Inciting Incident:** {plot.get('inciting_incident', '')}")
+        st.write("**Major Points:**")
+        for point in plot.get('major_plot_points', []):
+            st.write(f"• {point}")
+        st.write(f"**Climax:** {plot.get('climax', '')}")
+        st.write(f"**Resolution:** {plot.get('resolution', '')}")
+    
+    with col2:
         themes = analysis.get('themes', {})
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### Plot")
-            st.markdown(f"**Opening Hook:** {plot.get('opening_hook', '')}")
-            st.markdown(f"**Inciting Incident:** {plot.get('inciting_incident', '')}")
-            st.markdown("**Major Plot Points:**")
-            for point in plot.get('major_plot_points', []):
-                st.write(f"• {point}")
-            st.markdown(f"**Climax:** {plot.get('climax', '')}")
-            st.markdown(f"**Resolution:** {plot.get('resolution', '')}")
-        
-        with col2:
-            st.markdown("### Themes")
-            st.markdown("**Primary:**")
-            for theme in themes.get('primary', []):
-                st.write(f"• {theme}")
-            st.markdown("**Secondary:**")
-            for theme in themes.get('secondary', []):
-                st.write(f"• {theme}")
-            if themes.get('motifs'):
-                st.markdown("**Motifs:**")
-                for motif in themes.get('motifs', []):
-                    st.write(f"• {motif}")
+        st.markdown("### 🎨 Themes")
+        st.write("**Primary:**")
+        for theme in themes.get('primary', []):
+            st.write(f"• {theme}")
+        st.write("**Secondary:**")
+        for theme in themes.get('secondary', []):
+            st.write(f"• {theme}")
     
-    # Tab 4: Target Market
-    with tabs[3]:
-        target = analysis.get('target_audience', {})
-        st.markdown(f"**Primary Audience:** {target.get('primary', 'N/A')}")
-        st.markdown(f"**Appeal:** {target.get('appeal', 'N/A')}")
-        
-        st.markdown("### Comparable Titles")
+    # Target Audience
+    target = analysis.get('target_audience', {})
+    with st.expander("🎯 Target Audience"):
+        st.write(f"**Primary:** {target.get('primary', 'N/A')}")
+        st.write(f"**Appeal:** {target.get('appeal', 'N/A')}")
+        st.write("**Comparable Titles:**")
         for comp in target.get('comparable_titles', []):
-            with st.expander(f"**{comp.get('title', '')}**"):
-                st.write(f"Similar: {comp.get('similarity', '')}")
-                st.write(f"Different: {comp.get('difference', '')}")
-        
-        strengths = analysis.get('strengths', [])
-        if strengths:
-            st.markdown("### Strengths")
-            for s in strengths:
-                st.write(f"✅ {s}")
-        
-        improvements = analysis.get('areas_for_improvement', [])
-        if improvements:
-            st.markdown("### Areas for Improvement")
-            for i in improvements:
-                st.write(f"📝 {i}")
+            st.write(f"• **{comp.get('title', '')}**")
+            st.write(f"  Similar: {comp.get('similarity', '')}")
+            st.write(f"  Different: {comp.get('difference', '')}")
     
-    # Tab 5: Marketing
-    with tabs[4]:
-        marketing = analysis.get('marketing', {})
-        
-        st.markdown("### Unique Selling Points")
+    # Strengths & Improvements
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### ✅ Strengths")
+        for s in analysis.get('strengths', []):
+            st.write(f"• {s}")
+    with col2:
+        st.markdown("### 📝 Areas to Improve")
+        for i in analysis.get('areas_for_improvement', []):
+            st.write(f"• {i}")
+    
+    # Marketing
+    marketing = analysis.get('marketing', {})
+    with st.expander("📈 Marketing Insights"):
+        st.write("**Unique Selling Points:**")
         for usp in marketing.get('unique_selling_points', []):
-            st.write(f"✨ {usp}")
-        
-        st.markdown("### Keywords")
-        keywords = marketing.get('keyword_cloud', [])
-        st.write(', '.join(keywords))
-        
-        st.markdown("### Compelling Quotes")
+            st.write(f"• {usp}")
+        st.write("**Keywords:**")
+        st.write(', '.join(marketing.get('keyword_cloud', [])))
+        st.write("**Pull Quotes:**")
         for quote in marketing.get('compelling_quotes', []):
             st.info(f"“{quote}”")
-        
-        st.markdown("### Book Blurb")
-        st.success(marketing.get('blurb', 'N/A'))
+
+
+def show_assets(assets):
+    """Display generated assets"""
     
-    # Tab 6: TikTok Strategy
-    with tabs[5]:
-        tiktok = analysis.get('tiktok_strategy', {})
-        
-        st.markdown("### Content Pillars")
-        for pillar in tiktok.get('content_pillars', []):
-            st.write(f"📌 {pillar}")
-        
-        st.markdown("### Script Ideas")
-        for i, script in enumerate(tiktok.get('script_ideas', []), 1):
+    # Blurb
+    if assets.get('blurb'):
+        st.markdown("### 📝 Book Blurb")
+        st.info(assets['blurb'])
+        if st.button("📋 Copy Blurb"):
+            st.write("Copied!")
+    
+    # TikTok Scripts
+    if assets.get('tiktok_scripts'):
+        st.markdown("### 🎬 TikTok Scripts")
+        for i, script in enumerate(assets['tiktok_scripts'], 1):
             with st.expander(f"Script {i}"):
-                st.write(f"**Hook:** {script.get('hook', '')}")
-                st.write(f"**Visual:** {script.get('visual', '')}")
-                st.write(f"**Voiceover:** {script.get('voiceover', '')}")
-        
-        st.markdown("### Hashtags")
-        hashtags = tiktok.get('hashtags', [])
-        st.write(' '.join(hashtags))
-
-
-# Main execution
-if __name__ == "__main__":
-    # This allows the script to be imported or run directly
-    pass
+                for key, value in script.items():
+                    st.write(f"**{key.title()}:** {value}")
+    
+    # Emails
+    if assets.get('emails'):
+        st.markdown("### 📧 Email Sequence")
+        for email_type, email in assets['emails'].items():
+            with st.expander(f"📨 {email_type.title()} Email"):
+                if isinstance(email, dict):
+                    st.write(f"**Subject:** {email.get('subject', '')}")
+                    st.write(f"**Body:** {email.get('body', '')}")
+                else:
+                    st.write(email)
+    
+    # Social Posts
+    if assets.get('social_posts'):
+        st.markdown("### 📱 Social Media Posts")
+        for i, post in enumerate(assets['social_posts'], 1):
+            with st.expander(f"Post {i}"):
+                if isinstance(post, dict):
+                    for key, value in post.items():
+                        if key == 'hashtags' and isinstance(value, list):
+                            st.write(f"**{key.title()}:** {' '.join(value)}")
+                        else:
+                            st.write(f"**{key.title()}:** {value}")
+                else:
+                    st.write(post)
+    
+    # Ad Copy
+    if assets.get('ad_copy'):
+        st.markdown("### 📢 Ad Copy")
+        for ad_type, ad in assets['ad_copy'].items():
+            with st.expander(f"📢 {ad_type.replace('_', ' ').title()}"):
+                if isinstance(ad, dict):
+                    for key, value in ad.items():
+                        st.write(f"**{key.title()}:** {value}")
+                else:
+                    st.write(ad)
+    
+    # Quote Cards
+    if assets.get('quote_cards'):
+        st.markdown("### 💬 Quote Cards")
+        for i, quote in enumerate(assets['quote_cards'], 1):
+            with st.expander(f"Quote {i}"):
+                st.write(f"**Quote:** “{quote.get('quote', '')}”")
+                st.write(f"**Visual:** {quote.get('visual_suggestion', '')}")
