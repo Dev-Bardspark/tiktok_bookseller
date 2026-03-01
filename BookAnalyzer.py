@@ -9,6 +9,7 @@ import base64
 from PIL import Image
 import io
 from datetime import datetime
+import re
 
 def show_analyzer():
     """Pure book analysis without marketing assets"""
@@ -34,7 +35,7 @@ def show_analyzer():
     
     # Header
     st.title("📖 Book Analyzer")
-    st.markdown("Upload your manuscript and cover for deep literary analysis")
+    st.markdown("Upload your manuscript and cover for deep literary analysis with **marketability scoring**")
     st.markdown("---")
     
     # API Key input with instructions
@@ -77,7 +78,7 @@ def show_analyzer():
     
     # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
-        st.success("✅ Analysis complete! Your book has been analyzed.")
+        st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
         
         # Action buttons at the top with instructions
         col1, col2, col3 = st.columns(3)
@@ -122,7 +123,7 @@ def show_analyzer():
         
         st.markdown("---")
         
-        # Show analysis results - FULL WIDTH with proper fonts
+        # Show analysis results with marketability scores prominently displayed
         show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
         
         return
@@ -158,11 +159,11 @@ def show_analyzer():
     
     # Analyze button
     if manuscript_file and cover_file:
-        cost_estimate = "$0.30-$0.50 for analysis"
+        cost_estimate = "$0.35-$0.60 for analysis with marketability scoring"
         st.info(f"💰 Estimated API cost: {cost_estimate}")
         
-        if st.button("🔍 ANALYZE BOOK", type="primary", use_container_width=True):
-            with st.spinner("Analyzing your book... (this takes about 30 seconds)"):
+        if st.button("🔍 ANALYZE BOOK WITH MARKETABILITY SCORE", type="primary", use_container_width=True):
+            with st.spinner("Analyzing your book with marketability scoring... (this takes about 45 seconds)"):
                 # Generate a simple book ID
                 st.session_state.current_book_id = f"book_{int(time.time())}"
                 
@@ -180,8 +181,8 @@ def show_analyzer():
                 cover_analysis = analyze_cover(client, cover_base64)
                 st.session_state.cover_analysis = cover_analysis
                 
-                # Step 2: Deep manuscript analysis
-                analysis = analyze_manuscript_deep(client, manuscript_text, cover_analysis)
+                # Step 2: Deep manuscript analysis with marketability
+                analysis = analyze_manuscript_with_marketability(client, manuscript_text, cover_analysis)
                 st.session_state.analysis_result = analysis
                 
                 # Mark complete
@@ -246,8 +247,8 @@ def analyze_cover(client, cover_base64):
         }
 
 
-def analyze_manuscript_deep(client, text, cover_analysis):
-    """Single comprehensive manuscript analysis with narrative arc"""
+def analyze_manuscript_with_marketability(client, text, cover_analysis):
+    """Single comprehensive manuscript analysis with marketability scoring"""
     
     # Truncate if needed
     if len(text) > 50000:
@@ -260,7 +261,7 @@ def analyze_manuscript_deep(client, text, cover_analysis):
     ending = text[-5000:]
     
     prompt = f"""
-    You are a professional literary analyst. Analyze this book in depth.
+    You are a professional literary analyst and publishing industry expert. Analyze this book in depth with special focus on its **marketability and commercial potential**.
     
     COVER ANALYSIS (for context):
     {json.dumps(cover_analysis, indent=2)}
@@ -276,83 +277,174 @@ def analyze_manuscript_deep(client, text, cover_analysis):
     ENDING:
     {ending}
     
-    Based on these excerpts, provide a COMPLETE analysis as JSON with:
+    Based on these excerpts, provide a COMPLETE analysis as JSON with the following structure.
     
-    1. book_info: {{
-        "title": "suggested or detected title",
-        "genre": "primary genre",
-        "subgenres": ["subgenre1", "subgenre2"],
-        "tone": "overall emotional tone",
-        "writing_style": "descriptive/lyrical/direct/etc",
-        "pacing": "fast/medium/slow with explanation"
-    }}
+    CRITICAL: Include a comprehensive marketability section with numerical scores (0-100) for:
+    - Overall Marketability Score
+    - Writing Quality Score
+    - Commercial Potential Score
+    - Genre Fit Score
+    - Hook Strength Score
+    - Character Appeal Score
+    - Pacing Score
+    - Originality Score
+    - Target Audience Appeal Score
     
-    2. characters: {{
-        "main": [
-            {{"name": "name", "role": "protagonist/antagonist/etc", 
-              "description": "who they are", 
-              "arc": "how they change throughout the story",
-              "motivation": "what drives them",
-              "conflict": "internal or external struggles"}}
-        ],
-        "supporting": ["list of supporting characters"],
-        "relationships": ["key dynamics between characters"]
-    }}
+    For each score, provide a brief explanation and specific justification.
     
-    3. narrative_arc: {{
-        "exposition": "setup and background",
-        "rising_action": "events that build tension",
-        "climax": "the turning point",
-        "falling_action": "aftermath of climax",
-        "resolution": "how story concludes"
-    }}
+    Here's the complete JSON structure to return:
     
-    4. plot: {{
-        "opening_hook": "what grabs attention",
-        "inciting_incident": "what starts the story",
-        "major_plot_points": ["point1", "point2", "point3", "point4", "point5"],
-        "plot_twists": ["any surprises or reveals"],
-        "subplots": ["secondary storylines"]
-    }}
-    
-    5. themes: {{
-        "primary": ["main themes with explanation"],
-        "secondary": ["other themes"],
-        "motifs": ["recurring elements"]
-    }}
-    
-    6. character_development: {{
-        "protagonist_journey": "how the main character changes",
-        "antagonist_motivation": "what drives the opposition",
-        "supporting_arcs": ["how other characters evolve"]
-    }}
-    
-    7. pacing_analysis: {{
-        "overall": "fast/medium/slow",
-        "opening": "description",
-        "middle": "description",
-        "ending": "description",
-        "tension_curve": "how tension rises and falls"
-    }}
-    
-    8. strengths: ["5 specific strengths of this manuscript with examples"]
-    
-    9. areas_for_improvement: ["5 specific weaknesses with suggestions"]
-    
-    10. target_audience: {{
-        "primary": "who will love this",
-        "appeal": "why they'll love it",
-        "comparable_titles": [
-            {{"title": "Book 1", "similarity": "how it's similar", "difference": "how it's different"}},
-            {{"title": "Book 2", "similarity": "how it's similar", "difference": "how it's different"}},
-            {{"title": "Book 3", "similarity": "how it's similar", "difference": "how it's different"}}
-        ]
-    }}
-    
-    11. marketing: {{
-        "unique_selling_points": ["what makes it special"],
-        "keyword_cloud": ["amazon_keywords"],
-        "compelling_quotes": ["3 actual or potential pull quotes"]
+    {{
+        "marketability": {{
+            "overall_score": 85,
+            "overall_grade": "A-",
+            "overall_assessment": "Brief summary of commercial potential",
+            "scores": {{
+                "writing_quality": {{"score": 88, "explanation": "Why this score", "strengths": ["specific strength"], "weaknesses": ["specific weakness"]}},
+                "commercial_potential": {{"score": 82, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "genre_fit": {{"score": 90, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "hook_strength": {{"score": 85, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "character_appeal": {{"score": 80, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "pacing": {{"score": 75, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "originality": {{"score": 70, "explanation": "Why this score", "strengths": [], "weaknesses": []}},
+                "target_audience_appeal": {{"score": 85, "explanation": "Why this score", "strengths": [], "weaknesses": []}}
+            }},
+            "comparable_successes": [
+                {{"title": "Similar Successful Book 1", "similarity": "How it's similar", "why_it_succeeded": "Market factors"}},
+                {{"title": "Similar Successful Book 2", "similarity": "How it's similar", "why_it_succeeded": "Market factors"}}
+            ],
+            "market_gap_analysis": "Where this book fits in current market",
+            "competitive_advantage": "What makes it stand out",
+            "potential_challenges": ["Challenge 1", "Challenge 2", "Challenge 3"]
+        }},
+        
+        "writing_quality_detailed": {{
+            "prose_quality": "Assessment of sentence-level writing",
+            "dialogue": "Quality and naturalness of dialogue",
+            "description": "Quality of descriptive passages",
+            "voice": "Strength and consistency of narrative voice",
+            "technical_execution": "Grammar, punctuation, formatting",
+            "strengths": ["Specific writing strengths"],
+            "improvements": ["Specific writing improvements needed"]
+        }},
+        
+        "title_analysis": {{
+            "current_title": "Title detected or suggested from content",
+            "title_effectiveness": {{
+                "score": 70,
+                "memorability": "Assessment",
+                "genre_appropriateness": "Assessment",
+                "uniqueness": "Assessment",
+                "searchability": "Assessment"
+            }},
+            "suggested_titles": [
+                {{"title": "Alternative Title 1", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
+                {{"title": "Alternative Title 2", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
+                {{"title": "Alternative Title 3", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
+                {{"title": "Alternative Title 4", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}},
+                {{"title": "Alternative Title 5", "rationale": "Why this works better", "estimated_impact": "High/Medium/Low"}}
+            ],
+            "title_change_recommendation": "Should the title be changed? Why?",
+            "subtitle_suggestion": "If applicable, a subtitle suggestion"
+        }},
+        
+        "salability_analysis": {{
+            "estimated_market_size": "Small/Medium/Large with explanation",
+            "target_retailers": ["Amazon", "Barnes & Noble", "etc"],
+            "format_potential": {{
+                "ebook": "High/Medium/Low",
+                "paperback": "High/Medium/Low", 
+                "hardcover": "High/Medium/Low",
+                "audiobook": "High/Medium/Low"
+            }},
+            "series_potential": "Yes/No with explanation",
+            "adaptation_potential": "Film/TV/None with explanation",
+            "estimated_price_point": "Suggested pricing",
+            "comparable_bestsellers": [
+                {{"title": "Bestseller 1", "similarity": "What's similar", "copies_sold": "Estimated"}},
+                {{"title": "Bestseller 2", "similarity": "What's similar", "copies_sold": "Estimated"}}
+            ]
+        }},
+        
+        "book_info": {{
+            "title": "suggested or detected title",
+            "genre": "primary genre",
+            "subgenres": ["subgenre1", "subgenre2"],
+            "tone": "overall emotional tone",
+            "writing_style": "descriptive/lyrical/direct/etc",
+            "pacing": "fast/medium/slow with explanation"
+        }},
+        
+        "characters": {{
+            "main": [
+                {{"name": "name", "role": "protagonist/antagonist/etc", 
+                  "description": "who they are", 
+                  "arc": "how they change throughout the story",
+                  "motivation": "what drives them",
+                  "conflict": "internal or external struggles",
+                  "appeal_factor": "Why readers will connect"}}
+            ],
+            "supporting": ["list of supporting characters"],
+            "relationships": ["key dynamics between characters"]
+        }},
+        
+        "narrative_arc": {{
+            "exposition": "setup and background",
+            "rising_action": "events that build tension",
+            "climax": "the turning point",
+            "falling_action": "aftermath of climax",
+            "resolution": "how story concludes"
+        }},
+        
+        "plot": {{
+            "opening_hook": "what grabs attention",
+            "inciting_incident": "what starts the story",
+            "major_plot_points": ["point1", "point2", "point3", "point4", "point5"],
+            "plot_twists": ["any surprises or reveals"],
+            "subplots": ["secondary storylines"]
+        }},
+        
+        "themes": {{
+            "primary": ["main themes with explanation"],
+            "secondary": ["other themes"],
+            "motifs": ["recurring elements"]
+        }},
+        
+        "character_development": {{
+            "protagonist_journey": "how the main character changes",
+            "antagonist_motivation": "what drives the opposition",
+            "supporting_arcs": ["how other characters evolve"]
+        }},
+        
+        "pacing_analysis": {{
+            "overall": "fast/medium/slow",
+            "opening": "description",
+            "middle": "description",
+            "ending": "description",
+            "tension_curve": "how tension rises and falls"
+        }},
+        
+        "strengths": ["5 specific strengths of this manuscript with examples"],
+        
+        "areas_for_improvement": ["5 specific weaknesses with suggestions"],
+        
+        "target_audience": {{
+            "primary": "who will love this",
+            "appeal": "why they'll love it",
+            "demographics": ["age range", "gender skew", "interests"],
+            "comparable_titles": [
+                {{"title": "Book 1", "similarity": "how it's similar", "difference": "how it's different"}},
+                {{"title": "Book 2", "similarity": "how it's similar", "difference": "how it's different"}},
+                {{"title": "Book 3", "similarity": "how it's similar", "difference": "how it's different"}}
+            ]
+        }},
+        
+        "marketing": {{
+            "unique_selling_points": ["what makes it special"],
+            "keyword_cloud": ["amazon_keywords"],
+            "compelling_quotes": ["3 actual or potential pull quotes"],
+            "blurb_suggestion": "A potential back-cover blurb"
+        }}
     }}
     """
     
@@ -360,11 +452,11 @@ def analyze_manuscript_deep(client, text, cover_analysis):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
+                {"role": "system", "content": "You are a literary analyst and publishing industry expert. Return valid JSON only with comprehensive marketability analysis."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.4,
-            max_tokens=4000,
+            max_tokens=6000,
             response_format={"type": "json_object"}
         )
         
@@ -401,7 +493,239 @@ def extract_text(file) -> str:
 
 
 def show_analysis_results(analysis, cover):
-    """Display analysis results in full-width layout with proper fonts"""
+    """Display analysis results with marketability scores prominently"""
+    
+    # MARKETABILITY SCORES - Display prominently at the top
+    if 'marketability' in analysis:
+        market = analysis['marketability']
+        
+        # Create a visually striking score card
+        st.markdown("## 📊 MARKETABILITY ANALYSIS")
+        
+        # Overall score in a big box
+        overall_score = market.get('overall_score', 0)
+        overall_grade = market.get('overall_grade', 'N/A')
+        
+        # Determine color based on score
+        if overall_score >= 80:
+            score_color = "#00cc66"  # Green
+            emoji = "🚀"
+            score_text = "EXCELLENT MARKETABILITY"
+        elif overall_score >= 70:
+            score_color = "#ffaa00"  # Orange/Yellow
+            emoji = "📈"
+            score_text = "GOOD MARKETABILITY"
+        elif overall_score >= 60:
+            score_color = "#ff8800"  # Dark Orange
+            emoji = "📊"
+            score_text = "FAIR MARKETABILITY"
+        else:
+            score_color = "#ff4444"  # Red
+            emoji = "⚠️"
+            score_text = "NEEDS WORK"
+        
+        # Display main score card
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 10px; border: 2px solid {score_color};">
+                <h1 style="font-size: 60px; margin: 0; color: {score_color};">{overall_score}</h1>
+                <h2 style="margin: 0; color: {score_color};">{score_text}</h2>
+                <p style="font-size: 24px; margin: 0;">Grade: {overall_grade} {emoji}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown(f"**Overall Assessment:** {market.get('overall_assessment', '')}")
+        st.markdown("---")
+        
+        # Individual scores in a grid
+        st.markdown("### 📈 Detailed Scores")
+        
+        scores = market.get('scores', {})
+        
+        # Create 4 rows of 2 columns each for 8 scores
+        score_items = list(scores.items())
+        for i in range(0, len(score_items), 2):
+            cols = st.columns(2)
+            for j in range(2):
+                if i + j < len(score_items):
+                    score_name, score_data = score_items[i + j]
+                    # Format the score name for display
+                    display_name = score_name.replace('_', ' ').title()
+                    score_value = score_data.get('score', 0)
+                    explanation = score_data.get('explanation', '')
+                    
+                    # Color code individual scores
+                    if score_value >= 80:
+                        bg_color = "#e6f7e6"
+                        border_color = "#00cc66"
+                    elif score_value >= 70:
+                        bg_color = "#fff4e6"
+                        border_color = "#ffaa00"
+                    elif score_value >= 60:
+                        bg_color = "#fff0e6"
+                        border_color = "#ff8800"
+                    else:
+                        bg_color = "#ffe6e6"
+                        border_color = "#ff4444"
+                    
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
+                            <h4 style="margin: 0 0 5px 0;">{display_name}</h4>
+                            <h2 style="margin: 0; color: {border_color};">{score_value}</h2>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9em;">{explanation}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Comparable successes and market analysis
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🏆 Comparable Successes")
+            comps = market.get('comparable_successes', [])
+            for comp in comps:
+                if isinstance(comp, dict):
+                    st.markdown(f"**{comp.get('title', '')}**")
+                    st.write(f"*Similarity:* {comp.get('similarity', '')}")
+                    st.write(f"*Why it succeeded:* {comp.get('why_it_succeeded', '')}")
+                    st.markdown("---")
+        
+        with col2:
+            st.markdown("### 🔍 Market Position")
+            st.markdown(f"**Market Gap:** {market.get('market_gap_analysis', '')}")
+            st.markdown(f"**Competitive Advantage:** {market.get('competitive_advantage', '')}")
+            
+            st.markdown("**Potential Challenges:**")
+            for challenge in market.get('potential_challenges', []):
+                st.write(f"• {challenge}")
+        
+        st.markdown("---")
+    
+    # WRITING QUALITY DETAILED
+    if 'writing_quality_detailed' in analysis:
+        writing = analysis['writing_quality_detailed']
+        
+        st.markdown("### ✍️ Writing Quality Deep Dive")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
+            st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
+            st.markdown(f"**Description:** {writing.get('description', '')}")
+        
+        with col2:
+            st.markdown(f"**Voice:** {writing.get('voice', '')}")
+            st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**✅ Writing Strengths:**")
+            for strength in writing.get('strengths', []):
+                st.write(f"• {strength}")
+        
+        with col2:
+            st.markdown("**📝 Needed Improvements:**")
+            for imp in writing.get('improvements', []):
+                st.write(f"• {imp}")
+        
+        st.markdown("---")
+    
+    # TITLE ANALYSIS
+    if 'title_analysis' in analysis:
+        title_analysis = analysis['title_analysis']
+        
+        st.markdown("### 🏷️ Title Analysis")
+        
+        current_title = title_analysis.get('current_title', 'Unknown')
+        st.markdown(f"**Current Title:** {current_title}")
+        
+        # Title effectiveness
+        effectiveness = title_analysis.get('title_effectiveness', {})
+        if effectiveness:
+            score = effectiveness.get('score', 0)
+            st.markdown(f"**Title Effectiveness Score:** {score}/100")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"*Memorability:* {effectiveness.get('memorability', '')}")
+                st.markdown(f"*Genre Appropriateness:* {effectiveness.get('genre_appropriateness', '')}")
+            with col2:
+                st.markdown(f"*Uniqueness:* {effectiveness.get('uniqueness', '')}")
+                st.markdown(f"*Searchability:* {effectiveness.get('searchability', '')}")
+        
+        # Title suggestions
+        suggestions = title_analysis.get('suggested_titles', [])
+        if suggestions:
+            st.markdown("**💡 Suggested Alternative Titles:**")
+            
+            for i, suggestion in enumerate(suggestions, 1):
+                if isinstance(suggestion, dict):
+                    impact = suggestion.get('estimated_impact', 'Medium')
+                    # Color code impact
+                    if impact.lower() == 'high':
+                        impact_display = "🔴 HIGH IMPACT"
+                    elif impact.lower() == 'medium':
+                        impact_display = "🟡 MEDIUM IMPACT"
+                    else:
+                        impact_display = "🟢 LOW IMPACT"
+                    
+                    st.markdown(f"""
+                    <div style="padding: 10px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
+                        <strong>{i}. {suggestion.get('title', '')}</strong> - {impact_display}<br>
+                        <em>{suggestion.get('rationale', '')}</em>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Recommendation
+        rec = title_analysis.get('title_change_recommendation', '')
+        if rec:
+            st.markdown(f"**Recommendation:** {rec}")
+        
+        subtitle = title_analysis.get('subtitle_suggestion', '')
+        if subtitle:
+            st.markdown(f"**Suggested Subtitle:** {subtitle}")
+        
+        st.markdown("---")
+    
+    # SALABILITY ANALYSIS
+    if 'salability_analysis' in analysis:
+        salability = analysis['salability_analysis']
+        
+        st.markdown("### 💰 Salability Analysis")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Market Size", salability.get('estimated_market_size', 'Unknown'))
+        with col2:
+            st.metric("Series Potential", salability.get('series_potential', 'Unknown'))
+        with col3:
+            st.metric("Adaptation Potential", salability.get('adaptation_potential', 'Unknown'))
+        
+        st.markdown(f"**Target Retailers:** {', '.join(salability.get('target_retailers', []))}")
+        
+        # Format potential
+        format_potential = salability.get('format_potential', {})
+        if format_potential:
+            st.markdown("**Format Potential:**")
+            cols = st.columns(4)
+            formats = list(format_potential.items())
+            for i, (fmt, potential) in enumerate(formats[:4]):
+                with cols[i]:
+                    st.markdown(f"**{fmt.title()}:** {potential}")
+        
+        # Comparable bestsellers
+        comps = salability.get('comparable_bestsellers', [])
+        if comps:
+            st.markdown("**Comparable Bestsellers:**")
+            for comp in comps:
+                if isinstance(comp, dict):
+                    st.markdown(f"• **{comp.get('title', '')}** - {comp.get('similarity', '')} (Est. {comp.get('copies_sold', 'Unknown')} copies)")
+        
+        st.markdown("---")
     
     # Cover Analysis - Full width at top
     if cover:
@@ -510,6 +834,8 @@ def show_analysis_results(analysis, cover):
                                 st.write(f"*Conflict:* {char.get('conflict')}")
                             if char.get('arc'):
                                 st.write(f"*Arc:* {char.get('arc')}")
+                            if char.get('appeal_factor'):
+                                st.write(f"*Appeal:* {char.get('appeal_factor')}")
     
     # Character Development
     dev = analysis.get('character_development', {})
@@ -613,6 +939,8 @@ def show_analysis_results(analysis, cover):
                 st.markdown(f"**Primary:** {target['primary']}")
             if target.get('appeal'):
                 st.markdown(f"**Appeal:** {target['appeal']}")
+            if target.get('demographics'):
+                st.markdown(f"**Demographics:** {', '.join(target['demographics'])}")
         
         with col2:
             if target.get('comparable_titles'):
@@ -669,6 +997,10 @@ def show_analysis_results(analysis, cover):
             st.markdown("**Pull Quotes:**")
             for quote in marketing['compelling_quotes']:
                 st.info(f"“{quote}”")
+        
+        if marketing.get('blurb_suggestion'):
+            with st.expander("📝 Suggested Blurb"):
+                st.write(marketing['blurb_suggestion'])
 
 
 # For direct testing
