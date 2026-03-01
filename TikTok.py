@@ -10,8 +10,6 @@ import json
 import plotly.express as px
 import VideoGenerator
 import LaunchTimeline
-import BookBlueprint  # ADDED: New Book Blueprint module
-import BookTokCompetitorTracker  # Your competitor tracker
 
 # ============================================================================
 # PAGE CONFIG
@@ -183,18 +181,8 @@ else:
 
 st.sidebar.markdown("---")
 
-# ============================================================================
-# UPDATED NAVIGATION - WITH BOOK BLUEPRINT
-# ============================================================================
-menu_options = [
-    "🏠 Dashboard", 
-    "📚 ARC Readers", 
-    "❤️ Saved Readers", 
-    "📖 Book Blueprint",  # CHANGED: from "Book Analysis" to "Book Blueprint"
-    "🎬 Video Generator",
-    "📊 Competitor Tracker"
-]
-
+# Navigation - Use session state
+menu_options = ["🏠 Dashboard", "📚 ARC Readers", "❤️ Saved Readers", "📖 Book Analysis", "🎬 Video Generator"]
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
 
 if selected != st.session_state.page:
@@ -216,7 +204,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - UPDATED WITH BOOK BLUEPRINT
+    # QUICK ACTIONS BUTTON GRID
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -229,8 +217,8 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col2:
-        if st.button("📖 Book Blueprint", use_container_width=True):  # CHANGED
-            st.session_state.page = "📖 Book Blueprint"
+        if st.button("📖 Book Analysis", use_container_width=True):
+            st.session_state.page = "📖 Book Analysis"
             st.rerun()
     
     with col3:
@@ -239,9 +227,7 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col4:
-        if st.button("📊 Competitor Tracker", use_container_width=True):
-            st.session_state.page = "📊 Competitor Tracker"
-            st.rerun()
+        st.button("📝 Coming Soon", use_container_width=True, disabled=True)
     
     # Row 2
     col1, col2, col3, col4 = st.columns(4)
@@ -281,13 +267,12 @@ if st.session_state.page == "🏠 Dashboard":
     else:
         total_readers = "?"
     
-    # Check if any blueprint exists
-    books_analyzed = 1 if st.session_state.get('blueprint') else 0
+    books_analyzed = 1 if st.session_state.get('manuscript_analysis') else 0
     
     col1, col2, col3 = st.columns(3)
     col1.metric("ARC Readers Available", total_readers)
     col2.metric("Saved Readers", len(st.session_state.saved_readers))
-    col3.metric("Books Blueprinted", books_analyzed)  # CHANGED
+    col3.metric("Books Analyzed", books_analyzed)
 
 # ============================================================================
 # ARC READERS PAGE
@@ -403,12 +388,12 @@ elif st.session_state.page == "❤️ Saved Readers":
                             st.warning("No email found. Try DM on TikTok")
 
 # ============================================================================
-# BOOK BLUEPRINT PAGE (REPLACES Book Analysis)
+# BOOK ANALYSIS PAGE
 # ============================================================================
 
-elif st.session_state.page == "📖 Book Blueprint":
-    # This calls the new BookBlueprint module
-    BookBlueprint.show_blueprint_analyzer()
+elif st.session_state.page == "📖 Book Analysis":
+    import BookReader
+    BookReader.show_manuscript_tools()
 
 # ============================================================================
 # VIDEO GENERATOR PAGE
@@ -419,15 +404,8 @@ elif st.session_state.page == "🎬 Video Generator":
     VideoGenerator.show_video_generator()
 
 # ============================================================================
-# COMPETITOR TRACKER PAGE
-# ============================================================================
-
-elif st.session_state.page == "📊 Competitor Tracker":
-    BookTokCompetitorTracker.show_competitor_tracker()
-
-# ============================================================================
 # FOOTER
 # ============================================================================
 
 st.sidebar.markdown("---")
-st.sidebar.caption("BookTok Machine v0.2 • Book Marketing OS")
+st.sidebar.caption("BookTok Machine v0.1 • Data from Supabase")
