@@ -38,7 +38,7 @@ def show_analyzer():
     st.markdown("Upload your manuscript and cover for deep literary analysis with **commercial potential scoring**")
     st.markdown("---")
     
-    # API Key input
+    # API Key input (only show if no key)
     if not st.session_state.openai_api_key:
         with st.container():
             st.markdown("### 🔑 OpenAI API Key")
@@ -60,7 +60,18 @@ def show_analyzer():
                 st.rerun()
         return
     
-    # Main upload area
+    # If analysis is complete, show ONLY the dashboard (no upload screen)
+    if st.session_state.analysis_complete and st.session_state.analysis_result:
+        show_results()
+        return
+    
+    # Otherwise show upload screen
+    show_upload_screen()
+
+
+def show_upload_screen():
+    """Show only the upload interface"""
+    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -112,14 +123,10 @@ def show_analyzer():
                 st.rerun()
     else:
         st.info("👆 Please upload both manuscript and cover to begin")
-    
-    # Show results if analysis is complete
-    if st.session_state.analysis_complete and st.session_state.analysis_result:
-        show_results()
 
 
 def show_results():
-    """Display analysis results with marketability dashboard FIRST"""
+    """Display ONLY the results dashboard (no upload interface)"""
     
     st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
     
