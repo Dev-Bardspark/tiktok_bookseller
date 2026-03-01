@@ -1,465 +1,119 @@
-# BookBlueprint.py
+# BookAnalyzer.py
 import streamlit as st
 from openai import OpenAI
 import PyPDF2
 import docx
 import json
 import time
-import re
-from typing import Optional, Dict, List, Any
-from datetime import datetime
-import plotly.express as px
-import pandas as pd
+import base64
 from PIL import Image
 import io
-import base64
+from typing import Optional, Dict, List
 
-def show_blueprint_analyzer():
-    """Main Book Marketing Blueprint Analyzer"""
+def show_analyzer():
+    """Main book analyzer with cover vision and deep analysis"""
     
-    if st.session_state.get('current_page') != "📖 Book Blueprint":
+    if st.session_state.get('current_page') != "📖 Book Analyzer":
         return
     
-    if 'openai_api_key' in st.session_state and st.session_state.openai_api_key:
-        st.session_state.api_configured = True
-    else:
-        st.session_state.api_configured = False
+    # Initialize session state
+    if 'openai_api_key' not in st.session_state:
+        st.session_state.openai_api_key = None
     
-    if 'blueprint' not in st.session_state:
-        st.session_state.blueprint = None
+    if 'analysis_result' not in st.session_state:
+        st.session_state.analysis_result = None
     
-    if 'blueprint_stage' not in st.session_state:
-        st.session_state.blueprint_stage = "upload"
+    if 'cover_analysis' not in st.session_state:
+        st.session_state.cover_analysis = None
     
-    st.title("📖 Book Marketing Blueprint")
-    st.markdown("""
-    <style>
-    .blueprint-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # Header
+    st.title("📖 Book Analyzer")
+    st.markdown("Upload your manuscript and cover for complete AI analysis")
+    st.markdown("---")
     
-    st.markdown('<div class="blueprint-header"><h2>Your Complete Marketing Roadmap</h2><p>Upload your manuscript and cover. Get a 360° marketing strategy tailored to YOUR book.</p></div>', unsafe_allow_html=True)
-    
-    if not st.session_state.api_configured:
-        with st.expander("🔑 API Settings", expanded=True):
-            api_key = st.text_input("OpenAI API Key", type="password", key="blueprint_api_key", 
-                                   value=st.session_state.get('openai_api_key', ''))
-            if api_key and st.button("Connect", key="blueprint_connect"):
+    # API Key input
+    if not st.session_state.openai_api_key:
+        with st.container():
+            st.markdown("### 🔑 OpenAI API Key")
+            api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
+            if api_key:
                 st.session_state.openai_api_key = api_key
-                st.session_state.api_configured = True
                 st.rerun()
         return
     
-    stages = ["upload", "analyzing", "results"]
-    stage_names = ["📤 Upload", "⚙️ Deep Analysis", "🎯 Blueprint"]
-    current_idx = stage_names.index(stage_names[stages.index(st.session_state.blueprint_stage)]) if st.session_state.blueprint_stage in stages else 0
-    
-    cols = st.columns(3)
-    for i, (col, stage_name) in enumerate(zip(cols, stage_names)):
-        with col:
-            if i < current_idx:
-                st.success(f"✅ {stage_name}")
-            elif i == current_idx:
-                st.info(f"⏳ {stage_name}")
-            else:
-                st.write(f"⚪ {stage_name}")
-    
-    st.divider()
-    
-    if st.session_state.blueprint_stage == "upload":
-        show_upload_stage()
-    elif st.session_state.blueprint_stage == "analyzing":
-        show_deep_analysis_stage()
-    elif st.session_state.blueprint_stage == "results":
-        show_blueprint_results()
-
-
-def show_upload_stage():
-    """Stage 1: Upload manuscript and cover"""
-    
-    st.subheader("📤 Upload Your Book Materials")
-    
+    # Main upload area
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("### 📄 Manuscript")
         manuscript_file = st.file_uploader(
-            "Upload manuscript (PDF, DOCX, TXT)",
+            "Upload PDF, DOCX, or TXT",
             type=['pdf', 'docx', 'txt'],
-            key="blueprint_manuscript",
-            help="Your complete book text"
+            key="manuscript_file"
         )
         
         if manuscript_file:
             st.success(f"✅ Loaded: {manuscript_file.name}")
-            
-            with st.expander("Preview"):
-                text = extract_text_preview(manuscript_file)
-                st.text(text[:500] + "..." if len(text) > 500 else text)
     
     with col2:
         st.markdown("### 🎨 Cover Image")
         cover_file = st.file_uploader(
-            "Upload cover image (JPG, PNG)",
+            "Upload JPG or PNG",
             type=['jpg', 'jpeg', 'png'],
-            key="blueprint_cover",
-            help="Your book cover"
+            key="cover_file"
         )
         
         if cover_file:
             st.success(f"✅ Loaded: {cover_file.name}")
             image = Image.open(cover_file)
-            st.image(image, caption="Cover Preview", width=200)
+            st.image(image, caption="Cover Preview", width=150)
     
-    st.divider()
+    st.markdown("---")
     
-    with st.expander("📋 Additional Information (Optional but Helpful)"):
-        col1, col2 = st.columns(2)
-        with col1:
-            target_genre = st.text_input("Primary Genre (if known)", placeholder="e.g., Memoir")
-            comp_titles = st.text_area("Comparable Titles (one per line)", placeholder="Wind, Sand and Stars\nFlying Solo\nSkyward")
-        with col2:
-            target_audience = st.text_input("Target Audience (if known)", placeholder="e.g., Aviation enthusiasts, memoir readers")
-            author_platform = st.multiselect("Author Platforms", ["TikTok", "Instagram", "Twitter", "Facebook", "Newsletter", "None"])
-    
+    # Analyze button
     if manuscript_file and cover_file:
-        cost_estimate = "$3-5 for complete analysis"
-        st.info(f"💰 Estimated API cost: {cost_estimate}")
-        
-        if st.button("🚀 START DEEP ANALYSIS", type="primary", use_container_width=True):
-            st.session_state.manuscript_bytes = manuscript_file.getvalue()
-            st.session_state.manuscript_type = manuscript_file.type
-            st.session_state.cover_bytes = cover_file.getvalue()
-            st.session_state.cover_type = cover_file.type
-            
-            st.session_state.blueprint_options = {
-                "genre": target_genre if target_genre else None,
-                "comp_titles": [c.strip() for c in comp_titles.split("\n") if c.strip()] if comp_titles else [],
-                "target_audience": target_audience if target_audience else None,
-                "author_platforms": author_platform
-            }
-            
-            st.session_state.blueprint_stage = "analyzing"
-            st.rerun()
+        if st.button("🔍 ANALYZE BOOK", type="primary", use_container_width=True):
+            with st.spinner("Analyzing your book... (this takes about 30 seconds)"):
+                # Extract text
+                manuscript_text = extract_text(manuscript_file)
+                
+                # Encode cover
+                cover_bytes = cover_file.getvalue()
+                cover_base64 = base64.b64encode(cover_bytes).decode('utf-8')
+                
+                # Initialize OpenAI
+                client = OpenAI(api_key=st.session_state.openai_api_key)
+                
+                # Step 1: Analyze cover with vision
+                cover_analysis = analyze_cover(client, cover_base64)
+                st.session_state.cover_analysis = cover_analysis
+                
+                # Step 2: Deep manuscript analysis (single comprehensive call)
+                analysis = analyze_manuscript_deep(client, manuscript_text, cover_analysis)
+                st.session_state.analysis_result = analysis
+                
+                st.success("✅ Analysis complete!")
+                st.rerun()
     else:
-        st.info("👆 Please upload both manuscript and cover to continue")
+        st.info("👆 Please upload both manuscript and cover to begin")
 
 
-def show_deep_analysis_stage():
-    """Stage 2: DEEP analysis - chapter by chapter"""
-    
-    st.subheader("⚙️ Deep Analysis in Progress")
-    st.warning("This analyzes your book chapter by chapter. It takes 2-3 minutes and costs $3-5 in API fees.")
-    
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    details_container = st.container()
-    
-    # Step 1: Extract text
-    status_text.text("📄 Extracting full manuscript...")
-    progress_bar.progress(5)
-    manuscript_text = extract_full_text(
-        st.session_state.manuscript_bytes,
-        st.session_state.manuscript_type
-    )
-    
-    # Step 2: Split into chapters
-    status_text.text("📑 Splitting into chapters...")
-    progress_bar.progress(10)
-    chapters = split_into_chapters(manuscript_text)
-    with details_container:
-        st.success(f"✅ Found {len(chapters)} chapters")
-    
-    # Step 3: Analyze cover
-    status_text.text("🎨 Analyzing cover with vision...")
-    progress_bar.progress(15)
-    cover_base64 = base64.b64encode(st.session_state.cover_bytes).decode('utf-8')
-    client = OpenAI(api_key=st.session_state.openai_api_key)
-    cover_analysis = analyze_cover_with_vision(client, cover_base64)
-    with details_container:
-        st.success("✅ Cover analyzed")
-    
-    # Step 4: Analyze each chapter
-    status_text.text("📖 Analyzing chapters (this takes time)...")
-    progress_bar.progress(20)
-    
-    chapter_analyses = []
-    for i, chapter in enumerate(chapters):
-        status_text.text(f"📖 Analyzing chapter {i+1}/{len(chapters)}...")
-        analysis = analyze_single_chapter(client, chapter, i+1)
-        chapter_analyses.append(analysis)
-        
-        # Update progress (20% to 80% across chapters)
-        progress = 20 + (60 * (i+1) / len(chapters))
-        progress_bar.progress(int(progress))
-        
-        with details_container:
-            st.write(f"✅ Chapter {i+1}: {analysis.get('summary', '')[:50]}...")
-    
-    # Step 5: Synthesize across ALL chapters
-    status_text.text("🧠 Synthesizing across all chapters...")
-    progress_bar.progress(85)
-    
-    book_analysis = synthesize_chapter_analyses(chapter_analyses)
-    with details_container:
-        st.success("✅ Full book synthesis complete")
-    
-    # Step 6: Generate complete blueprint
-    status_text.text("🎯 Generating complete marketing blueprint...")
-    progress_bar.progress(95)
-    
-    blueprint = generate_complete_blueprint(
-        client,
-        book_analysis,
-        cover_analysis,
-        chapters,
-        st.session_state.blueprint_options
-    )
-    
-    if blueprint:
-        blueprint['cover_analysis'] = cover_analysis
-        blueprint['book_analysis'] = book_analysis
-        blueprint['chapter_count'] = len(chapters)
-        st.session_state.blueprint = blueprint
-        
-        status_text.text("✅ Complete!")
-        progress_bar.progress(100)
-        time.sleep(1)
-        st.session_state.blueprint_stage = "results"
-        st.rerun()
-    else:
-        st.error("Failed to generate blueprint")
-
-
-def split_into_chapters(text):
-    """Intelligently split manuscript into chapters"""
-    # Look for common chapter markers
-    chapter_patterns = [
-        r'Chapter \d+',
-        r'CHAPTER \d+',
-        r'Chapitre \d+',
-        r'\n\d+\n',  # Just a number on its own line
-        r'Part [IVX]+',
-        r'Book [IVX]+'
-    ]
-    
-    # Try to find chapter breaks
-    best_pattern = None
-    best_split = None
-    
-    for pattern in chapter_patterns:
-        splits = re.split(pattern, text)
-        if len(splits) > 3:  # Found at least a few chapters
-            best_split = splits
-            best_pattern = pattern
-            break
-    
-    if best_split and len(best_split) > 1:
-        # Remove empty first element if text started with chapter
-        if not best_split[0].strip():
-            best_split = best_split[1:]
-        return best_split
-    
-    # If no chapters found, split by approximate page count
-    words = text.split()
-    words_per_page = 300
-    total_pages = len(words) // words_per_page
-    target_chapters = max(10, min(30, total_pages // 10))
-    
-    # Split into roughly equal chunks
-    chunk_size = len(text) // target_chapters
-    chunks = []
-    for i in range(target_chapters):
-        start = i * chunk_size
-        end = (i + 1) * chunk_size if i < target_chapters - 1 else len(text)
-        chunks.append(text[start:end])
-    
-    return chunks
-
-
-def analyze_single_chapter(client, chapter_text, chapter_num):
-    """Analyze a single chapter in depth with SAFE data structures"""
-    
-    if len(chapter_text) > 4000:
-        chapter_text = chapter_text[:4000]
-    
-    prompt = f"""
-    Analyze this chapter in detail and return ONLY valid JSON.
-    
-    CHAPTER {chapter_num}:
-    {chapter_text}
-    
-    Return JSON with EXACTLY this structure:
-    {{
-        "summary": "Brief summary of what happens",
-        "characters_present": ["character1", "character2"],
-        "plot_development": "Key plot points",
-        "themes": ["theme1", "theme2"],
-        "tone": "Emotional tone",
-        "pacing": "fast/medium/slow",
-        "important_quotes": ["quote1"],
-        "cliffhanger": true/false,
-        "character_development": "How characters change"
-    }}
-    
-    IMPORTANT: 
-    - characters_present MUST be a list, even if empty
-    - themes MUST be a list, even if empty
-    - important_quotes MUST be a list, even if empty
-    - Use ONLY valid JSON format
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=1000,
-            response_format={"type": "json_object"}
-        )
-        
-        result = json.loads(response.choices[0].message.content)
-        
-        # SAFETY: Ensure all fields exist and are correct types
-        safe_result = {
-            "chapter_number": chapter_num,
-            "summary": str(result.get('summary', 'Summary not available')),
-            "characters_present": result.get('characters_present', []),
-            "plot_development": str(result.get('plot_development', 'Plot not available')),
-            "themes": result.get('themes', []),
-            "tone": str(result.get('tone', 'Unknown')),
-            "pacing": str(result.get('pacing', 'medium')),
-            "important_quotes": result.get('important_quotes', []),
-            "cliffhanger": bool(result.get('cliffhanger', False)),
-            "character_development": str(result.get('character_development', 'Unknown'))
-        }
-        
-        # Force list types
-        if not isinstance(safe_result['characters_present'], list):
-            safe_result['characters_present'] = []
-        if not isinstance(safe_result['themes'], list):
-            safe_result['themes'] = []
-        if not isinstance(safe_result['important_quotes'], list):
-            safe_result['important_quotes'] = []
-            
-        return safe_result
-        
-    except Exception as e:
-        st.error(f"Error analyzing chapter {chapter_num}: {str(e)}")
-        # Return safe default with proper list types
-        return {
-            "chapter_number": chapter_num,
-            "summary": "Analysis failed",
-            "characters_present": [],
-            "plot_development": "Error",
-            "themes": [],
-            "tone": "Unknown",
-            "pacing": "Unknown",
-            "important_quotes": [],
-            "cliffhanger": False,
-            "character_development": "Unknown"
-        }
-
-
-def synthesize_chapter_analyses(chapter_analyses):
-    """Synthesize all chapter analyses into complete book understanding with SAFE data handling"""
-    
-    # Initialize with safe defaults
-    character_arcs = {}
-    plot_progression = []
-    theme_tracking = {}
-    tone_progression = []
-    
-    for i, chapter in enumerate(chapter_analyses):
-        if not isinstance(chapter, dict):
-            continue
-            
-        # SAFELY get characters_present - ensure it's a list
-        chars = chapter.get('characters_present', [])
-        if not isinstance(chars, list):
-            chars = []
-            
-        # Track characters
-        for char in chars:
-            if char and isinstance(char, str):  # Only process valid strings
-                if char not in character_arcs:
-                    character_arcs[char] = {
-                        'first_seen': i+1,
-                        'chapters_present': [],
-                        'development': []
-                    }
-                character_arcs[char]['chapters_present'].append(i+1)
-        
-        # Track plot safely
-        plot_progression.append({
-            'chapter': i+1,
-            'plot': str(chapter.get('plot_development', '')),
-            'summary': str(chapter.get('summary', ''))
-        })
-        
-        # SAFELY get themes - ensure it's a list
-        themes = chapter.get('themes', [])
-        if not isinstance(themes, list):
-            themes = []
-            
-        # Track themes
-        for theme in themes:
-            if theme and isinstance(theme, str):
-                if theme not in theme_tracking:
-                    theme_tracking[theme] = []
-                theme_tracking[theme].append(i+1)
-        
-        # Track tone safely
-        tone_progression.append({
-            'chapter': i+1,
-            'tone': str(chapter.get('tone', 'Unknown')),
-            'pacing': str(chapter.get('pacing', 'Unknown'))
-        })
-    
-    # Identify main characters (appear in most chapters) with SAFE calculation
-    main_characters = []
-    total_chapters = len(chapter_analyses) if chapter_analyses else 1
-    
-    for char, data in character_arcs.items():
-        if len(data['chapters_present']) > total_chapters * 0.3:
-            main_characters.append(char)
-    
-    # Identify primary themes with SAFE calculation
-    primary_themes = []
-    for theme, chapters in theme_tracking.items():
-        if len(chapters) > total_chapters * 0.2:
-            primary_themes.append(theme)
-    
-    # Build plot structure safely
-    plot_structure = {
-        'opening': plot_progression[0] if plot_progression else {},
-        'rising_action': plot_progression[len(plot_progression)//4:len(plot_progression)//2] if len(plot_progression) > 2 else [],
-        'climax': plot_progression[len(plot_progression)//2] if plot_progression and len(plot_progression) > len(plot_progression)//2 else {},
-        'resolution': plot_progression[-1] if plot_progression else {}
-    }
-    
-    return {
-        'main_characters': main_characters[:5],
-        'character_arcs': character_arcs,
-        'plot_structure': plot_structure,
-        'primary_themes': primary_themes[:3],
-        'tone_progression': tone_progression,
-        'chapter_count': total_chapters
-    }
-
-
-def analyze_cover_with_vision(client, cover_base64):
+def analyze_cover(client, cover_base64):
     """Analyze cover with vision"""
+    
+    prompt = """Analyze this book cover in detail. Return JSON with:
+    {
+        "colors": ["list of dominant colors"],
+        "has_figure": true/false,
+        "figure_description": "description if any figures present",
+        "typography": "description of font style",
+        "composition": "how elements are arranged",
+        "mood": "emotional feeling",
+        "genre_signals": "what genre this suggests",
+        "strengths": ["3 specific strengths"],
+        "weaknesses": ["3 specific weaknesses"],
+        "suggestions": ["3 improvements"]
+    }"""
     
     try:
         response = client.chat.completions.create(
@@ -468,21 +122,7 @@ def analyze_cover_with_vision(client, cover_base64):
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": """Analyze this book cover in detail. Return JSON with:
-                            - colors: list of specific colors
-                            - figures: describe any people/figures
-                            - composition: layout description
-                            - typography: font style
-                            - mood: emotional feeling
-                            - genre_signals: what genre it suggests
-                            - strengths: 3 specific strengths
-                            - weaknesses: 3 specific weaknesses
-                            - suggestions: 3 improvements
-                            
-                            Return ONLY valid JSON."""
-                        },
+                        {"type": "text", "text": prompt},
                         {
                             "type": "image_url",
                             "image_url": {
@@ -497,503 +137,334 @@ def analyze_cover_with_vision(client, cover_base64):
             response_format={"type": "json_object"}
         )
         
-        result = json.loads(response.choices[0].message.content)
-        
-        # Ensure lists are lists
-        if 'colors' in result and not isinstance(result['colors'], list):
-            result['colors'] = [str(result['colors'])]
-        if 'strengths' in result and not isinstance(result['strengths'], list):
-            result['strengths'] = [str(result['strengths'])]
-        if 'weaknesses' in result and not isinstance(result['weaknesses'], list):
-            result['weaknesses'] = [str(result['weaknesses'])]
-        if 'suggestions' in result and not isinstance(result['suggestions'], list):
-            result['suggestions'] = [str(result['suggestions'])]
-            
-        return result
-        
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
         return {
-            "colors": ["Analysis failed"],
-            "figures": "Error",
-            "composition": "Error",
+            "colors": ["Error analyzing"],
+            "has_figure": False,
+            "figure_description": f"Error: {str(e)}",
             "typography": "Error",
+            "composition": "Error",
             "mood": "Error",
             "genre_signals": "Error",
-            "strengths": ["Upload successful"],
-            "weaknesses": [f"Error: {str(e)[:50]}"],
-            "suggestions": ["Check API key", "Try again", "Ensure image is valid"]
+            "strengths": ["Unable to analyze"],
+            "weaknesses": ["Vision API error"],
+            "suggestions": ["Check image format", "Try again"]
         }
 
 
-def generate_complete_blueprint(client, book_analysis, cover_analysis, chapters, options):
-    """Generate complete marketing blueprint from full analysis"""
+def analyze_manuscript_deep(client, text, cover_analysis):
+    """Single comprehensive manuscript analysis"""
     
-    # Get representative excerpts from first, middle, last chapters
-    excerpts = []
-    if chapters and len(chapters) > 0:
-        excerpts.append(str(chapters[0][:1000]) if len(str(chapters[0])) > 1000 else str(chapters[0]))
-        if len(chapters) > len(chapters)//2:
-            mid_idx = len(chapters)//2
-            excerpts.append(str(chapters[mid_idx][:1000]) if len(str(chapters[mid_idx])) > 1000 else str(chapters[mid_idx]))
-        if len(chapters) > 1:
-            excerpts.append(str(chapters[-1][:1000]) if len(str(chapters[-1])) > 1000 else str(chapters[-1]))
+    # Truncate if needed (gpt-4o-mini has 128k context, so this is generous)
+    if len(text) > 50000:
+        text = text[:50000] + "... [truncated]"
+        st.warning("Long manuscript truncated to 50,000 characters")
     
-    # SAFELY get values
-    main_chars = book_analysis.get('main_characters', [])
-    if not isinstance(main_chars, list):
-        main_chars = []
-        
-    primary_themes = book_analysis.get('primary_themes', [])
-    if not isinstance(primary_themes, list):
-        primary_themes = []
+    # Get beginning, middle, end for context
+    total_len = len(text)
+    beginning = text[:min(5000, total_len//3)]
+    middle = text[total_len//3:total_len//3*2][:5000]
+    ending = text[-5000:]
     
     prompt = f"""
-    You are a book marketing expert. Create a COMPLETE marketing blueprint for this book.
+    You are a professional literary analyst. Analyze this book in depth.
     
-    BOOK ANALYSIS (from full chapter-by-chapter review):
-    Main characters: {', '.join(main_chars)}
-    Primary themes: {', '.join(primary_themes)}
-    Total chapters: {book_analysis.get('chapter_count', 0)}
-    
-    COVER ANALYSIS:
+    COVER ANALYSIS (for context):
     {json.dumps(cover_analysis, indent=2)}
     
-    REPRESENTATIVE EXCERPTS:
-    EXCERPT 1 (opening):
-    {excerpts[0] if len(excerpts) > 0 else "No excerpt"}
+    MANUSCRIPT EXCERPTS:
     
-    EXCERPT 2 (middle):
-    {excerpts[1] if len(excerpts) > 1 else "No excerpt"}
+    BEGINNING:
+    {beginning}
     
-    EXCERPT 3 (ending):
-    {excerpts[2] if len(excerpts) > 2 else "No excerpt"}
+    MIDDLE:
+    {middle}
     
-    Based on this COMPLETE analysis, create a marketing blueprint with:
+    ENDING:
+    {ending}
     
-    1. book_profile: {{
-        "title": "Determine from content",
-        "genre": "From analysis",
-        "subgenres": ["derived from themes"],
-        "tone": "From tone progression",
-        "pace": "From pacing analysis",
-        "main_characters": {json.dumps(main_chars)}
+    Based on these excerpts, provide a COMPLETE analysis as JSON with:
+    
+    1. book_info: {{
+        "title": "suggested or detected title",
+        "genre": "primary genre",
+        "subgenres": ["subgenre1", "subgenre2"],
+        "tone": "overall emotional tone",
+        "writing_style": "descriptive/lyrical/direct/etc",
+        "pacing": "fast/medium/slow with explanation"
     }}
     
-    2. reader_avatar: {{
-        "primary": {{
-            "name": "Persona name",
-            "age": "appropriate range",
-            "occupation": "relevant to themes",
-            "reading_habits": "how they read",
-            "what_she_seeks": "what they want from THIS book",
-            "where_she_hangs_out": "relevant platforms",
-            "what_she_avoids": "turnoffs"
-        }}
-    }}
-    
-    3. market_position: {{
-        "primary_shelf": "Amazon category",
-        "comp_titles": [
-            {{"title": "Real comparable book", "similarity": "based on themes", "difference": "unique aspects"}},
-            {{"title": "Another comparable", "similarity": "based on style", "difference": "unique elements"}}
+    2. characters: {{
+        "main": [
+            {{"name": "name", "role": "protagonist/antagonist/etc", 
+              "description": "who they are", "arc": "how they change"}}
         ],
-        "positioning_statement": "For readers who love [elements from analysis]"
+        "supporting": ["list of supporting characters"],
+        "relationships": ["key dynamics"]
     }}
     
-    4. keyword_cloud: {{
-        "amazon_keywords": ["keywords from themes", "from characters", "from setting"],
-        "search_volume": {{"high": ["main themes"], "medium": ["related terms"]}},
-        "categories": ["2-3 Amazon categories"]
+    3. plot: {{
+        "opening_hook": "what grabs attention",
+        "inciting_incident": "what starts the story",
+        "major_plot_points": ["point1", "point2", "point3"],
+        "climax": "the big moment",
+        "resolution": "how it ends"
     }}
     
-    5. blurb_analysis: {{
-        "score": 75,
-        "strengths": ["3 strengths from full analysis"],
-        "weaknesses": ["3 areas from analysis"],
-        "optimized_version": "150-word blurb using actual book elements"
+    4. themes: {{
+        "primary": ["main themes with explanation"],
+        "secondary": ["other themes"],
+        "motifs": ["recurring elements"]
     }}
     
-    6. marketing_blueprint: {{
-        "channel_strategies": {{
-            "tiktok": {{
-                "content_pillars": ["3 pillars from themes"],
-                "sound_suggestions": ["2 matching sounds"],
-                "hashtags": ["5 relevant hashtags"]
-            }},
-            "instagram": {{
-                "post_types": ["3 visual post types"],
-                "reel_ideas": ["2 reel concepts"]
-            }},
-            "email": {{
-                "welcome_sequence": ["2 welcome emails"],
-                "launch_sequence": ["2 launch emails"]
-            }},
-            "ads": {{
-                "amazon_ads": {{
-                    "headlines": ["3 headlines from excerpts"],
-                    "keywords_to_bid": ["keywords from analysis"],
-                    "negative_keywords": ["irrelevant terms"]
-                }}
-            }}
-        }},
-        "launch_timeline": {{
-            "6_months_out": ["3 tasks"],
-            "3_months_out": ["3 tasks"],
-            "1_month_out": ["3 tasks"],
-            "launch_week": ["4 tasks"],
-            "post_launch": ["3 tasks"]
-        }}
-    }}
+    5. strengths: ["5 specific strengths of this manuscript with examples"]
     
-    7. generated_assets: {{
-        "blurbs": [
-            "Blurb using opening excerpt",
-            "Blurb using themes",
-            "Blurb using emotional arc"
-        ],
-        "tiktok_scripts": [
-            {{"hook": "From excerpt 1", "visuals": "Matching", "voiceover": "Script", "music": "Suggestion", "cta": "Buy now"}},
-            {{"hook": "From excerpt 2", "visuals": "Matching", "voiceover": "Script", "music": "Suggestion", "cta": "Pre-order"}}
-        ],
-        "emails": {{
-            "prelaunch": "Email about book's origin",
-            "launch": "Launch announcement",
-            "followup": "Thank you with quotes"
-        }},
-        "social_posts": [
-            "Post about main character",
-            "Post about themes",
-            "Post with quote",
-            "Post about setting",
-            "Post connecting to readers"
-        ],
-        "ad_copy": {{
-            "variation1": "Ad focusing on plot",
-            "variation2": "Ad focusing on emotion",
-            "variation3": "Ad focusing on characters"
-        }},
-        "quote_cards": [
-            {{"text": "Quote from opening", "visual": "Visual suggestion"}},
-            {{"text": "Quote from middle", "visual": "Visual suggestion"}},
-            {{"text": "Quote from ending", "visual": "Visual suggestion"}}
+    6. areas_for_improvement: ["5 specific weaknesses with suggestions"]
+    
+    7. target_audience: {{
+        "primary": "who will love this",
+        "appeal": "why they'll love it",
+        "comparable_titles": [
+            {{"title": "Book 1", "similarity": "how it's similar", "difference": "how it's different"}},
+            {{"title": "Book 2", "similarity": "how it's similar", "difference": "how it's different"}}
         ]
     }}
     
-    IMPORTANT: EVERYTHING must reference the ACTUAL analysis and excerpts.
-    Return ONLY valid JSON.
+    8. marketing: {{
+        "unique_selling_points": ["what makes it special"],
+        "keyword_cloud": ["amazon_keywords"],
+        "compelling_quotes": ["3 actual or potential pull quotes"],
+        "blurb": "150-word compelling book description"
+    }}
+    
+    9. tiktok_strategy: {{
+        "content_pillars": ["3 angles for videos"],
+        "script_ideas": [
+            {{"hook": "attention grabber", "visual": "what to show", "voiceover": "script"}},
+            {{"hook": "another angle", "visual": "what to show", "voiceover": "script"}}
+        ],
+        "hashtags": ["relevant hashtags"]
+    }}
+    
+    Be specific. Reference actual elements from the excerpts. Make this feel like a REAL analysis of THIS book.
     """
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a book marketing expert. Use the provided analysis."},
+                {"role": "system", "content": "You are a literary analyst. Return valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            temperature=0.4,
             max_tokens=4000,
             response_format={"type": "json_object"}
         )
         
-        result = json.loads(response.choices[0].message.content)
-        return result
+        return json.loads(response.choices[0].message.content)
         
     except Exception as e:
-        st.error(f"Blueprint generation error: {str(e)}")
+        st.error(f"Analysis failed: {str(e)}")
         return None
 
 
-def show_blueprint_results():
-    """Display the complete blueprint"""
-    
-    blueprint = st.session_state.blueprint
-    if not blueprint:
-        st.error("No blueprint found")
-        return
-    
-    title = blueprint.get('book_profile', {}).get('title', 'Your Book')
-    st.success(f"✅ Complete Marketing Blueprint: **{title}**")
-    st.info(f"📊 Analyzed {blueprint.get('chapter_count', 'all')} chapters")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("📥 Download PDF", use_container_width=True):
-            st.info("Coming soon")
-    with col2:
-        if st.button("📋 Copy Summary", use_container_width=True):
-            st.info("Coming soon")
-    with col3:
-        if st.button("🔄 New Analysis", use_container_width=True):
-            st.session_state.blueprint_stage = "upload"
-            st.session_state.blueprint = None
-            st.rerun()
-    
-    st.divider()
-    
-    # Show book analysis summary
-    if 'book_analysis' in blueprint:
-        with st.expander("📚 Full Book Analysis", expanded=False):
-            book = blueprint['book_analysis']
-            chars = book.get('main_characters', [])
-            if not isinstance(chars, list):
-                chars = []
-            st.write(f"**Main Characters:** {', '.join(chars)}")
-            
-            themes = book.get('primary_themes', [])
-            if not isinstance(themes, list):
-                themes = []
-            st.write(f"**Primary Themes:** {', '.join(themes)}")
-            st.write(f"**Plot Structure:**")
-            st.json(book.get('plot_structure', {}))
-    
-    tabs = st.tabs([
-        "📖 Book Profile", "🎨 Cover", "👥 Reader", "🎯 Market",
-        "🔑 Keywords", "📝 Blurb", "📱 Strategy", "🗓️ Timeline", "🎬 Assets"
-    ])
-    
-    with tabs[0]:
-        show_book_profile(blueprint.get('book_profile', {}))
-    with tabs[1]:
-        show_cover_analysis(blueprint.get('cover_analysis', {}))
-    with tabs[2]:
-        show_reader_avatar(blueprint.get('reader_avatar', {}))
-    with tabs[3]:
-        show_market_position(blueprint.get('market_position', {}))
-    with tabs[4]:
-        show_keywords(blueprint.get('keyword_cloud', {}))
-    with tabs[5]:
-        show_blurb_analysis(blueprint.get('blurb_analysis', {}))
-    with tabs[6]:
-        show_channel_strategy(blueprint.get('marketing_blueprint', {}).get('channel_strategies', {}))
-    with tabs[7]:
-        show_timeline(blueprint.get('marketing_blueprint', {}).get('launch_timeline', {}))
-    with tabs[8]:
-        show_assets(blueprint.get('generated_assets', {}))
-
-
-def show_book_profile(profile):
-    if not profile or not isinstance(profile, dict):
-        st.info("No profile data")
-        return
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 📖 Book Details")
-        st.write(f"**Title:** {profile.get('title', 'N/A')}")
-        st.write(f"**Genre:** {profile.get('genre', 'N/A')}")
-        
-        subgenres = profile.get('subgenres', [])
-        if not isinstance(subgenres, list):
-            subgenres = []
-        st.write(f"**Subgenres:** {', '.join(subgenres)}")
-        
-        st.write(f"**Tone:** {profile.get('tone', 'N/A')}")
-        st.write(f"**Pace:** {profile.get('pace', 'N/A')}")
-    with col2:
-        st.markdown("### 🎭 Main Characters")
-        chars = profile.get('main_characters', [])
-        if not isinstance(chars, list):
-            chars = []
-        for char in chars:
-            st.write(f"• {char}")
-
-
-def show_cover_analysis(cover):
-    if not cover or not isinstance(cover, dict):
-        st.info("No cover analysis")
-        return
-    
-    st.markdown("### 🎨 Cover Analysis")
-    col1, col2 = st.columns(2)
-    with col1:
-        colors = cover.get('colors', [])
-        if not isinstance(colors, list):
-            colors = [str(colors)]
-        st.write(f"**Colors:** {', '.join(colors)}")
-        st.write(f"**Composition:** {cover.get('composition', '')}")
-        st.write(f"**Figures:** {cover.get('figures', '')}")
-    with col2:
-        st.write(f"**Typography:** {cover.get('typography', '')}")
-        st.write(f"**Mood:** {cover.get('mood', '')}")
-        st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**✅ Strengths:**")
-        strengths = cover.get('strengths', [])
-        if not isinstance(strengths, list):
-            strengths = [str(strengths)]
-        for s in strengths:
-            st.write(f"• {s}")
-    with col2:
-        st.markdown("**❌ Weaknesses:**")
-        weaknesses = cover.get('weaknesses', [])
-        if not isinstance(weaknesses, list):
-            weaknesses = [str(weaknesses)]
-        for w in weaknesses:
-            st.write(f"• {w}")
-    
-    st.markdown("**💡 Suggestions:**")
-    suggestions = cover.get('suggestions', [])
-    if not isinstance(suggestions, list):
-        suggestions = [str(suggestions)]
-    for s in suggestions:
-        st.write(f"• {s}")
-
-
-def show_reader_avatar(avatar):
-    if not avatar or not isinstance(avatar, dict):
-        st.info("No reader avatar")
-        return
-    
-    primary = avatar.get('primary', {})
-    if not isinstance(primary, dict):
-        primary = {}
-        
-    st.markdown("### 👤 Primary Reader")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Name:** {primary.get('name', '')}")
-        st.write(f"**Age:** {primary.get('age', '')}")
-        st.write(f"**Occupation:** {primary.get('occupation', '')}")
-    with col2:
-        st.write(f"**Seeks:** {primary.get('what_she_seeks', '')}")
-        st.write(f"**Hangs out:** {primary.get('where_she_hangs_out', '')}")
-        st.write(f"**Avoids:** {primary.get('what_she_avoids', '')}")
-
-
-def show_market_position(position):
-    if not position or not isinstance(position, dict):
-        st.info("No market position")
-        return
-    
-    st.write(f"**Shelf:** {position.get('primary_shelf', '')}")
-    st.write(f"**Positioning:** {position.get('positioning_statement', '')}")
-    st.markdown("### 📚 Comparable")
-    
-    comps = position.get('comp_titles', [])
-    if not isinstance(comps, list):
-        comps = []
-        
-    for comp in comps:
-        if isinstance(comp, dict):
-            st.write(f"• **{comp.get('title', '')}**")
-            st.write(f"  Similar: {comp.get('similarity', '')}")
-            st.write(f"  Different: {comp.get('difference', '')}")
-
-
-def show_keywords(keywords):
-    if not keywords or not isinstance(keywords, dict):
-        st.info("No keywords")
-        return
-    
-    st.markdown("**🔑 Amazon Keywords:**")
-    amazon_keywords = keywords.get('amazon_keywords', [])
-    if not isinstance(amazon_keywords, list):
-        amazon_keywords = [str(amazon_keywords)]
-    for k in amazon_keywords:
-        st.write(f"• {k}")
-
-
-def show_blurb_analysis(blurb):
-    if not blurb or not isinstance(blurb, dict):
-        st.info("No blurb")
-        return
-    
-    score = blurb.get('score', 0)
-    if not isinstance(score, (int, float)):
-        score = 0
-    st.metric("Score", f"{score}/100")
-    st.markdown("**✨ Optimized:**")
-    st.info(blurb.get('optimized_version', ''))
-
-
-def show_channel_strategy(strategies):
-    if not strategies or not isinstance(strategies, dict):
-        st.info("No strategies")
-        return
-    
-    for channel, data in strategies.items():
-        with st.expander(f"📱 {channel.title()}"):
-            st.json(data)
-
-
-def show_timeline(timeline):
-    if not timeline or not isinstance(timeline, dict):
-        st.info("No timeline")
-        return
-    
-    phases = [
-        ("6_months_out", "6 Months Before"),
-        ("3_months_out", "3 Months Before"),
-        ("1_month_out", "1 Month Before"),
-        ("launch_week", "Launch Week"),
-        ("post_launch", "Post-Launch")
-    ]
-    
-    for key, name in phases:
-        tasks = timeline.get(key, [])
-        if not isinstance(tasks, list):
-            tasks = []
-        if tasks:
-            with st.expander(f"📅 {name}"):
-                for task in tasks:
-                    st.write(f"• {task}")
-
-
-def show_assets(assets):
-    if not assets or not isinstance(assets, dict):
-        st.info("No assets")
-        return
-    
-    for asset_type, content in assets.items():
-        with st.expander(f"📎 {asset_type.title()}"):
-            if isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict):
-                        for k, v in item.items():
-                            st.write(f"**{k}:** {v}")
-                    else:
-                        st.write(item)
-            elif isinstance(content, dict):
-                for k, v in content.items():
-                    st.write(f"**{k}:** {v}")
-            else:
-                st.write(content)
-
-
-def extract_text_preview(file):
+def extract_text(file) -> str:
+    """Extract text from uploaded file"""
     try:
-        if "pdf" in file.type:
+        if file.type == "application/pdf":
             pdf_reader = PyPDF2.PdfReader(file)
-            return pdf_reader.pages[0].extract_text()[:500]
-        elif "document" in file.type:
-            doc = docx.Document(file)
-            return doc.paragraphs[0].text[:500] if doc.paragraphs else ""
-        else:
-            return file.getvalue().decode("utf-8")[:500]
-    except:
-        return "Preview unavailable"
-
-
-def extract_full_text(bytes_data, file_type):
-    try:
-        import io
-        if "pdf" in file_type:
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(bytes_data))
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text()
             return text
-        elif "document" in file_type:
-            doc = docx.Document(io.BytesIO(bytes_data))
+            
+        elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            doc = docx.Document(file)
             text = ""
             for para in doc.paragraphs:
                 text += para.text + "\n"
             return text
-        else:
-            return bytes_data.decode("utf-8")
+            
+        else:  # txt
+            return file.getvalue().decode("utf-8")
+            
     except Exception as e:
-        st.error(f"Error extracting text: {e}")
+        st.error(f"Error extracting text: {str(e)}")
         return ""
+
+
+def show_results():
+    """Display analysis results"""
+    
+    if not st.session_state.analysis_result:
+        st.info("No analysis yet. Upload and analyze a book first.")
+        return
+    
+    analysis = st.session_state.analysis_result
+    cover = st.session_state.cover_analysis
+    
+    # Title and export
+    title = analysis.get('book_info', {}).get('title', 'Your Book')
+    st.success(f"✅ Analysis Complete: **{title}**")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📋 Copy Summary", use_container_width=True):
+            st.info("Copy to clipboard feature coming")
+    with col2:
+        if st.button("🔄 New Analysis", use_container_width=True):
+            st.session_state.analysis_result = None
+            st.session_state.cover_analysis = None
+            st.rerun()
+    
+    st.divider()
+    
+    # Cover Analysis Summary
+    if cover:
+        with st.expander("🎨 Cover Analysis", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
+                st.write(f"**Mood:** {cover.get('mood', '')}")
+                st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
+            with col2:
+                st.write(f"**Typography:** {cover.get('typography', '')}")
+                st.write(f"**Composition:** {cover.get('composition', '')}")
+                if cover.get('has_figure'):
+                    st.write(f"**Figure:** {cover.get('figure_description', '')}")
+    
+    # Main tabs
+    tabs = st.tabs([
+        "📖 Book Info", "👥 Characters", "📊 Plot & Themes",
+        "🎯 Target Market", "📝 Marketing", "🎬 TikTok Strategy"
+    ])
+    
+    # Tab 1: Book Info
+    with tabs[0]:
+        book_info = analysis.get('book_info', {})
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Title:** " + book_info.get('title', 'N/A'))
+            st.markdown("**Genre:** " + book_info.get('genre', 'N/A'))
+            st.markdown("**Subgenres:** " + ', '.join(book_info.get('subgenres', [])))
+        with col2:
+            st.markdown("**Tone:** " + book_info.get('tone', 'N/A'))
+            st.markdown("**Writing Style:** " + book_info.get('writing_style', 'N/A'))
+            st.markdown("**Pacing:** " + book_info.get('pacing', 'N/A'))
+    
+    # Tab 2: Characters
+    with tabs[1]:
+        chars = analysis.get('characters', {})
+        st.markdown("### Main Characters")
+        for char in chars.get('main', []):
+            with st.expander(f"**{char.get('name', 'Unknown')}** - {char.get('role', '')}"):
+                st.write(char.get('description', ''))
+                st.write(f"*Arc:* {char.get('arc', '')}")
+        
+        if chars.get('supporting'):
+            st.markdown("### Supporting Characters")
+            for char in chars.get('supporting', []):
+                st.write(f"• {char}")
+        
+        if chars.get('relationships'):
+            st.markdown("### Key Relationships")
+            for rel in chars.get('relationships', []):
+                st.write(f"• {rel}")
+    
+    # Tab 3: Plot & Themes
+    with tabs[2]:
+        plot = analysis.get('plot', {})
+        themes = analysis.get('themes', {})
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### Plot")
+            st.markdown(f"**Opening Hook:** {plot.get('opening_hook', '')}")
+            st.markdown(f"**Inciting Incident:** {plot.get('inciting_incident', '')}")
+            st.markdown("**Major Plot Points:**")
+            for point in plot.get('major_plot_points', []):
+                st.write(f"• {point}")
+            st.markdown(f"**Climax:** {plot.get('climax', '')}")
+            st.markdown(f"**Resolution:** {plot.get('resolution', '')}")
+        
+        with col2:
+            st.markdown("### Themes")
+            st.markdown("**Primary:**")
+            for theme in themes.get('primary', []):
+                st.write(f"• {theme}")
+            st.markdown("**Secondary:**")
+            for theme in themes.get('secondary', []):
+                st.write(f"• {theme}")
+            if themes.get('motifs'):
+                st.markdown("**Motifs:**")
+                for motif in themes.get('motifs', []):
+                    st.write(f"• {motif}")
+    
+    # Tab 4: Target Market
+    with tabs[3]:
+        target = analysis.get('target_audience', {})
+        st.markdown(f"**Primary Audience:** {target.get('primary', 'N/A')}")
+        st.markdown(f"**Appeal:** {target.get('appeal', 'N/A')}")
+        
+        st.markdown("### Comparable Titles")
+        for comp in target.get('comparable_titles', []):
+            with st.expander(f"**{comp.get('title', '')}**"):
+                st.write(f"Similar: {comp.get('similarity', '')}")
+                st.write(f"Different: {comp.get('difference', '')}")
+        
+        strengths = analysis.get('strengths', [])
+        if strengths:
+            st.markdown("### Strengths")
+            for s in strengths:
+                st.write(f"✅ {s}")
+        
+        improvements = analysis.get('areas_for_improvement', [])
+        if improvements:
+            st.markdown("### Areas for Improvement")
+            for i in improvements:
+                st.write(f"📝 {i}")
+    
+    # Tab 5: Marketing
+    with tabs[4]:
+        marketing = analysis.get('marketing', {})
+        
+        st.markdown("### Unique Selling Points")
+        for usp in marketing.get('unique_selling_points', []):
+            st.write(f"✨ {usp}")
+        
+        st.markdown("### Keywords")
+        keywords = marketing.get('keyword_cloud', [])
+        st.write(', '.join(keywords))
+        
+        st.markdown("### Compelling Quotes")
+        for quote in marketing.get('compelling_quotes', []):
+            st.info(f"“{quote}”")
+        
+        st.markdown("### Book Blurb")
+        st.success(marketing.get('blurb', 'N/A'))
+    
+    # Tab 6: TikTok Strategy
+    with tabs[5]:
+        tiktok = analysis.get('tiktok_strategy', {})
+        
+        st.markdown("### Content Pillars")
+        for pillar in tiktok.get('content_pillars', []):
+            st.write(f"📌 {pillar}")
+        
+        st.markdown("### Script Ideas")
+        for i, script in enumerate(tiktok.get('script_ideas', []), 1):
+            with st.expander(f"Script {i}"):
+                st.write(f"**Hook:** {script.get('hook', '')}")
+                st.write(f"**Visual:** {script.get('visual', '')}")
+                st.write(f"**Voiceover:** {script.get('voiceover', '')}")
+        
+        st.markdown("### Hashtags")
+        hashtags = tiktok.get('hashtags', [])
+        st.write(' '.join(hashtags))
+
+
+# Main execution
+if __name__ == "__main__":
+    # This allows the script to be imported or run directly
+    pass
