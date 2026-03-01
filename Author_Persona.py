@@ -1,6 +1,7 @@
 # author_persona_discovery.py
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from enum import Enum
 
 class AuthorType(Enum):
@@ -55,12 +56,202 @@ class AuthorPersona:
         else:
             return AuthorType.OPEN_BOOK
 
+
+def get_strengths(author_type, interaction_style):
+    """Get strengths based on author type and interaction style"""
+    strengths = {
+        AuthorType.SHADOW: "Deep writing, authenticity, mystery, letting work speak for itself",
+        AuthorType.CURATED: "Professional presentation, consistency, quality over quantity, planned engagement",
+        AuthorType.BRIDGE: "Versatility, connection, adaptability, balancing multiple formats",
+        AuthorType.OPEN_BOOK: "Relatability, trust, community building, authentic connection"
+    }
+    return strengths[author_type]
+
+
+def calculate_energy_budget(social_battery):
+    """Calculate recommended energy expenditure based on social battery"""
+    budgets = {
+        SocialBattery.LOW: {
+            "daily": "15-20 minutes",
+            "weekly": "2-3 pieces of content",
+            "tip": "Batch create on weekends, schedule during week. Quality over quantity."
+        },
+        SocialBattery.MEDIUM: {
+            "daily": "30-45 minutes",
+            "weekly": "5-7 pieces of content",
+            "tip": "Mix scheduled and real-time engagement. Find your sustainable rhythm."
+        },
+        SocialBattery.HIGH: {
+            "daily": "1-2 hours",
+            "weekly": "10+ pieces of content",
+            "tip": "Go live, engage daily, build community. Your energy is your superpower."
+        }
+    }
+    return budgets[social_battery]
+
+
+def calculate_platform_scores(author_type, interaction_style, genre):
+    """Score platforms 0-100 based on fit for author persona"""
+    
+    # Base scores by author type
+    type_scores = {
+        AuthorType.SHADOW: {
+            "Newsletter": 95,
+            "Medium/Substack": 95,
+            "Twitter/X": 85,
+            "Blog": 90,
+            "Podcast (as guest)": 70,
+            "Goodreads": 80,
+            "Instagram": 40,
+            "TikTok": 20,
+            "YouTube": 30,
+            "LinkedIn": 60,
+            "Facebook": 50
+        },
+        AuthorType.CURATED: {
+            "Instagram": 90,
+            "LinkedIn": 85,
+            "YouTube": 80,
+            "Newsletter": 85,
+            "Twitter/X": 75,
+            "Podcast": 70,
+            "Blog": 75,
+            "TikTok": 60,
+            "Facebook": 65,
+            "Goodreads": 70,
+            "Medium/Substack": 70
+        },
+        AuthorType.BRIDGE: {
+            "Instagram": 90,
+            "Twitter/X": 85,
+            "Newsletter": 85,
+            "Podcast": 80,
+            "TikTok": 75,
+            "YouTube": 75,
+            "LinkedIn": 70,
+            "Facebook": 70,
+            "Medium/Substack": 65,
+            "Blog": 65,
+            "Goodreads": 60
+        },
+        AuthorType.OPEN_BOOK: {
+            "TikTok": 95,
+            "Instagram Live": 95,
+            "YouTube": 90,
+            "Podcast": 85,
+            "Twitter/X": 80,
+            "Facebook": 80,
+            "Newsletter": 75,
+            "LinkedIn": 70,
+            "Medium/Substack": 50,
+            "Blog": 50,
+            "Goodreads": 60
+        }
+    }
+    
+    # Adjust for interaction style
+    style_boost = {
+        InteractionStyle.WRITTEN: {"Newsletter": 10, "Medium/Substack": 10, "Blog": 10, "Twitter/X": 5},
+        InteractionStyle.AUDIO: {"Podcast": 15, "Clubhouse": 15, "Twitter Spaces": 10},
+        InteractionStyle.VISUAL: {"TikTok": 10, "Instagram": 10, "YouTube": 10, "Pinterest": 10},
+        InteractionStyle.LIVE: {"Instagram Live": 15, "TikTok Live": 15, "Facebook Live": 10, "Events": 20}
+    }
+    
+    # Genre adjustments
+    genre_boosts = {
+        "Genre Fiction (Mystery/Romance/Sci-Fi/Fantasy)": {"TikTok": 10, "Instagram": 10, "Pinterest": 5},
+        "Non-fiction (Self-help/Business/Memoir)": {"LinkedIn": 15, "Newsletter": 10, "YouTube": 10},
+        "Poetry": {"Instagram": 15, "TikTok": 10, "Pinterest": 10},
+        "Children's Books": {"Instagram": 10, "Pinterest": 15, "Facebook": 10},
+        "Academic/Technical": {"LinkedIn": 15, "Twitter/X": 10, "Medium/Substack": 15}
+    }
+    
+    # Get base scores
+    platform_scores = type_scores[author_type].copy()
+    
+    # Apply style boost
+    for platform, boost in style_boost[interaction_style].items():
+        if platform in platform_scores:
+            platform_scores[platform] = min(100, platform_scores[platform] + boost)
+    
+    # Apply genre boost
+    if genre in genre_boosts:
+        for platform, boost in genre_boosts[genre].items():
+            if platform in platform_scores:
+                platform_scores[platform] = min(100, platform_scores[platform] + boost)
+    
+    # Convert to list of dicts and sort
+    platform_list = [{"name": k, "score": v, "reason": get_platform_reason(k, author_type)} 
+                     for k, v in platform_scores.items()]
+    platform_list.sort(key=lambda x: x["score"], reverse=True)
+    
+    return platform_list[:8]  # Return top 8
+
+
+def get_platform_reason(platform, author_type):
+    """Get reason why platform is recommended"""
+    reasons = {
+        "Newsletter": "Your words, your rules. No algorithms, direct connection.",
+        "Medium/Substack": "Perfect for long-form writing that stands on its own.",
+        "Twitter/X": "Quick hits, conversation, low visibility required.",
+        "Blog": "Own your platform, build depth over time.",
+        "Instagram": "Visual storytelling with controlled presentation.",
+        "TikTok": "High reach, authentic content, viral potential.",
+        "YouTube": "Depth through video, evergreen content.",
+        "LinkedIn": "Professional credibility, non-fiction goldmine.",
+        "Facebook": "Community groups, targeted demographics.",
+        "Goodreads": "Connect with dedicated readers, build trust.",
+        "Podcast": "Intimate connection, growing medium.",
+        "Pinterest": "Evergreen traffic, visual discovery."
+    }
+    return reasons.get(platform, "Strong fit for your persona.")
+
+
+def get_quick_win(author_type, interaction_style, genre):
+    """Get immediate actionable step"""
+    
+    wins = {
+        (AuthorType.SHADOW, InteractionStyle.WRITTEN): "Write a thread about your book's central theme. Post it on X/Twitter. No face required.",
+        (AuthorType.SHADOW, InteractionStyle.AUDIO): "Record a 5-minute voice note about your writing process. Share with your email list.",
+        (AuthorType.SHADOW, InteractionStyle.VISUAL): "Create 3 aesthetic quote cards using Canva. Schedule them on Pinterest.",
+        
+        (AuthorType.CURATED, InteractionStyle.WRITTEN): "Draft a professional newsletter introducing yourself and your book.",
+        (AuthorType.CURATED, InteractionStyle.VISUAL): "Create a cohesive Instagram grid with 3 posts that establish your visual brand.",
+        (AuthorType.CURATED, InteractionStyle.AUDIO): "Prepare 5 talking points and pitch yourself to 3 relevant podcasts.",
+        
+        (AuthorType.BRIDGE, InteractionStyle.WRITTEN): "Write a personal essay about why you wrote this book. Share everywhere.",
+        (AuthorType.BRIDGE, InteractionStyle.VISUAL): "Film a 'day in the life' writing vlog. Show the person behind the pages.",
+        (AuthorType.BRIDGE, InteractionStyle.AUDIO): "Start a casual conversation on Twitter Spaces about your genre.",
+        
+        (AuthorType.OPEN_BOOK, InteractionStyle.LIVE): "Go live for 10 minutes just to introduce yourself and your book.",
+        (AuthorType.OPEN_BOOK, InteractionStyle.VISUAL): "Create a TikTok duet with a reader's video about your genre.",
+        (AuthorType.OPEN_BOOK, InteractionStyle.WRITTEN): "Share a vulnerable post about your writing journey on social media."
+    }
+    
+    # Try exact match
+    win = wins.get((author_type, interaction_style))
+    
+    # Fallback by author type
+    if not win:
+        fallbacks = {
+            AuthorType.SHADOW: "Write one piece of long-form content this week. Publish it on your blog or Medium.",
+            AuthorType.CURATED: "Create and schedule 3 pieces of content across one platform this week.",
+            AuthorType.BRIDGE: "Engage with 5 authors in your genre on social media. Leave meaningful comments.",
+            AuthorType.OPEN_BOOK: "Post a behind-the-scenes look at your writing space or process."
+        }
+        win = fallbacks[author_type]
+    
+    return win
+
+
 def render_quiz():
     """Main function to render the Streamlit quiz interface"""
     
-    st.title("📝 Author Persona Discovery Quiz")
-    st.markdown("### Find your author type in 5 minutes")
-    st.caption("This quiz will help identify your natural author persona and ideal platform strategy.")
+    st.set_page_config(
+        page_title="Author Persona Discovery",
+        page_icon="📚",
+        layout="wide"
+    )
     
     # Initialize session state for quiz progress
     if 'quiz_started' not in st.session_state:
@@ -70,14 +261,73 @@ def render_quiz():
     if 'answers' not in st.session_state:
         st.session_state.answers = {}
     
-    # Start quiz button
-    if not st.session_state.quiz_started:
-        if st.button("Start Quiz →", type="primary"):
-            st.session_state.quiz_started = True
-            st.rerun()
+    # Sidebar with progress
+    with st.sidebar:
+        st.markdown("### 📚 Author Persona Discovery")
+        st.markdown("---")
+        
+        if not st.session_state.get('quiz_started', False):
+            st.info("✨ Ready to discover your author type?")
+            st.markdown("Take the 5-minute quiz to get personalized platform recommendations.")
+        elif st.session_state.get('quiz_complete', False):
+            st.success("✅ Quiz Complete!")
+            st.progress(1.0)
+            st.balloons()
+        else:
+            st.warning("📝 Quiz in progress...")
+            st.progress(0.5)
+        
+        st.markdown("---")
+        st.markdown("**Why take this quiz?**")
+        st.markdown("- Find platforms that match your comfort level")
+        st.markdown("- Save months of trial and error")
+        st.markdown("- Market in a way that feels natural")
     
-    # Quiz interface
-    if st.session_state.quiz_started and not st.session_state.quiz_complete:
+    # Main content
+    if not st.session_state.quiz_started:
+        # Landing page
+        st.title("📚 Discover Your Author Persona")
+        st.markdown("### Find the marketing approach that fits *you*—not the other way around")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("""
+            **You're a writer, not a marketer.**  
+            But here's the truth: readers can't love what they can't find.
+            
+            The problem? Most marketing advice assumes you're an extrovert who loves being on camera.
+            
+            **This quiz is different.** It helps you discover:
+            - Your natural author type
+            - Platforms that match your comfort level
+            - A sustainable marketing approach
+            - Quick wins that don't drain you
+            """)
+            
+            if st.button("✨ Start the Quiz →", type="primary", use_container_width=True):
+                st.session_state.quiz_started = True
+                st.rerun()
+        
+        with col2:
+            st.markdown("""
+            ### The Four Author Types
+            
+            | Type | Style |
+            |------|-------|
+            | 🖤 **The Shadow** | Let the work speak |
+            | 💎 **The Curated** | Polished & professional |
+            | 🌉 **The Bridge** | Blend of worlds |
+            | 📖 **The Open Book** | Authentic & visible |
+            
+            Find out which one you are in 5 minutes.
+            """)
+    
+    elif not st.session_state.quiz_complete:
+        # Quiz interface
+        st.title("📝 Author Persona Quiz")
+        st.markdown("### Answer these 7 questions to discover your type")
+        
         with st.form("quiz_form"):
             st.markdown("#### Section 1: Public Visibility Comfort")
             
@@ -184,7 +434,7 @@ def render_quiz():
                 )
             
             # Submit button
-            submitted = st.form_submit_button("See My Results →", type="primary")
+            submitted = st.form_submit_button("✨ See My Results →", type="primary", use_container_width=True)
             
             if submitted:
                 # Validate required fields
@@ -204,6 +454,10 @@ def render_quiz():
                     }
                     st.session_state.quiz_complete = True
                     st.rerun()
+    
+    else:
+        render_results()
+
 
 def render_results():
     """Display quiz results with author type and recommendations"""
@@ -232,145 +486,204 @@ def render_results():
     }
     social_battery = q5_map[st.session_state.answers['q5']]
     
-    # Display results in a beautiful layout
-    st.balloons()
+    # Type-specific styling
+    type_colors = {
+        AuthorType.SHADOW: "🖤",
+        AuthorType.CURATED: "💎",
+        AuthorType.BRIDGE: "🌉",
+        AuthorType.OPEN_BOOK: "📖"
+    }
+    
+    # Results header
     st.title("✨ Your Author Persona Results")
     
-    # Author Type Badge
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        # Type-specific styling
-        type_colors = {
-            AuthorType.SHADOW: "🖤",
-            AuthorType.CURATED: "💎",
-            AuthorType.BRIDGE: "🌉",
-            AuthorType.OPEN_BOOK: "📖"
-        }
-        
+    # Hero section
+    col1, col2 = st.columns([1, 2])
+    with col1:
         st.markdown(f"""
         <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; color: white;">
             <h1 style="font-size: 4rem; margin: 0;">{type_colors[author_type]}</h1>
             <h2 style="margin: 0.5rem 0;">{author_type.value}</h2>
-            <p style="opacity: 0.9;">Visibility Score: {visibility_score:.1f}/4.0</p>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    
-    # Detailed breakdown
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 📊 Your Profile")
-        st.markdown(f"**Interaction Style:** {interaction_style.value}")
-        st.markdown(f"**Social Battery:** {social_battery.value}")
-        st.markdown(f"**Genre:** {st.session_state.answers['q6']}")
-        
-        st.markdown("**Your Goals:**")
-        for goal in st.session_state.answers['q7']:
-            st.markdown(f"- {goal}")
-    
     with col2:
-        st.markdown("### 🎯 Recommended Path")
+        st.markdown("### Your Profile at a Glance")
+        metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+        metrics_col1.metric("Visibility Score", f"{visibility_score:.1f}/4.0")
+        metrics_col2.metric("Interaction Style", interaction_style.value)
+        metrics_col3.metric("Social Battery", social_battery.value)
         
-        # Personalized recommendations based on author type
-        recommendations = {
-            AuthorType.SHADOW: """
-            - **Focus on:** Written content, newsletters, blog posts
-            - **Platform:** Start with Medium, Substack, or anonymous Twitter
-            - **Avoid:** Live video, in-person events initially
-            - **Growth strategy:** Let your writing be your voice
-            """,
-            
-            AuthorType.CURATED: """
-            - **Focus on:** Professional branding, scheduled content, edited videos
-            - **Platform:** LinkedIn, YouTube (edited), professional website
-            - **Avoid:** Impromptu live streams, unplanned appearances
-            - **Growth strategy:** Quality over quantity, planned engagement
-            """,
-            
-            AuthorType.BRIDGE: """
-            - **Focus on:** Mix of content types, podcast appearances, interviews
-            - **Platform:** Instagram, Twitter, occasional live events
-            - **Avoid:** Overcommitting to one format
-            - **Growth strategy:** Leverage both written and visual content
-            """,
-            
-            AuthorType.OPEN_BOOK: """
-            - **Focus on:** Live videos, events, community building
-            - **Platform:** TikTok, Instagram Live, Clubhouse, speaking events
-            - **Avoid:** Hiding behind curated content
-            - **Growth strategy:** Your personality is your brand—lean into it
-            """
-        }
-        
-        st.markdown(recommendations[author_type])
-        
-        # Interaction style tips
-        st.markdown("**💡 Quick Tip:**")
-        style_tips = {
-            InteractionStyle.WRITTEN: "Start a newsletter—it's your superpower.",
-            InteractionStyle.AUDIO: "Launch a podcast or seek guest spots.",
-            InteractionStyle.VISUAL: "YouTube and TikTok are your playground.",
-            InteractionStyle.LIVE: "Seek speaking opportunities and live events."
-        }
-        st.info(style_tips[interaction_style])
+        # Quick win
+        quick_win = get_quick_win(author_type, interaction_style, st.session_state.answers['q6'])
+        st.success(f"⚡ **Your Quick Win:** {quick_win}")
     
-    # Next steps
     st.markdown("---")
-    st.markdown("### 🚀 Your Personalized Action Plan")
     
-    if st.button("Generate Detailed Strategy →", type="primary"):
-        st.session_state.show_strategy = True
+    # Three-tab layout
+    tab1, tab2, tab3 = st.tabs(["🎯 Your Strategy", "📱 Platform Picks", "⚡ 7-Day Action Plan"])
     
-    if st.session_state.get('show_strategy', False):
-        with st.expander("Your 30-Day Platform Launch Plan", expanded=True):
-            st.markdown(f"""
-            **Week 1-2: Foundation**
-            - Set up your primary platform ({'Substack/Medium' if interaction_style == InteractionStyle.WRITTEN else 'YouTube/TikTok' if interaction_style == InteractionStyle.VISUAL else 'Podcast setup' if interaction_style == InteractionStyle.AUDIO else 'Event booking'})
-            - Create your bio and consistent branding
-            - Prepare 5 pieces of content
+    with tab1:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 💪 Your Natural Strengths")
+            st.markdown(get_strengths(author_type, interaction_style))
             
-            **Week 3-4: Engagement**
-            - Begin posting consistently
-            - Engage with 5 other authors daily
-            - Schedule your first {'newsletter' if interaction_style == InteractionStyle.WRITTEN else 'video' if interaction_style == InteractionStyle.VISUAL else 'podcast episode' if interaction_style == InteractionStyle.AUDIO else 'small event'}
-            """)
+            st.markdown("### 🎯 Your Goals")
+            for goal in st.session_state.answers['q7']:
+                st.markdown(f"- {goal}")
+        
+        with col2:
+            st.markdown("### 🧭 Recommended Path")
+            
+            recommendations = {
+                AuthorType.SHADOW: """
+                **Focus on:** Written content, newsletters, blog posts  
+                **Start with:** Medium, Substack, or anonymous Twitter  
+                **Avoid:** Live video, in-person events initially  
+                **Growth strategy:** Let your writing be your voice
+                """,
+                
+                AuthorType.CURATED: """
+                **Focus on:** Professional branding, scheduled content, edited videos  
+                **Start with:** LinkedIn, YouTube (edited), professional website  
+                **Avoid:** Impromptu live streams, unplanned appearances  
+                **Growth strategy:** Quality over quantity, planned engagement
+                """,
+                
+                AuthorType.BRIDGE: """
+                **Focus on:** Mix of content types, podcast appearances, interviews  
+                **Start with:** Instagram, Twitter, occasional live events  
+                **Avoid:** Overcommitting to one format  
+                **Growth strategy:** Leverage both written and visual content
+                """,
+                
+                AuthorType.OPEN_BOOK: """
+                **Focus on:** Live videos, events, community building  
+                **Start with:** TikTok, Instagram Live, Clubhouse, speaking events  
+                **Avoid:** Hiding behind curated content  
+                **Growth strategy:** Your personality is your brand—lean into it
+                """
+            }
+            
+            st.markdown(recommendations[author_type])
+            
+            st.markdown("### 🔋 Your Energy Budget")
+            budget = calculate_energy_budget(social_battery)
+            st.markdown(f"**Daily:** {budget['daily']}")
+            st.markdown(f"**Weekly:** {budget['weekly']}")
+            st.info(f"💡 {budget['tip']}")
+    
+    with tab2:
+        st.markdown("### Top Platforms for You")
+        st.markdown("These platforms match your comfort level and natural style:")
+        
+        platform_scores = calculate_platform_scores(author_type, interaction_style, st.session_state.answers['q6'])
+        
+        for i, platform in enumerate(platform_scores, 1):
+            # Color based on score
+            if platform['score'] >= 85:
+                color = "#00C851"  # Green
+                emoji = "🔥"
+            elif platform['score'] >= 70:
+                color = "#ffbb33"  # Yellow
+                emoji = "👍"
+            else:
+                color = "#33b5e5"  # Blue
+                emoji = "👌"
+            
+            st.markdown(f"""
+            <div style="padding: 1rem; margin: 0.5rem 0; background: #f8f9fa; border-radius: 10px; border-left: 5px solid {color};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span><strong>{i}. {platform['name']}</strong> {emoji}</span>
+                    <span style="font-size: 1.2rem; font-weight: bold; color: {color};">{platform['score']}% match</span>
+                </div>
+                <small>{platform['reason']}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("### 📊 Platform Comparison")
+        
+        # Create DataFrame for visualization
+        df = pd.DataFrame(platform_scores)
+        fig = px.bar(df, x='name', y='score', title="Platform Match Score",
+                    labels={'name': 'Platform', 'score': 'Match Score %'},
+                    color='score', color_continuous_scale='viridis')
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with tab3:
+        st.markdown("### Your Personalized 7-Day Launch Plan")
+        st.markdown("Start here. No overwhelm. Just action.")
+        
+        days = [
+            ("Day 1: Set Up Foundation", "Create your profile on your top platform. Write your bio. Add a link to your book."),
+            ("Day 2: Create Your First Post", f"Based on your style, create your first piece of content. {quick_win}"),
+            ("Day 3: Engage with Community", "Find 5 authors in your genre. Leave meaningful comments on their posts."),
+            ("Day 4: Share Behind the Scenes", "Show your writing space, process, or a sneak peek of your work."),
+            ("Day 5: Ask a Question", "Engage your audience. Ask about their favorite books in your genre."),
+            ("Day 6: Share a Resource", "Recommend a book, tool, or tip that helped your writing."),
+            ("Day 7: Reflect & Plan", "Look at what worked. Plan next week's content. Celebrate starting!")
+        ]
+        
+        for i, (day, description) in enumerate(days, 1):
+            with st.expander(f"**{day}**", expanded=i==1):
+                st.markdown(description)
+                if i < 7:
+                    st.progress(i/7)
+                else:
+                    st.progress(1.0)
+                    st.balloons()
+        
+        st.markdown("---")
+        st.markdown("### 📥 Download Your Results")
+        
+        # Create summary text
+        summary = f"""
+AUTHOR PERSONA RESULTS
+======================
+Type: {author_type.value}
+Visibility Score: {visibility_score:.1f}/4.0
+Interaction Style: {interaction_style.value}
+Social Battery: {social_battery.value}
+
+YOUR TOP PLATFORMS
+=================
+"""
+        for p in platform_scores[:3]:
+            summary += f"{p['name']}: {p['score']}% match\n"
+        
+        summary += f"""
+        
+YOUR QUICK WIN
+=============
+{quick_win}
+
+ENERGY BUDGET
+============
+Daily: {budget['daily']}
+Weekly: {budget['weekly']}
+Tip: {budget['tip']}
+        """
+        
+        st.download_button(
+            label="📥 Download PDF Summary",
+            data=summary,
+            file_name=f"author_persona_{author_type.value.replace(' ', '_')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
     
     # Reset option
-    if st.button("Take Quiz Again"):
+    st.markdown("---")
+    if st.button("← Take Quiz Again", use_container_width=True):
         for key in ['quiz_started', 'quiz_complete', 'answers', 'show_strategy']:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
 
-def main():
-    """Main app controller"""
-    st.set_page_config(
-        page_title="Author Persona Discovery",
-        page_icon="📚",
-        layout="wide"
-    )
-    
-    # Sidebar with progress
-    with st.sidebar:
-        st.image("https://via.placeholder.com/150x150.png?text=📚", width=150)
-        st.markdown("### Your Journey")
-        
-        if not st.session_state.get('quiz_started', False):
-            st.info("Ready to begin? Take the 5-minute quiz to discover your author type!")
-        elif st.session_state.get('quiz_complete', False):
-            st.success("✅ Quiz Complete!")
-            st.progress(1.0)
-        else:
-            st.warning("Quiz in progress...")
-            st.progress(0.5)
-    
-    # Route to appropriate view
-    if not st.session_state.get('quiz_complete', False):
-        render_quiz()
-    else:
-        render_results()
 
 if __name__ == "__main__":
-    main()
+    render_quiz()
