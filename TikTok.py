@@ -178,7 +178,7 @@ if 'page' not in st.session_state:
 # ============================================================================
 # SIDEBAR
 # ============================================================================
-st.sidebar.title("📱 BookTok Machine")
+st.sidebar.title("📱 BardSpark")
 st.sidebar.markdown("---")
 
 # Simple login
@@ -222,7 +222,7 @@ st.session_state.current_page = st.session_state.page
 # ============================================================================
 
 if st.session_state.page == "🏠 Dashboard":
-    st.title("📱 BookTok Machine")
+    st.title("📱 BardSpark")
     
     # ============================================================================
     # TIMELINE WIDGET (from LaunchTimeline module)
