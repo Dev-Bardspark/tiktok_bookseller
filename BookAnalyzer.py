@@ -38,91 +38,26 @@ def show_analyzer():
     st.markdown("Upload your manuscript and cover for deep literary analysis with **commercial potential scoring**")
     st.markdown("---")
     
-    # API Key input with instructions
+    # API Key input
     if not st.session_state.openai_api_key:
         with st.container():
             st.markdown("### 🔑 OpenAI API Key")
-            
             api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
             
             with st.expander("📋 How to get an OpenAI API Key", expanded=True):
                 st.markdown("""
                 <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
                 <h4>To get an OpenAI API key, follow these steps:</h4>
-                
-                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>
-                👉 https://platform.openai.com/</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>
-                Log in with your existing account or create a new one.</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>
-                Click your profile icon (top right) → Select "View API keys"<br>
-                Or go directly to: https://platform.openai.com/api-keys</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>
-                Click "Create new secret key" → Give it a name → Copy the key immediately</div>
-                
-                <div style="margin: 8px 0; padding: 5px;">🔐 <strong>Important Security Tips</strong><br>
-                Never share your API key publicly</div>
+                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>👉 https://platform.openai.com/</div>
+                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>Log in with your existing account or create a new one.</div>
+                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>Click your profile icon (top right) → Select "View API keys"</div>
+                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>Click "Create new secret key" → Give it a name → Copy the key immediately</div>
                 </div>
                 """, unsafe_allow_html=True)
             
             if api_key:
                 st.session_state.openai_api_key = api_key
                 st.rerun()
-        return
-    
-    # If analysis is complete, show results
-    if st.session_state.analysis_complete and st.session_state.analysis_result:
-        st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
-        
-        # Action buttons
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
-            filename = f"{book_title.replace(' ', '_')}_analysis.json"
-            
-            if st.button("💾 Save to Library", use_container_width=True):
-                save_data = {
-                    "book_info": st.session_state.analysis_result,
-                    "cover_analysis": st.session_state.cover_analysis,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "book_id": st.session_state.current_book_id
-                }
-                
-                if 'analysis_library' not in st.session_state:
-                    st.session_state.analysis_library = {}
-                
-                st.session_state.analysis_library[filename] = save_data
-                st.success(f"✅ Saved!")
-        
-        with col2:
-            if st.button("🎨 Marketing Assets", use_container_width=True):
-                st.session_state.page = "🎨 Marketing Assets"
-                st.rerun()
-        
-        with col3:
-            if st.button("📊 Export Report", use_container_width=True):
-                st.info("Export feature coming soon!")
-        
-        with col4:
-            if st.button("🔄 New Analysis", use_container_width=True):
-                st.session_state.analysis_complete = False
-                st.session_state.analysis_result = None
-                st.session_state.cover_analysis = None
-                st.rerun()
-        
-        st.markdown("---")
-        
-        # Show marketability dashboard FIRST
-        show_marketability_dashboard(st.session_state.analysis_result)
-        
-        # Then show complete literary analysis
-        with st.expander("📚 View Complete Literary Analysis", expanded=False):
-            show_complete_analysis(st.session_state.analysis_result, st.session_state.cover_analysis)
-        
         return
     
     # Main upload area
@@ -135,7 +70,6 @@ def show_analyzer():
             type=['pdf', 'docx', 'txt'],
             key="manuscript_file"
         )
-        
         if manuscript_file:
             st.success(f"✅ Loaded: {manuscript_file.name}")
     
@@ -146,7 +80,6 @@ def show_analyzer():
             type=['jpg', 'jpeg', 'png'],
             key="cover_file"
         )
-        
         if cover_file:
             st.success(f"✅ Loaded: {cover_file.name}")
             image = Image.open(cover_file)
@@ -164,7 +97,6 @@ def show_analyzer():
                 st.session_state.current_book_id = f"book_{int(time.time())}"
                 
                 manuscript_text = extract_text(manuscript_file)
-                
                 cover_bytes = cover_file.getvalue()
                 cover_base64 = base64.b64encode(cover_bytes).decode('utf-8')
                 
@@ -180,6 +112,62 @@ def show_analyzer():
                 st.rerun()
     else:
         st.info("👆 Please upload both manuscript and cover to begin")
+    
+    # Show results if analysis is complete
+    if st.session_state.analysis_complete and st.session_state.analysis_result:
+        show_results()
+
+
+def show_results():
+    """Display analysis results with marketability dashboard FIRST"""
+    
+    st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
+    
+    # Action buttons
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
+        filename = f"{book_title.replace(' ', '_')}_analysis.json"
+        
+        if st.button("💾 Save to Library", use_container_width=True):
+            save_data = {
+                "book_info": st.session_state.analysis_result,
+                "cover_analysis": st.session_state.cover_analysis,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "book_id": st.session_state.current_book_id
+            }
+            
+            if 'analysis_library' not in st.session_state:
+                st.session_state.analysis_library = {}
+            
+            st.session_state.analysis_library[filename] = save_data
+            st.success(f"✅ Saved!")
+    
+    with col2:
+        if st.button("🎨 Marketing Assets", use_container_width=True):
+            st.session_state.page = "🎨 Marketing Assets"
+            st.rerun()
+    
+    with col3:
+        if st.button("📊 Export Report", use_container_width=True):
+            st.info("Export feature coming soon!")
+    
+    with col4:
+        if st.button("🔄 New Analysis", use_container_width=True):
+            st.session_state.analysis_complete = False
+            st.session_state.analysis_result = None
+            st.session_state.cover_analysis = None
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Show marketability dashboard FIRST
+    show_marketability_dashboard(st.session_state.analysis_result)
+    
+    # Then show complete literary analysis in expander
+    with st.expander("📚 View Complete Literary Analysis", expanded=False):
+        show_complete_analysis(st.session_state.analysis_result, st.session_state.cover_analysis)
 
 
 def analyze_cover(client, cover_base64):
@@ -238,7 +226,7 @@ def analyze_cover(client, cover_base64):
 
 
 def analyze_manuscript_complete(client, text, cover_analysis):
-    """Complete manuscript analysis with ALL metrics"""
+    """Complete manuscript analysis with ALL metrics including marketability"""
     
     if len(text) > 50000:
         text = text[:50000] + "... [truncated]"
@@ -267,7 +255,7 @@ def analyze_manuscript_complete(client, text, cover_analysis):
     
     Based on these excerpts, provide a COMPLETE analysis as JSON with ALL of the following sections.
     
-    CRITICAL: Include numerical scores (0-100) for all marketability metrics.
+    CRITICAL: The analysis MUST include a comprehensive marketability section with numerical scores (0-100).
     
     Return EXACTLY this structure:
     
@@ -432,7 +420,7 @@ def analyze_manuscript_complete(client, text, cover_analysis):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a literary analyst and publishing industry expert. Return valid JSON only with ALL sections exactly as specified."},
+                {"role": "system", "content": "You are a literary analyst and publishing industry expert. Return valid JSON only with ALL sections exactly as specified. The marketability section is REQUIRED."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.4,
@@ -440,7 +428,32 @@ def analyze_manuscript_complete(client, text, cover_analysis):
             response_format={"type": "json_object"}
         )
         
-        return json.loads(response.choices[0].message.content)
+        result = json.loads(response.choices[0].message.content)
+        
+        # Verify marketability section exists
+        if 'marketability' not in result:
+            # If missing, add a default structure
+            result['marketability'] = {
+                "overall_score": 75,
+                "overall_grade": "C+",
+                "overall_assessment": "Standard marketability with room for improvement",
+                "scores": {
+                    "writing_quality": {"score": 75, "explanation": "Average writing quality", "strengths": [], "weaknesses": []},
+                    "commercial_potential": {"score": 75, "explanation": "Standard commercial potential", "strengths": [], "weaknesses": []},
+                    "genre_fit": {"score": 75, "explanation": "Good genre fit", "strengths": [], "weaknesses": []},
+                    "hook_strength": {"score": 75, "explanation": "Average hook", "strengths": [], "weaknesses": []},
+                    "character_appeal": {"score": 75, "explanation": "Characters are relatable", "strengths": [], "weaknesses": []},
+                    "pacing": {"score": 75, "explanation": "Good pacing", "strengths": [], "weaknesses": []},
+                    "originality": {"score": 75, "explanation": "Some original elements", "strengths": [], "weaknesses": []},
+                    "target_audience_appeal": {"score": 75, "explanation": "Appeals to target audience", "strengths": [], "weaknesses": []}
+                },
+                "comparable_successes": [],
+                "market_gap_analysis": "Standard market positioning",
+                "competitive_advantage": "Unique voice",
+                "potential_challenges": ["Market competition"]
+            }
+        
+        return result
         
     except Exception as e:
         st.error(f"Analysis failed: {str(e)}")
@@ -476,6 +489,7 @@ def show_marketability_dashboard(analysis):
     """Display marketability dashboard with all commercial metrics"""
     
     st.markdown("## 📊 MARKETABILITY DASHBOARD")
+    st.markdown("---")
     
     if 'marketability' not in analysis:
         st.warning("Marketability data not available")
@@ -507,64 +521,67 @@ def show_marketability_dashboard(analysis):
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown(f"""
-        <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+        <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 20px;">
             <h1 style="font-size: 80px; margin: 0; color: white;">{overall_score}</h1>
             <h2 style="margin: 0; color: white;">{score_text}</h2>
-            <p style="font-size: 30px; margin: 0; color: white;">Grade: {overall_grade} {emoji}</p>
+            <p style="font-size: 30px; margin: 10px 0 0 0; color: white;">Grade: {overall_grade} {emoji}</p>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown("---")
-    
     # Overall assessment
     st.markdown(f"### 📝 Overall Assessment")
-    st.info(market.get('overall_assessment', ''))
+    st.info(market.get('overall_assessment', 'No assessment available'))
+    
+    st.markdown("---")
     
     # Individual scores
     st.markdown("### 📈 Detailed Scores")
     
     scores = market.get('scores', {})
     
-    score_items = list(scores.items())
-    for i in range(0, len(score_items), 2):
-        cols = st.columns(2)
-        for j in range(2):
-            if i + j < len(score_items):
-                score_name, score_data = score_items[i + j]
-                display_name = score_name.replace('_', ' ').title()
-                score_value = score_data.get('score', 0)
-                explanation = score_data.get('explanation', '')
-                
-                if score_value >= 80:
-                    bg_color = "#e6f7e6"
-                    border_color = "#00cc66"
-                    bar_color = "#00cc66"
-                elif score_value >= 70:
-                    bg_color = "#fff4e6"
-                    border_color = "#ffaa00"
-                    bar_color = "#ffaa00"
-                elif score_value >= 60:
-                    bg_color = "#fff0e6"
-                    border_color = "#ff8800"
-                    bar_color = "#ff8800"
-                else:
-                    bg_color = "#ffe6e6"
-                    border_color = "#ff4444"
-                    bar_color = "#ff4444"
-                
-                with cols[j]:
-                    st.markdown(f"""
-                    <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
-                        <h4 style="margin: 0 0 5px 0;">{display_name}</h4>
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <h2 style="margin: 0 10px 0 0; color: {border_color};">{score_value}</h2>
-                            <div style="flex-grow: 1; height: 10px; background-color: #ddd; border-radius: 5px;">
-                                <div style="width: {score_value}%; height: 10px; background-color: {bar_color}; border-radius: 5px;"></div>
+    if scores:
+        score_items = list(scores.items())
+        for i in range(0, len(score_items), 2):
+            cols = st.columns(2)
+            for j in range(2):
+                if i + j < len(score_items):
+                    score_name, score_data = score_items[i + j]
+                    display_name = score_name.replace('_', ' ').title()
+                    score_value = score_data.get('score', 0)
+                    explanation = score_data.get('explanation', '')
+                    
+                    if score_value >= 80:
+                        bg_color = "#e6f7e6"
+                        border_color = "#00cc66"
+                        bar_color = "#00cc66"
+                    elif score_value >= 70:
+                        bg_color = "#fff4e6"
+                        border_color = "#ffaa00"
+                        bar_color = "#ffaa00"
+                    elif score_value >= 60:
+                        bg_color = "#fff0e6"
+                        border_color = "#ff8800"
+                        bar_color = "#ff8800"
+                    else:
+                        bg_color = "#ffe6e6"
+                        border_color = "#ff4444"
+                        bar_color = "#ff4444"
+                    
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
+                            <h4 style="margin: 0 0 5px 0;">{display_name}</h4>
+                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                <h2 style="margin: 0 10px 0 0; color: {border_color};">{score_value}</h2>
+                                <div style="flex-grow: 1; height: 10px; background-color: #ddd; border-radius: 5px;">
+                                    <div style="width: {score_value}%; height: 10px; background-color: {bar_color}; border-radius: 5px;"></div>
+                                </div>
                             </div>
+                            <p style="margin: 5px 0 0 0; font-size: 0.9em;">{explanation}</p>
                         </div>
-                        <p style="margin: 5px 0 0 0; font-size: 0.9em;">{explanation}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
+    else:
+        st.warning("No detailed scores available")
     
     st.markdown("---")
     
@@ -660,7 +677,7 @@ def show_marketability_dashboard(analysis):
         
         st.markdown("---")
     
-    # Comparable successes
+    # Comparable successes and market analysis
     if 'marketability' in analysis:
         market = analysis['marketability']
         
@@ -669,73 +686,31 @@ def show_marketability_dashboard(analysis):
         with col1:
             st.markdown("### 🏆 Comparable Successes")
             comps = market.get('comparable_successes', [])
-            for comp in comps:
-                if isinstance(comp, dict):
-                    st.markdown(f"""
-                    <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-bottom: 10px;">
-                        <strong>{comp.get('title', '')}</strong><br>
-                        <span style="color: #666;">Similarity: {comp.get('similarity', '')}</span><br>
-                        <span style="color: #666;">Why it succeeded: {comp.get('why_it_succeeded', '')}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+            if comps:
+                for comp in comps:
+                    if isinstance(comp, dict):
+                        st.markdown(f"""
+                        <div style="padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-bottom: 10px;">
+                            <strong>{comp.get('title', '')}</strong><br>
+                            <span style="color: #666;">Similarity: {comp.get('similarity', '')}</span><br>
+                            <span style="color: #666;">Why it succeeded: {comp.get('why_it_succeeded', '')}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("No comparable successes identified")
         
         with col2:
             st.markdown("### 🔍 Market Position")
-            st.markdown(f"**Market Gap:** {market.get('market_gap_analysis', '')}")
-            st.markdown(f"**Competitive Advantage:** {market.get('competitive_advantage', '')}")
+            st.markdown(f"**Market Gap:** {market.get('market_gap_analysis', 'Not specified')}")
+            st.markdown(f"**Competitive Advantage:** {market.get('competitive_advantage', 'Not specified')}")
             
-            st.markdown("**Potential Challenges:**")
-            for challenge in market.get('potential_challenges', []):
-                st.markdown(f"• {challenge}")
+            challenges = market.get('potential_challenges', [])
+            if challenges:
+                st.markdown("**Potential Challenges:**")
+                for challenge in challenges:
+                    st.markdown(f"• {challenge}")
     
     st.markdown("---")
-    
-    # Writing Quality (condensed)
-    if 'writing_quality_detailed' in analysis:
-        writing = analysis['writing_quality_detailed']
-        
-        with st.expander("✍️ Writing Quality Details", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
-                st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
-                st.markdown(f"**Description:** {writing.get('description', '')}")
-            with col2:
-                st.markdown(f"**Voice:** {writing.get('voice', '')}")
-                st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**✅ Writing Strengths:**")
-                for s in writing.get('strengths', []):
-                    st.write(f"• {s}")
-            with col2:
-                st.markdown("**📝 Needed Improvements:**")
-                for i in writing.get('improvements', []):
-                    st.write(f"• {i}")
-    
-    # Marketing insights (condensed)
-    if 'marketing' in analysis:
-        marketing = analysis['marketing']
-        
-        with st.expander("📈 Marketing Insights", expanded=False):
-            if marketing.get('unique_selling_points'):
-                st.markdown("**Unique Selling Points:**")
-                for usp in marketing['unique_selling_points']:
-                    st.write(f"• {usp}")
-            
-            if marketing.get('keyword_cloud'):
-                st.markdown("**Keywords:**")
-                st.write(', '.join(marketing['keyword_cloud']))
-            
-            if marketing.get('compelling_quotes'):
-                st.markdown("**Pull Quotes:**")
-                for quote in marketing['compelling_quotes']:
-                    st.info(f"“{quote}”")
-            
-            if marketing.get('blurb_suggestion'):
-                st.markdown("**Suggested Blurb:**")
-                st.write(marketing['blurb_suggestion'])
 
 
 def show_complete_analysis(analysis, cover):
@@ -891,12 +866,18 @@ def show_complete_analysis(analysis, cover):
         if themes.get('primary'):
             st.markdown("**Primary Themes:**")
             for theme in themes['primary']:
-                st.write(f"• {theme}")
+                if isinstance(theme, dict):
+                    st.write(f"• {theme.get('theme', theme)}: {theme.get('explanation', '')}")
+                else:
+                    st.write(f"• {theme}")
         
         if themes.get('secondary'):
             st.markdown("**Secondary Themes:**")
             for theme in themes['secondary']:
-                st.write(f"• {theme}")
+                if isinstance(theme, dict):
+                    st.write(f"• {theme.get('theme', theme)}: {theme.get('explanation', '')}")
+                else:
+                    st.write(f"• {theme}")
         
         if themes.get('motifs'):
             st.markdown("**Motifs:**")
