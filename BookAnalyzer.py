@@ -381,14 +381,6 @@ def analyze_manuscript_complete(client, text, cover_analysis):
             "motifs": ["recurring elements"]
         }},
         
-        "pacing_analysis": {{
-            "overall": "fast/medium/slow",
-            "opening": "description",
-            "middle": "description",
-            "ending": "description",
-            "tension_curve": "how tension rises and falls"
-        }},
-        
         "strengths": ["5 specific strengths of this manuscript with examples"],
         
         "areas_for_improvement": ["5 specific weaknesses with suggestions"],
@@ -486,7 +478,7 @@ def show_marketability_dashboard(analysis):
         emoji = "⚠️"
         score_text = "NEEDS WORK"
     
-    # Beautiful card with normal sized text (24px max)
+    # Beautiful card with normal sized text (48px max)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown(f"""
@@ -710,7 +702,7 @@ def show_marketability_dashboard(analysis):
 
 
 def show_complete_analysis(analysis, cover):
-    """Display complete literary analysis with BEAUTIFUL design but NORMAL fonts"""
+    """Display complete literary analysis - PACING ANALYSIS REMOVED (redundant)"""
     
     # Cover Analysis
     if cover:
@@ -741,7 +733,7 @@ def show_complete_analysis(analysis, cover):
             for s in cover.get('suggestions', []):
                 st.write(f"• {s}")
     
-    # Book Info
+    # Book Info - INCLUDES PACING SUMMARY
     book_info = analysis.get('book_info', {})
     st.markdown("### 📖 Book Overview")
     
@@ -870,24 +862,6 @@ def show_complete_analysis(analysis, cover):
             st.markdown("**Motifs:**")
             for motif in themes['motifs']:
                 st.write(f"• {motif}")
-        
-        st.divider()
-    
-    # Pacing Analysis - FIXED: Beautiful but normal fonts, no truncation
-    pacing = analysis.get('pacing_analysis', {})
-    if pacing:
-        st.markdown("### ⏱️ Pacing Analysis")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Overall", pacing.get('overall', 'Unknown'))
-        with col2:
-            st.metric("Opening", pacing.get('opening', 'Unknown'))
-        with col3:
-            st.metric("Ending", pacing.get('ending', 'Unknown'))
-        
-        if pacing.get('tension_curve'):
-            st.write(f"**Tension Curve:** {pacing['tension_curve']}")
         
         st.divider()
     
