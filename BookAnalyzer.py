@@ -454,7 +454,7 @@ def extract_text(file) -> str:
 
 
 def show_marketability_dashboard(analysis):
-    """Display marketability dashboard with NORMAL fonts - NO MASSIVE TEXT"""
+    """Display marketability dashboard with BEAUTIFUL design but NORMAL fonts"""
     
     st.markdown("## 📊 MARKETABILITY DASHBOARD")
     st.markdown("---")
@@ -465,7 +465,7 @@ def show_marketability_dashboard(analysis):
     
     market = analysis['marketability']
     
-    # Overall score - NORMAL size card
+    # Overall score - Beautiful card with NORMAL font sizes
     overall_score = market.get('overall_score', 0)
     overall_grade = market.get('overall_grade', 'N/A')
     
@@ -486,48 +486,70 @@ def show_marketability_dashboard(analysis):
         emoji = "⚠️"
         score_text = "NEEDS WORK"
     
-    # Simple card with normal sized text
-    st.markdown(f"""
-    <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 15px;">
-        <h3 style="margin: 0; color: white;">Overall Score: {overall_score} ({overall_grade})</h3>
-        <p style="margin: 5px 0 0 0; color: white;">{score_text} {emoji}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Beautiful card with normal sized text (24px max)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown(f"""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 20px;">
+            <h2 style="font-size: 48px; margin: 0; color: white;">{overall_score}</h2>
+            <h4 style="font-size: 20px; margin: 5px 0; color: white;">{score_text}</h4>
+            <p style="font-size: 18px; margin: 5px 0 0 0; color: white;">Grade: {overall_grade} {emoji}</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Overall assessment - normal font
     st.markdown(f"**Overall Assessment:** {market.get('overall_assessment', 'No assessment available')}")
     
     st.markdown("---")
     
-    # Individual scores - normal font with progress bars
+    # Individual scores - Beautiful cards with normal fonts
     st.markdown("### 📈 Detailed Scores")
     
     scores = market.get('scores', {})
     
     if scores:
-        for score_name, score_data in scores.items():
-            display_name = score_name.replace('_', ' ').title()
-            score_value = score_data.get('score', 0)
-            explanation = score_data.get('explanation', '')
-            
-            if score_value >= 80:
-                bar_color = "#00cc66"
-            elif score_value >= 70:
-                bar_color = "#ffaa00"
-            else:
-                bar_color = "#ff8800"
-            
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                st.markdown(f"**{display_name}:** {score_value}")
-            with col2:
-                st.progress(score_value/100, text=explanation)
+        score_items = list(scores.items())
+        for i in range(0, len(score_items), 2):
+            cols = st.columns(2)
+            for j in range(2):
+                if i + j < len(score_items):
+                    score_name, score_data = score_items[i + j]
+                    display_name = score_name.replace('_', ' ').title()
+                    score_value = score_data.get('score', 0)
+                    explanation = score_data.get('explanation', '')
+                    
+                    if score_value >= 80:
+                        bg_color = "#e6f7e6"
+                        border_color = "#00cc66"
+                        bar_color = "#00cc66"
+                    elif score_value >= 70:
+                        bg_color = "#fff4e6"
+                        border_color = "#ffaa00"
+                        bar_color = "#ffaa00"
+                    else:
+                        bg_color = "#fff0e6"
+                        border_color = "#ff8800"
+                        bar_color = "#ff8800"
+                    
+                    with cols[j]:
+                        st.markdown(f"""
+                        <div style="padding: 15px; background-color: {bg_color}; border-radius: 8px; border-left: 5px solid {border_color}; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="font-weight: 600; font-size: 16px;">{display_name}</span>
+                                <span style="font-weight: 600; font-size: 20px; color: {border_color};">{score_value}</span>
+                            </div>
+                            <div style="height: 8px; background-color: #ddd; border-radius: 4px; margin-bottom: 10px;">
+                                <div style="width: {score_value}%; height: 8px; background-color: {bar_color}; border-radius: 4px;"></div>
+                            </div>
+                            <p style="margin: 0; font-size: 14px; color: #666;">{explanation}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
     else:
         st.warning("No detailed scores available")
     
     st.markdown("---")
     
-    # Title Analysis - normal font
+    # Title Analysis - Beautiful but normal fonts
     if 'title_analysis' in analysis:
         title_analysis = analysis['title_analysis']
         
@@ -559,40 +581,67 @@ def show_marketability_dashboard(analysis):
         
         suggestions = title_analysis.get('suggested_titles', [])
         if suggestions:
-            st.markdown("#### Alternative Title Suggestions")
+            st.markdown("#### 💡 Alternative Title Suggestions")
             
             for i, suggestion in enumerate(suggestions, 1):
                 if isinstance(suggestion, dict):
                     impact = suggestion.get('estimated_impact', 'Medium')
-                    st.markdown(f"**{i}. {suggestion.get('title', '')}** - {impact} IMPACT")
-                    st.markdown(f"*{suggestion.get('rationale', '')}*")
-                    st.markdown("---")
+                    if impact.lower() == 'high':
+                        impact_color = "#ff4444"
+                        impact_display = "🔴 HIGH IMPACT"
+                    elif impact.lower() == 'medium':
+                        impact_color = "#ffaa00"
+                        impact_display = "🟡 MEDIUM IMPACT"
+                    else:
+                        impact_color = "#00cc66"
+                        impact_display = "🟢 LOW IMPACT"
+                    
+                    st.markdown(f"""
+                    <div style="padding: 15px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-weight: 600; font-size: 16px;">{i}. {suggestion.get('title', '')}</span>
+                            <span style="background-color: {impact_color}; color: white; padding: 3px 10px; border-radius: 15px; font-size: 12px;">{impact_display}</span>
+                        </div>
+                        <p style="margin: 0; color: #666; font-size: 14px;"><em>{suggestion.get('rationale', '')}</em></p>
+                    </div>
+                    """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Salability Analysis - normal font
+    # Salability Analysis - Beautiful but normal fonts
     if 'salability_analysis' in analysis:
         salability = analysis['salability_analysis']
         
         st.markdown("### 💰 Salability Analysis")
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.markdown(f"**Market Size:** {salability.get('estimated_market_size', 'Medium')}")
-            st.markdown(f"**Series Potential:** {salability.get('series_potential', 'Unknown')}")
-            st.markdown(f"**Adaptation Potential:** {salability.get('adaptation_potential', 'Unknown')}")
+            st.markdown(f"**Market Size**  \n{salability.get('estimated_market_size', 'Medium')}")
         with col2:
-            st.markdown(f"**Price Point:** {salability.get('estimated_price_point', 'Unknown')}")
+            st.markdown(f"**Series Potential**  \n{salability.get('series_potential', 'Unknown')}")
+        with col3:
+            st.markdown(f"**Adaptation**  \n{salability.get('adaptation_potential', 'Unknown')}")
+        with col4:
+            st.markdown(f"**Price Point**  \n{salability.get('estimated_price_point', 'Unknown')}")
         
         format_potential = salability.get('format_potential', {})
         if format_potential:
             st.markdown("**Format Potential:**")
-            for fmt, potential in format_potential.items():
-                st.markdown(f"• {fmt.title()}: {potential}")
+            cols = st.columns(4)
+            formats = list(format_potential.items())
+            for i, (fmt, potential) in enumerate(formats[:4]):
+                with cols[i]:
+                    if potential.lower() == 'high':
+                        color = "#00cc66"
+                    elif potential.lower() == 'medium':
+                        color = "#ffaa00"
+                    else:
+                        color = "#ff4444"
+                    st.markdown(f"**{fmt.title()}:**  \n<span style='color: {color}; font-weight: bold;'>{potential}</span>", unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Market Position - normal font
+    # Market Position - Beautiful but normal fonts
     if 'marketability' in analysis:
         market = analysis['marketability']
         
@@ -661,7 +710,7 @@ def show_marketability_dashboard(analysis):
 
 
 def show_complete_analysis(analysis, cover):
-    """Display complete literary analysis with NORMAL fonts - NO TRUNCATION"""
+    """Display complete literary analysis with BEAUTIFUL design but NORMAL fonts"""
     
     # Cover Analysis
     if cover:
@@ -824,21 +873,21 @@ def show_complete_analysis(analysis, cover):
         
         st.divider()
     
-    # Pacing Analysis - FIXED: No huge fonts, no truncation
+    # Pacing Analysis - FIXED: Beautiful but normal fonts, no truncation
     pacing = analysis.get('pacing_analysis', {})
     if pacing:
         st.markdown("### ⏱️ Pacing Analysis")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown(f"**Overall:** {pacing.get('overall', 'Unknown')}")
+            st.metric("Overall", pacing.get('overall', 'Unknown'))
         with col2:
-            st.markdown(f"**Opening:** {pacing.get('opening', 'Unknown')}")
+            st.metric("Opening", pacing.get('opening', 'Unknown'))
         with col3:
-            st.markdown(f"**Ending:** {pacing.get('ending', 'Unknown')}")
+            st.metric("Ending", pacing.get('ending', 'Unknown'))
         
         if pacing.get('tension_curve'):
-            st.markdown(f"**Tension Curve:** {pacing['tension_curve']}")
+            st.write(f"**Tension Curve:** {pacing['tension_curve']}")
         
         st.divider()
     
