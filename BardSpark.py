@@ -1,4 +1,4 @@
-# TikTok.py
+# BardSpark.py (formerly TikTok.py)
 import streamlit as st
 import pandas as pd
 import psycopg2
@@ -13,37 +13,44 @@ import LaunchTimeline
 import BookTokCompetitorTracker
 import BookAnalyzer
 import MarketingGenerator
+import author_persona_discovery  # NEW IMPORT
 
 # ============================================================================
 # PAGE CONFIG
 # ============================================================================
 st.set_page_config(
-    page_title="BookTok Machine",
-    page_icon="📱",
+    page_title="BardSpark",
+    page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================================================
-# COLORFUL BUTTON CSS
+# BRANDED CSS
 # ============================================================================
 st.markdown("""
 <style>
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
         color: white !important;
         font-weight: bold;
         border: none;
         padding: 15px 10px;
         border-radius: 10px;
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
     }
     .stButton > button:disabled {
         background: linear-gradient(135deg, #bdc3c7 0%, #2c3e50 100%);
         opacity: 0.5;
+        transform: none;
     }
     /* Timeline card styling */
     .timeline-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
         padding: 20px;
         border-radius: 10px;
         color: white;
@@ -63,11 +70,19 @@ st.markdown("""
         padding: 15px;
         border-radius: 10px;
         margin: 10px 0;
-        border-left: 4px solid #667eea;
+        border-left: 4px solid #4F46E5;
     }
     .api-step {
         margin: 8px 0;
         padding: 5px;
+    }
+    /* BardSpark specific */
+    .brand-header {
+        font-family: 'Inter', sans-serif;
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -178,7 +193,7 @@ if 'page' not in st.session_state:
 # ============================================================================
 # SIDEBAR
 # ============================================================================
-st.sidebar.title("📱 BardSpark")
+st.sidebar.title("✨ BardSpark")
 st.sidebar.markdown("---")
 
 # Simple login
@@ -197,16 +212,17 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================================
-# UPDATED NAVIGATION - WITH MARKETING ASSETS
+# UPDATED NAVIGATION - WITH AUTHOR PERSONA
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "📚 ARC Readers", 
     "❤️ Saved Readers", 
     "📖 Book Analyzer",
-    "🎨 Marketing Assets",  # Changed from "Marketing Generator"
+    "🎨 Marketing Assets",
     "🎬 Video Generator",
-    "📊 Competitor Tracker"
+    "📊 Competitor Tracker",
+    "🧠 Author Persona"  # NEW MENU ITEM
 ]
 
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
@@ -222,7 +238,8 @@ st.session_state.current_page = st.session_state.page
 # ============================================================================
 
 if st.session_state.page == "🏠 Dashboard":
-    st.title("📱 BardSpark")
+    st.title("✨ BardSpark")
+    st.markdown("### Write. Not Marketing.")
     
     # ============================================================================
     # TIMELINE WIDGET (from LaunchTimeline module)
@@ -230,7 +247,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - UPDATED WITH MARKETING ASSETS
+    # QUICK ACTIONS BUTTON GRID - WITH AUTHOR PERSONA
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -248,7 +265,7 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col3:
-        if st.button("🎨 Marketing Assets", use_container_width=True):  # Changed
+        if st.button("🎨 Marketing Assets", use_container_width=True):
             st.session_state.page = "🎨 Marketing Assets"
             st.rerun()
     
@@ -264,11 +281,13 @@ if st.session_state.page == "🏠 Dashboard":
             st.session_state.page = "📊 Competitor Tracker"
             st.rerun()
     with col2:
-        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
+        if st.button("🧠 Author Persona", use_container_width=True):  # NEW BUTTON
+            st.session_state.page = "🧠 Author Persona"
+            st.rerun()
     with col3:
-        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     with col4:
-        st.button("🎯 Ad Creator", use_container_width=True, disabled=True)
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     
     # Row 3
     col1, col2, col3, col4 = st.columns(4)
@@ -426,10 +445,10 @@ elif st.session_state.page == "📖 Book Analyzer":
     BookAnalyzer.show_analyzer()
 
 # ============================================================================
-# MARKETING ASSETS PAGE (was Marketing Generator)
+# MARKETING ASSETS PAGE
 # ============================================================================
 
-elif st.session_state.page == "🎨 Marketing Assets":  # Changed
+elif st.session_state.page == "🎨 Marketing Assets":
     MarketingGenerator.show_generator()
 
 # ============================================================================
@@ -447,8 +466,15 @@ elif st.session_state.page == "📊 Competitor Tracker":
     BookTokCompetitorTracker.show_competitor_tracker()
 
 # ============================================================================
+# AUTHOR PERSONA PAGE
+# ============================================================================
+
+elif st.session_state.page == "🧠 Author Persona":
+    author_persona_discovery.render_quiz()
+
+# ============================================================================
 # FOOTER
 # ============================================================================
 
 st.sidebar.markdown("---")
-st.sidebar.caption("BookTok Machine v0.3 • Book Marketing OS")
+st.sidebar.caption("BardSpark v1.0 • Write. Not Marketing.")
