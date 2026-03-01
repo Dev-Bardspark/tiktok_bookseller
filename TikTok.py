@@ -10,7 +10,9 @@ import json
 import plotly.express as px
 import VideoGenerator
 import LaunchTimeline
-import BookTokCompetitorTracker  # Your competitor tracker
+import BookTokCompetitorTracker
+import BookAnalyzer
+import MarketingGenerator
 
 # ============================================================================
 # PAGE CONFIG
@@ -54,6 +56,18 @@ st.markdown("""
         font-size: 12px;
         display: inline-block;
         margin-right: 10px;
+    }
+    /* API Instructions styling */
+    .api-instructions {
+        background-color: #f0f2f6;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 10px 0;
+        border-left: 4px solid #667eea;
+    }
+    .api-step {
+        margin: 8px 0;
+        padding: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -183,13 +197,14 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================================
-# UPDATED NAVIGATION - WITH BOOK BLUEPRINT
+# UPDATED NAVIGATION - WITH MARKETING ASSETS
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "📚 ARC Readers", 
     "❤️ Saved Readers", 
     "📖 Book Analyzer",
+    "🎨 Marketing Assets",  # Changed from "Marketing Generator"
     "🎬 Video Generator",
     "📊 Competitor Tracker"
 ]
@@ -215,7 +230,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - UPDATED WITH BOOK BLUEPRINT
+    # QUICK ACTIONS BUTTON GRID - UPDATED WITH MARKETING ASSETS
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -228,24 +243,26 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col2:
-        if st.button("📖 Book Blueprint", use_container_width=True):  # CHANGED
-            st.session_state.page = "📖 Book Blueprint"
+        if st.button("📖 Book Analyzer", use_container_width=True):
+            st.session_state.page = "📖 Book Analyzer"
             st.rerun()
     
     with col3:
-        if st.button("🎬 Video Generator", use_container_width=True):
-            st.session_state.page = "🎬 Video Generator"
+        if st.button("🎨 Marketing Assets", use_container_width=True):  # Changed
+            st.session_state.page = "🎨 Marketing Assets"
             st.rerun()
     
     with col4:
-        if st.button("📊 Competitor Tracker", use_container_width=True):
-            st.session_state.page = "📊 Competitor Tracker"
+        if st.button("🎬 Video Generator", use_container_width=True):
+            st.session_state.page = "🎬 Video Generator"
             st.rerun()
     
     # Row 2
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("📊 Analytics", use_container_width=True, disabled=True)
+        if st.button("📊 Competitor Tracker", use_container_width=True):
+            st.session_state.page = "📊 Competitor Tracker"
+            st.rerun()
     with col2:
         st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     with col3:
@@ -280,13 +297,13 @@ if st.session_state.page == "🏠 Dashboard":
     else:
         total_readers = "?"
     
-    # Check if any blueprint exists
-    books_analyzed = 1 if st.session_state.get('blueprint') else 0
+    # Check if any analysis exists
+    books_analyzed = 1 if st.session_state.get('analysis_result') else 0
     
     col1, col2, col3 = st.columns(3)
     col1.metric("ARC Readers Available", total_readers)
     col2.metric("Saved Readers", len(st.session_state.saved_readers))
-    col3.metric("Books Blueprinted", books_analyzed)  # CHANGED
+    col3.metric("Books Analyzed", books_analyzed)
 
 # ============================================================================
 # ARC READERS PAGE
@@ -402,19 +419,24 @@ elif st.session_state.page == "❤️ Saved Readers":
                             st.warning("No email found. Try DM on TikTok")
 
 # ============================================================================
-# BOOK BLUEPRINT PAGE (REPLACES Book Analysis)
+# BOOK ANALYZER PAGE
 # ============================================================================
 
 elif st.session_state.page == "📖 Book Analyzer":
-    import BookAnalyzer
     BookAnalyzer.show_analyzer()
+
+# ============================================================================
+# MARKETING ASSETS PAGE (was Marketing Generator)
+# ============================================================================
+
+elif st.session_state.page == "🎨 Marketing Assets":  # Changed
+    MarketingGenerator.show_generator()
 
 # ============================================================================
 # VIDEO GENERATOR PAGE
 # ============================================================================
 
 elif st.session_state.page == "🎬 Video Generator":
-    import VideoGenerator
     VideoGenerator.show_video_generator()
 
 # ============================================================================
@@ -429,4 +451,4 @@ elif st.session_state.page == "📊 Competitor Tracker":
 # ============================================================================
 
 st.sidebar.markdown("---")
-st.sidebar.caption("BookTok Machine v0.2 • Book Marketing OS")
+st.sidebar.caption("BookTok Machine v0.3 • Book Marketing OS")
