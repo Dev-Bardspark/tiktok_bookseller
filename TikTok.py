@@ -190,7 +190,7 @@ menu_options = [
     "🏠 Dashboard", 
     "📚 ARC Readers", 
     "❤️ Saved Readers", 
-    "📖 Book Blueprint",  # CHANGED: from "Book Analysis" to "Book Blueprint"
+    "📖 Book Analyzer",
     "🎬 Video Generator",
     "📊 Competitor Tracker"
 ]
@@ -406,9 +406,9 @@ elif st.session_state.page == "❤️ Saved Readers":
 # BOOK BLUEPRINT PAGE (REPLACES Book Analysis)
 # ============================================================================
 
-elif st.session_state.page == "📖 Book Blueprint":
-    # This calls the new BookBlueprint module
-    BookBlueprint.show_blueprint_analyzer()
+elif st.session_state.page == "📖 Book Analyzer":
+    import BookAnalyzer
+    BookAnalyzer.show_analyzer()
 
 # ============================================================================
 # VIDEO GENERATOR PAGE
