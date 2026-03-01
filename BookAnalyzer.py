@@ -79,16 +79,12 @@ def show_analyzer():
     if st.session_state.analysis_complete and st.session_state.analysis_result:
         st.success("✅ Analysis complete! Your book has been analyzed.")
         
-        col1, col2 = st.columns([3, 1])
+        # Action buttons at the top - full width
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
-        
-        with col2:
-            st.markdown("### 💾 Save & Next")
-            
             book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
-            filename = st.text_input("Filename", value=f"{book_title.replace(' ', '_')}_analysis.json")
+            filename = f"{book_title.replace(' ', '_')}_analysis.json"
             
             if st.button("💾 Save to Library", use_container_width=True):
                 # Prepare data to save
@@ -104,23 +100,26 @@ def show_analyzer():
                     st.session_state.analysis_library = {}
                 
                 st.session_state.analysis_library[filename] = save_data
-                st.success(f"✅ Saved!")
-            
-            st.markdown("---")
-            st.markdown("### 🚀 Next Step")
-            st.markdown("Create marketing campaigns from this analysis")
-            
+                st.success(f"✅ Saved to library!")
+        
+        with col2:
             # Button to go to Marketing Assets
             if st.button("🎨 Go to Marketing Assets", type="primary", use_container_width=True):
                 st.session_state.page = "🎨 Marketing Assets"
                 st.rerun()
-            
-            st.markdown("---")
+        
+        with col3:
+            # New Analysis button (you wanted to keep this)
             if st.button("🔄 New Analysis", use_container_width=True):
                 st.session_state.analysis_complete = False
                 st.session_state.analysis_result = None
                 st.session_state.cover_analysis = None
                 st.rerun()
+        
+        st.markdown("---")
+        
+        # Show analysis results - FULL WIDTH
+        show_analysis_results(st.session_state.analysis_result, st.session_state.cover_analysis)
         
         return
     
@@ -244,7 +243,7 @@ def analyze_cover(client, cover_base64):
 
 
 def analyze_manuscript_deep(client, text, cover_analysis):
-    """Single comprehensive manuscript analysis"""
+    """Single comprehensive manuscript analysis with narrative arc"""
     
     # Truncate if needed
     if len(text) > 50000:
@@ -287,40 +286,66 @@ def analyze_manuscript_deep(client, text, cover_analysis):
     2. characters: {{
         "main": [
             {{"name": "name", "role": "protagonist/antagonist/etc", 
-              "description": "who they are", "arc": "how they change"}}
+              "description": "who they are", 
+              "arc": "how they change throughout the story",
+              "motivation": "what drives them",
+              "conflict": "internal or external struggles"}}
         ],
         "supporting": ["list of supporting characters"],
-        "relationships": ["key dynamics"]
+        "relationships": ["key dynamics between characters"]
     }}
     
-    3. plot: {{
+    3. narrative_arc: {{
+        "exposition": "setup and background",
+        "rising_action": "events that build tension",
+        "climax": "the turning point",
+        "falling_action": "aftermath of climax",
+        "resolution": "how story concludes"
+    }}
+    
+    4. plot: {{
         "opening_hook": "what grabs attention",
         "inciting_incident": "what starts the story",
-        "major_plot_points": ["point1", "point2", "point3"],
-        "climax": "the big moment",
-        "resolution": "how it ends"
+        "major_plot_points": ["point1", "point2", "point3", "point4", "point5"],
+        "plot_twists": ["any surprises or reveals"],
+        "subplots": ["secondary storylines"]
     }}
     
-    4. themes: {{
+    5. themes: {{
         "primary": ["main themes with explanation"],
         "secondary": ["other themes"],
         "motifs": ["recurring elements"]
     }}
     
-    5. strengths: ["5 specific strengths of this manuscript with examples"]
+    6. character_development: {{
+        "protagonist_journey": "how the main character changes",
+        "antagonist_motivation": "what drives the opposition",
+        "supporting_arcs": ["how other characters evolve"]
+    }}
     
-    6. areas_for_improvement: ["5 specific weaknesses with suggestions"]
+    7. pacing_analysis: {{
+        "overall": "fast/medium/slow",
+        "opening": "description",
+        "middle": "description",
+        "ending": "description",
+        "tension_curve": "how tension rises and falls"
+    }}
     
-    7. target_audience: {{
+    8. strengths: ["5 specific strengths of this manuscript with examples"]
+    
+    9. areas_for_improvement: ["5 specific weaknesses with suggestions"]
+    
+    10. target_audience: {{
         "primary": "who will love this",
         "appeal": "why they'll love it",
         "comparable_titles": [
             {{"title": "Book 1", "similarity": "how it's similar", "difference": "how it's different"}},
-            {{"title": "Book 2", "similarity": "how it's similar", "difference": "how it's different"}}
+            {{"title": "Book 2", "similarity": "how it's similar", "difference": "how it's different"}},
+            {{"title": "Book 3", "similarity": "how it's similar", "difference": "how it's different"}}
         ]
     }}
     
-    8. marketing: {{
+    11. marketing: {{
         "unique_selling_points": ["what makes it special"],
         "keyword_cloud": ["amazon_keywords"],
         "compelling_quotes": ["3 actual or potential pull quotes"]
@@ -372,7 +397,7 @@ def extract_text(file) -> str:
 
 
 def show_analysis_results(analysis, cover):
-    """Display analysis results in full-width layout"""
+    """Display analysis results in full-width layout with narrative arc"""
     
     # Cover Analysis - Full width at top
     if cover:
@@ -405,29 +430,23 @@ def show_analysis_results(analysis, cover):
             for s in cover.get('suggestions', []):
                 st.write(f"• {s}")
     
-    # Book Info - Fixed font sizes and display
+    # Book Info - Full width
     book_info = analysis.get('book_info', {})
-    st.markdown("### 📖 Book Overview")
+    st.markdown("## 📖 Book Overview")
     
-    # Use columns with proper labels
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.markdown("**Title**")
-        title = book_info.get('title', 'Unknown')
-        st.write(title if len(title) < 30 else title[:30] + "...")
-    
+        st.markdown(f"<h3>{book_info.get('title', 'Unknown')}</h3>", unsafe_allow_html=True)
     with col2:
         st.markdown("**Genre**")
-        st.write(book_info.get('genre', 'Unknown'))
-    
+        st.markdown(f"<h3>{book_info.get('genre', 'Unknown')}</h3>", unsafe_allow_html=True)
     with col3:
         st.markdown("**Tone**")
-        st.write(book_info.get('tone', 'Unknown'))
-    
+        st.markdown(f"<h3>{book_info.get('tone', 'Unknown')}</h3>", unsafe_allow_html=True)
     with col4:
         st.markdown("**Pacing**")
-        st.write(book_info.get('pacing', 'Unknown'))
+        st.markdown(f"<h3>{book_info.get('pacing', 'Unknown')}</h3>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
@@ -440,34 +459,71 @@ def show_analysis_results(analysis, cover):
     
     st.divider()
     
-    # Characters - Grid layout
+    # Narrative Arc - RESTORED!
+    narrative = analysis.get('narrative_arc', {})
+    if narrative:
+        st.markdown("## 📊 Narrative Arc")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Exposition**")
+            st.info(narrative.get('exposition', 'Not specified'))
+            
+            st.markdown("**Rising Action**")
+            st.info(narrative.get('rising_action', 'Not specified'))
+            
+            st.markdown("**Climax**")
+            st.info(narrative.get('climax', 'Not specified'))
+        
+        with col2:
+            st.markdown("**Falling Action**")
+            st.info(narrative.get('falling_action', 'Not specified'))
+            
+            st.markdown("**Resolution**")
+            st.info(narrative.get('resolution', 'Not specified'))
+        
+        st.divider()
+    
+    # Characters with full arcs
     chars = analysis.get('characters', {})
-    st.markdown("### 👥 Main Characters")
+    st.markdown("## 👥 Characters")
     
     main_chars = chars.get('main', [])
     if main_chars:
-        # Create rows of 3 characters
-        for i in range(0, len(main_chars), 3):
-            cols = st.columns(3)
-            for j in range(3):
+        st.markdown("### Main Characters")
+        for i in range(0, len(main_chars), 2):
+            cols = st.columns(2)
+            for j in range(2):
                 if i + j < len(main_chars):
                     char = main_chars[i + j]
                     with cols[j]:
                         with st.container():
-                            st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
-                            desc = char.get('description', '')
-                            st.write(desc[:100] + "..." if len(desc) > 100 else desc)
-                            if char.get('arc'):
-                                st.caption(f"Arc: {char.get('arc', '')[:50]}...")
+                            st.markdown(f"### {char.get('name', 'Unknown')} *({char.get('role', '')})*")
+                            st.markdown(f"**Description:** {char.get('description', '')}")
+                            st.markdown(f"**Motivation:** {char.get('motivation', 'Not specified')}")
+                            st.markdown(f"**Conflict:** {char.get('conflict', 'Not specified')}")
+                            st.markdown(f"**Arc:** {char.get('arc', 'Not specified')}")
     
-    # Supporting characters in expander
+    # Character Development
+    dev = analysis.get('character_development', {})
+    if dev:
+        st.markdown("### Character Development")
+        if dev.get('protagonist_journey'):
+            st.markdown(f"**Protagonist Journey:** {dev['protagonist_journey']}")
+        if dev.get('antagonist_motivation'):
+            st.markdown(f"**Antagonist Motivation:** {dev['antagonist_motivation']}")
+        if dev.get('supporting_arcs'):
+            st.markdown("**Supporting Arcs:**")
+            for arc in dev['supporting_arcs']:
+                st.write(f"• {arc}")
+    
     if chars.get('supporting'):
-        with st.expander("👥 Supporting Characters"):
+        with st.expander("Supporting Characters"):
             for char in chars.get('supporting', []):
                 st.write(f"• {char}")
     
     if chars.get('relationships'):
-        with st.expander("🔄 Key Relationships"):
+        with st.expander("Key Relationships"):
             for rel in chars.get('relationships', []):
                 st.write(f"• {rel}")
     
@@ -478,7 +534,7 @@ def show_analysis_results(analysis, cover):
     
     with col1:
         plot = analysis.get('plot', {})
-        st.markdown("### 📊 Plot Structure")
+        st.markdown("## 📊 Plot Structure")
         
         if plot.get('opening_hook'):
             st.markdown(f"**Opening Hook:** {plot['opening_hook']}")
@@ -491,6 +547,16 @@ def show_analysis_results(analysis, cover):
             for point in plot['major_plot_points']:
                 st.write(f"• {point}")
         
+        if plot.get('plot_twists'):
+            st.markdown("**Plot Twists:**")
+            for twist in plot['plot_twists']:
+                st.write(f"• {twist}")
+        
+        if plot.get('subplots'):
+            st.markdown("**Subplots:**")
+            for subplot in plot['subplots']:
+                st.write(f"• {subplot}")
+        
         if plot.get('climax'):
             st.markdown(f"**Climax:** {plot['climax']}")
         
@@ -499,7 +565,7 @@ def show_analysis_results(analysis, cover):
     
     with col2:
         themes = analysis.get('themes', {})
-        st.markdown("### 🎨 Themes & Motifs")
+        st.markdown("## 🎨 Themes & Motifs")
         
         if themes.get('primary'):
             st.markdown("**Primary Themes:**")
@@ -518,10 +584,27 @@ def show_analysis_results(analysis, cover):
     
     st.divider()
     
+    # Pacing Analysis
+    pacing = analysis.get('pacing_analysis', {})
+    if pacing:
+        st.markdown("## ⏱️ Pacing Analysis")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Overall", pacing.get('overall', 'Unknown'))
+        with col2:
+            st.metric("Opening", pacing.get('opening', 'Unknown'))
+        with col3:
+            st.metric("Ending", pacing.get('ending', 'Unknown'))
+        
+        if pacing.get('tension_curve'):
+            st.markdown(f"**Tension Curve:** {pacing['tension_curve']}")
+        
+        st.divider()
+    
     # Target Audience
     target = analysis.get('target_audience', {})
     if target:
-        st.markdown("### 🎯 Target Audience")
+        st.markdown("## 🎯 Target Audience")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -537,11 +620,9 @@ def show_analysis_results(analysis, cover):
                     if isinstance(comp, dict):
                         st.markdown(f"• **{comp.get('title', '')}**")
                         if comp.get('similarity'):
-                            st.caption(f"  Similar: {comp['similarity'][:50]}...")
+                            st.caption(f"  Similar: {comp['similarity']}")
                         if comp.get('difference'):
-                            st.caption(f"  Different: {comp['difference'][:50]}...")
-                    else:
-                        st.write(f"• {comp}")
+                            st.caption(f"  Different: {comp['difference']}")
     
     st.divider()
     
@@ -551,22 +632,22 @@ def show_analysis_results(analysis, cover):
     with col1:
         strengths = analysis.get('strengths', [])
         if strengths:
-            st.markdown("### ✅ Strengths")
+            st.markdown("## ✅ Strengths")
             for s in strengths:
-                st.write(f"• {s[:100]}..." if len(s) > 100 else f"• {s}")
+                st.write(f"• {s}")
     
     with col2:
         improvements = analysis.get('areas_for_improvement', [])
         if improvements:
-            st.markdown("### 📝 Areas for Improvement")
+            st.markdown("## 📝 Areas for Improvement")
             for i in improvements:
-                st.write(f"• {i[:100]}..." if len(i) > 100 else f"• {i}")
+                st.write(f"• {i}")
     
     # Marketing Insights
     marketing = analysis.get('marketing', {})
     if marketing:
         st.divider()
-        st.markdown("### 📈 Marketing Insights")
+        st.markdown("## 📈 Marketing Insights")
         
         col1, col2 = st.columns(2)
         
@@ -574,19 +655,19 @@ def show_analysis_results(analysis, cover):
             if marketing.get('unique_selling_points'):
                 st.markdown("**Unique Selling Points:**")
                 for usp in marketing['unique_selling_points']:
-                    st.write(f"• {usp[:100]}..." if len(usp) > 100 else f"• {usp}")
+                    st.write(f"• {usp}")
         
         with col2:
             if marketing.get('keyword_cloud'):
                 st.markdown("**Keywords:**")
                 keywords = marketing['keyword_cloud']
                 if isinstance(keywords, list):
-                    st.write(', '.join(keywords[:10]) + ('...' if len(keywords) > 10 else ''))
+                    st.write(', '.join(keywords))
         
         if marketing.get('compelling_quotes'):
             st.markdown("**Pull Quotes:**")
-            for quote in marketing['compelling_quotes'][:3]:  # Show first 3 only
-                st.info(f"“{quote[:100]}...”" if len(quote) > 100 else f"“{quote}”")
+            for quote in marketing['compelling_quotes']:
+                st.info(f"“{quote}”")
 
 
 # For direct testing
