@@ -26,7 +26,7 @@ def show_generator():
     
     # Header
     st.title("🎨 Marketing Asset Generator")
-    st.markdown("Load a book analysis and generate multi-platform marketing assets")
+    st.markdown("Generate multi-platform marketing assets from your book analysis")
     st.markdown("---")
     
     # API Key input
@@ -39,74 +39,64 @@ def show_generator():
                 st.rerun()
         return
     
-   # Two-column layout
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.markdown("### 📂 Available Analyses")
+    # ============================================================================
+    # BOOK SELECTION SECTION (Full width)
+    # ============================================================================
     
-    # Check if there are any saved analyses from Book Analyzer
+    st.markdown("### 📚 Select a Book to Market")
+    
+    # Check for saved analyses
     if 'analysis_library' not in st.session_state:
         st.session_state.analysis_library = {}
     
-    if st.session_state.analysis_library:
-        book_titles = list(st.session_state.analysis_library.keys())
-        
-        if book_titles:
-            selected = st.selectbox(
-                "Choose a book to generate assets for:",
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        if st.session_state.analysis_library:
+            book_titles = list(st.session_state.analysis_library.keys())
+            selected_book = st.selectbox(
+                "Choose a book from your analyzed library:",
                 book_titles,
                 key="book_selector"
             )
-            
-            if st.button("📂 Load Selected Book", use_container_width=True):
-                st.session_state.loaded_analysis = st.session_state.analysis_library[selected]
+        else:
+            st.info("No books found in your library. Please analyze a book first in the Book Analyzer.")
+            if st.button("📖 Go to Book Analyzer"):
+                st.session_state.page = "📖 Book Analyzer"
+                st.rerun()
+            return
+    
+    with col2:
+        if st.session_state.analysis_library:
+            if st.button("📂 Load Selected Book", type="primary", use_container_width=True):
+                st.session_state.loaded_analysis = st.session_state.analysis_library[selected_book]
                 st.session_state.generated_assets = None
                 st.session_state.edited_assets = None
                 st.rerun()
-        else:
-            st.info("No books in library yet")
-    else:
-        st.info("No books analyzed yet. Go to **Book Analyzer** first.")
-        
-        # Helpful button
-        if st.button("📖 Go to Book Analyzer", use_container_width=True):
-            st.session_state.page = "📖 Book Analyzer"
-            st.rerun()
-
-with col2:
-    if st.session_state.loaded_analysis:
-        st.markdown("### 📖 Loaded Book")
-        # Safely navigate the nested structure
-        book_info = st.session_state.loaded_analysis
-        if isinstance(book_info, dict):
-            # Handle different possible structures
-            if 'book_info' in book_info and isinstance(book_info['book_info'], dict):
-                book_info = book_info['book_info'].get('book_info', book_info['book_info'])
-            elif 'book_info' in book_info:
-                book_info = book_info['book_info']
-        
-        title = "Unknown"
-        genre = "Unknown"
-        
-        if isinstance(book_info, dict):
-            title = book_info.get('title', 'Unknown')
-            genre = book_info.get('genre', 'Unknown')
-        
-        st.write(f"**Title:** {title}")
-        st.write(f"**Genre:** {genre}")
-        
-        # Show preview of analysis
-        with st.expander("Preview Analysis"):
-            st.json(st.session_state.loaded_analysis)
     
-    # Generate assets section
+    # ============================================================================
+    # ASSET GENERATION SECTION (Full width, only shows when book is loaded)
+    # ============================================================================
+    
     if st.session_state.loaded_analysis:
-        col1, col2, col3 = st.columns(3)
+        st.markdown("---")
         
+        # Show loaded book info
+        book_data = st.session_state.loaded_analysis
+        book_info = book_data.get('book_info', {})
+        if isinstance(book_info, dict) and 'book_info' in book_info:
+            book_info = book_info['book_info']
+        
+        title = book_info.get('title', 'Unknown')
+        genre = book_info.get('genre', 'Unknown')
+        
+        st.success(f"✅ Loaded: **{title}** ({genre})")
+        
+        # Generate button
+        col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("🎬 GENERATE ALL ASSETS", type="primary", use_container_width=True):
-                with st.spinner("Generating marketing assets... (30-45 seconds)"):
+            if st.button("🎬 GENERATE MARKETING ASSETS", type="primary", use_container_width=True):
+                with st.spinner("Generating assets... (30-45 seconds)"):
                     client = OpenAI(api_key=st.session_state.openai_api_key)
                     assets = generate_marketing_assets(client, st.session_state.loaded_analysis)
                     
@@ -116,17 +106,17 @@ with col2:
                         st.rerun()
         
         with col2:
-            if st.session_state.generated_assets and st.button("🔄 Regenerate", use_container_width=True):
-                st.session_state.generated_assets = None
-                st.session_state.edited_assets = None
-                st.rerun()
+            if st.session_state.generated_assets:
+                if st.button("🔄 Regenerate Assets", use_container_width=True):
+                    st.session_state.generated_assets = None
+                    st.session_state.edited_assets = None
+                    st.rerun()
         
         with col3:
             if st.session_state.edited_assets:
-                # Export edited assets
                 export_data = json.dumps(st.session_state.edited_assets, indent=2)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"marketing_assets_{timestamp}.json"
+                filename = f"{title.replace(' ', '_')}_assets_{timestamp}.json"
                 
                 st.download_button(
                     "📥 Export Assets",
@@ -135,157 +125,305 @@ with col2:
                     "application/json",
                     use_container_width=True
                 )
-    
-    # Display assets if generated
-    if st.session_state.generated_assets and st.session_state.edited_assets:
-        st.markdown("---")
-        st.success("✅ Assets generated! Edit them below.")
         
-        # Tabs for different platforms
-        platform_tabs = st.tabs([
-            "📝 Blurb", "🎬 TikTok", "📸 Instagram", "🛒 Amazon", 
-            "📧 Email", "📢 Facebook", "📰 Press", "📌 Pinterest", "📚 Goodreads", "🎙️ Podcast"
-        ])
+        # ============================================================================
+        # ASSET DISPLAY AND EDITING SECTION (Full width tabs)
+        # ============================================================================
         
-        edited = st.session_state.edited_assets
-        
-        with platform_tabs[0]:
-            st.markdown("### 📝 Book Blurb")
-            edited['blurb'] = st.text_area("Edit your blurb", edited.get('blurb', ''), height=200)
-        
-        with platform_tabs[1]:
-            st.markdown("### 🎬 TikTok Scripts")
-            for i, script in enumerate(edited.get('tiktok_scripts', [])):
-                with st.expander(f"Script {i+1}"):
-                    if isinstance(script, dict):
-                        for key, value in script.items():
-                            if key == 'hashtags' and isinstance(value, list):
-                                tag_string = ' '.join(value)
-                                edited_tags = st.text_input(f"{key.title()}", tag_string, key=f"tiktok_{i}_{key}")
-                                script[key] = edited_tags.split()
-                            else:
-                                script[key] = st.text_input(f"{key.title()}", str(value), key=f"tiktok_{i}_{key}")
-        
-        with platform_tabs[2]:
-            st.markdown("### 📸 Instagram")
-            insta = edited.get('instagram', {})
-            if insta.get('posts'):
-                for j, post in enumerate(insta['posts']):
-                    with st.expander(f"Post {j+1}"):
-                        if isinstance(post, dict):
-                            for key, value in post.items():
-                                if key == 'hashtags' and isinstance(value, list):
-                                    tag_string = ' '.join(value)
-                                    edited_tags = st.text_input(f"{key.title()}", tag_string, key=f"insta_post_{j}_{key}")
-                                    post[key] = edited_tags.split()
-                                else:
-                                    post[key] = st.text_input(f"{key.title()}", str(value), key=f"insta_post_{j}_{key}")
-        
-        with platform_tabs[3]:
-            st.markdown("### 🛒 Amazon")
-            amazon = edited.get('amazon', {})
-            if isinstance(amazon, dict):
-                for key, value in amazon.items():
-                    if key == 'search_terms' and isinstance(value, list):
-                        term_string = ', '.join(value)
-                        edited_terms = st.text_input(f"{key.replace('_', ' ').title()}", term_string, key=f"amazon_{key}")
-                        amazon[key] = [t.strip() for t in edited_terms.split(',')]
-                    elif key == 'categories' and isinstance(value, list):
-                        cat_string = ', '.join(value)
-                        edited_cats = st.text_input(f"{key.title()}", cat_string, key=f"amazon_{key}")
-                        amazon[key] = [c.strip() for c in edited_cats.split(',')]
-                    elif isinstance(value, dict):
-                        st.json(value)
-                    else:
-                        amazon[key] = st.text_input(f"{key.replace('_', ' ').title()}", str(value), key=f"amazon_{key}")
-        
-        with platform_tabs[4]:
-            st.markdown("### 📧 Email Sequence")
-            emails = edited.get('email_sequence', {})
-            for name, email in emails.items():
-                with st.expander(f"📨 {name.title()}"):
-                    if isinstance(email, dict):
-                        for key, value in email.items():
-                            email[key] = st.text_area(f"{key.title()}", str(value), height=100 if key == 'body' else 50, key=f"email_{name}_{key}")
-        
-        with platform_tabs[5]:
-            st.markdown("### 📢 Facebook Ads")
-            for i, ad in enumerate(edited.get('facebook_ads', [])):
-                with st.expander(f"Ad {i+1}"):
-                    if isinstance(ad, dict):
-                        for key, value in ad.items():
-                            ad[key] = st.text_input(f"{key.title()}", str(value), key=f"fb_ad_{i}_{key}")
-        
-        with platform_tabs[6]:
-            st.markdown("### 📰 Press Kit")
-            press = edited.get('press_kit', {})
-            if isinstance(press, dict):
-                for key, value in press.items():
-                    if key == 'author_qanda' and isinstance(value, list):
-                        for j, qa in enumerate(value):
-                            with st.expander(f"Q&A {j+1}"):
-                                if isinstance(qa, dict):
-                                    qa['question'] = st.text_input("Question", qa.get('question', ''), key=f"press_qa_{j}_q")
-                                    qa['answer'] = st.text_area("Answer", qa.get('answer', ''), height=80, key=f"press_qa_{j}_a")
-                    elif key == 'key_talking_points' and isinstance(value, list):
-                        point_string = '\n'.join(value)
-                        edited_points = st.text_area("Key Talking Points", point_string, height=100, key=f"press_{key}")
-                        press[key] = edited_points.split('\n')
-                    else:
-                        press[key] = st.text_area(f"{key.replace('_', ' ').title()}", str(value), height=100, key=f"press_{key}")
-        
-        with platform_tabs[7]:
-            st.markdown("### 📌 Pinterest")
-            pinterest = edited.get('pinterest', {})
-            if isinstance(pinterest, dict):
-                for key, value in pinterest.items():
-                    if isinstance(value, list):
-                        list_string = '\n'.join(value)
-                        edited_list = st.text_area(f"{key.replace('_', ' ').title()}", list_string, height=80, key=f"pinterest_{key}")
-                        pinterest[key] = edited_list.split('\n')
-                    else:
-                        pinterest[key] = st.text_input(f"{key.replace('_', ' ').title()}", str(value), key=f"pinterest_{key}")
-        
-        with platform_tabs[8]:
-            st.markdown("### 📚 Goodreads")
-            goodreads = edited.get('goodreads', {})
-            if isinstance(goodreads, dict):
-                for key, value in goodreads.items():
-                    if isinstance(value, list):
-                        list_string = '\n'.join(value)
-                        edited_list = st.text_area(f"{key.replace('_', ' ').title()}", list_string, height=80, key=f"goodreads_{key}")
-                        goodreads[key] = edited_list.split('\n')
-                    else:
-                        goodreads[key] = st.text_area(f"{key.replace('_', ' ').title()}", str(value), height=100, key=f"goodreads_{key}")
-        
-        with platform_tabs[9]:
-            st.markdown("### 🎙️ Podcast Pitch")
-            podcast = edited.get('podcast_pitch', {})
-            if isinstance(podcast, dict):
-                for key, value in podcast.items():
-                    if isinstance(value, list):
-                        list_string = '\n'.join(value)
-                        edited_list = st.text_area(f"{key.replace('_', ' ').title()}", list_string, height=80, key=f"podcast_{key}")
-                        podcast[key] = edited_list.split('\n')
-                    else:
-                        podcast[key] = st.text_area(f"{key.replace('_', ' ').title()}", str(value), height=100, key=f"podcast_{key}")
-        
-        st.success("✅ Edits saved in current session")
-        
-        # Copy to clipboard buttons (simulated)
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("📋 Copy Blurb"):
-                st.info("Blurb copied to clipboard (simulated)")
-        with col2:
-            if st.button("📋 Copy All"):
-                st.info("All assets copied (simulated)")
-        with col3:
-            if st.button("🔄 New Book"):
-                st.session_state.loaded_analysis = None
-                st.session_state.generated_assets = None
-                st.session_state.edited_assets = None
-                st.rerun()
+        if st.session_state.generated_assets and st.session_state.edited_assets:
+            st.markdown("---")
+            st.success("✅ Assets generated! Edit them below.")
+            
+            edited = st.session_state.edited_assets
+            
+            # Create tabs for each platform
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+                "📝 Blurb", "🎬 TikTok", "📸 Instagram", "🛒 Amazon", 
+                "📧 Email", "📢 Facebook", "📰 Press Kit", "📌 Pinterest", 
+                "📚 Goodreads", "🎙️ Podcast"
+            ])
+            
+            # Tab 1: Blurb
+            with tab1:
+                st.markdown("### 📝 Book Blurb")
+                edited['blurb'] = st.text_area(
+                    "Edit your blurb", 
+                    edited.get('blurb', ''), 
+                    height=200,
+                    key="blurb_editor"
+                )
+            
+            # Tab 2: TikTok Scripts
+            with tab2:
+                st.markdown("### 🎬 TikTok Scripts")
+                scripts = edited.get('tiktok_scripts', [])
+                if scripts:
+                    for i, script in enumerate(scripts):
+                        with st.expander(f"Script {i+1}", expanded=i==0):
+                            if isinstance(script, dict):
+                                for key, value in script.items():
+                                    if key == 'hashtags' and isinstance(value, list):
+                                        tag_string = ' '.join(value)
+                                        edited_tags = st.text_input(
+                                            f"{key.title()}", 
+                                            tag_string, 
+                                            key=f"tiktok_{i}_{key}"
+                                        )
+                                        script[key] = edited_tags.split()
+                                    else:
+                                        script[key] = st.text_input(
+                                            f"{key.title()}", 
+                                            str(value), 
+                                            key=f"tiktok_{i}_{key}"
+                                        )
+                else:
+                    st.info("No TikTok scripts generated")
+            
+            # Tab 3: Instagram
+            with tab3:
+                st.markdown("### 📸 Instagram")
+                insta = edited.get('instagram', {})
+                
+                if insta.get('posts'):
+                    st.markdown("**Posts:**")
+                    for j, post in enumerate(insta['posts']):
+                        with st.expander(f"Post {j+1}"):
+                            if isinstance(post, dict):
+                                for key, value in post.items():
+                                    if key == 'hashtags' and isinstance(value, list):
+                                        tag_string = ' '.join(value)
+                                        edited_tags = st.text_input(
+                                            f"{key.title()}", 
+                                            tag_string, 
+                                            key=f"insta_post_{j}_{key}"
+                                        )
+                                        post[key] = edited_tags.split()
+                                    else:
+                                        post[key] = st.text_input(
+                                            f"{key.title()}", 
+                                            str(value), 
+                                            key=f"insta_post_{j}_{key}"
+                                        )
+                
+                if insta.get('reels'):
+                    st.markdown("**Reels:**")
+                    for j, reel in enumerate(insta['reels']):
+                        with st.expander(f"Reel {j+1}"):
+                            if isinstance(reel, dict):
+                                for key, value in reel.items():
+                                    reel[key] = st.text_input(
+                                        f"{key.title()}", 
+                                        str(value), 
+                                        key=f"insta_reel_{j}_{key}"
+                                    )
+            
+            # Tab 4: Amazon
+            with tab4:
+                st.markdown("### 🛒 Amazon")
+                amazon = edited.get('amazon', {})
+                if isinstance(amazon, dict):
+                    # A+ Content
+                    if 'a_plus_content' in amazon:
+                        with st.expander("A+ Content", expanded=True):
+                            ap = amazon['a_plus_content']
+                            ap['title'] = st.text_input("Title", ap.get('title', ''), key="amazon_ap_title")
+                            ap['description'] = st.text_area("Description", ap.get('description', ''), height=100, key="amazon_ap_desc")
+                            
+                            features = ap.get('key_features', [])
+                            for f_idx, feature in enumerate(features):
+                                features[f_idx] = st.text_input(f"Feature {f_idx+1}", feature, key=f"amazon_feat_{f_idx}")
+                    
+                    # Search Terms
+                    with st.expander("Search Terms", expanded=True):
+                        terms = amazon.get('search_terms', [])
+                        term_string = ', '.join(terms)
+                        edited_terms = st.text_input("Keywords (comma separated)", term_string, key="amazon_terms")
+                        amazon['search_terms'] = [t.strip() for t in edited_terms.split(',') if t.strip()]
+                    
+                    # Categories
+                    cats = amazon.get('categories', [])
+                    cat_string = ', '.join(cats)
+                    edited_cats = st.text_input("Categories (comma separated)", cat_string, key="amazon_cats")
+                    amazon['categories'] = [c.strip() for c in edited_cats.split(',') if c.strip()]
+                    
+                    # Author Bio
+                    amazon['author_bio'] = st.text_area("Author Bio", amazon.get('author_bio', ''), height=150, key="amazon_bio")
+            
+            # Tab 5: Email
+            with tab5:
+                st.markdown("### 📧 Email Sequence")
+                emails = edited.get('email_sequence', {})
+                for name, email in emails.items():
+                    with st.expander(f"📨 {name.title()} Email"):
+                        if isinstance(email, dict):
+                            email['subject'] = st.text_input(
+                                "Subject", 
+                                email.get('subject', ''), 
+                                key=f"email_{name}_subject"
+                            )
+                            email['body'] = st.text_area(
+                                "Body", 
+                                email.get('body', ''), 
+                                height=150,
+                                key=f"email_{name}_body"
+                            )
+            
+            # Tab 6: Facebook Ads
+            with tab6:
+                st.markdown("### 📢 Facebook Ads")
+                ads = edited.get('facebook_ads', [])
+                if ads:
+                    for i, ad in enumerate(ads):
+                        with st.expander(f"Ad {i+1}"):
+                            if isinstance(ad, dict):
+                                for key, value in ad.items():
+                                    ad[key] = st.text_input(
+                                        f"{key.title()}", 
+                                        str(value), 
+                                        key=f"fb_ad_{i}_{key}"
+                                    )
+                else:
+                    st.info("No Facebook ads generated")
+            
+            # Tab 7: Press Kit
+            with tab7:
+                st.markdown("### 📰 Press Kit")
+                press = edited.get('press_kit', {})
+                
+                if 'press_release' in press:
+                    press['press_release'] = st.text_area(
+                        "Press Release", 
+                        press.get('press_release', ''), 
+                        height=200,
+                        key="press_release"
+                    )
+                
+                if 'key_talking_points' in press:
+                    points = press.get('key_talking_points', [])
+                    point_string = '\n'.join(points)
+                    edited_points = st.text_area(
+                        "Key Talking Points (one per line)", 
+                        point_string, 
+                        height=100,
+                        key="press_points"
+                    )
+                    press['key_talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
+                
+                if 'author_qanda' in press:
+                    qas = press.get('author_qanda', [])
+                    for j, qa in enumerate(qas):
+                        with st.expander(f"Q&A {j+1}"):
+                            if isinstance(qa, dict):
+                                qa['question'] = st.text_input(
+                                    "Question", 
+                                    qa.get('question', ''), 
+                                    key=f"press_qa_{j}_q"
+                                )
+                                qa['answer'] = st.text_area(
+                                    "Answer", 
+                                    qa.get('answer', ''), 
+                                    height=80,
+                                    key=f"press_qa_{j}_a"
+                                )
+            
+            # Tab 8: Pinterest
+            with tab8:
+                st.markdown("### 📌 Pinterest")
+                pinterest = edited.get('pinterest', {})
+                
+                if 'pin_descriptions' in pinterest:
+                    pins = pinterest.get('pin_descriptions', [])
+                    pin_string = '\n'.join(pins)
+                    edited_pins = st.text_area(
+                        "Pin Descriptions (one per line)", 
+                        pin_string, 
+                        height=100,
+                        key="pinterest_pins"
+                    )
+                    pinterest['pin_descriptions'] = [p.strip() for p in edited_pins.split('\n') if p.strip()]
+                
+                if 'board_ideas' in pinterest:
+                    boards = pinterest.get('board_ideas', [])
+                    board_string = '\n'.join(boards)
+                    edited_boards = st.text_area(
+                        "Board Ideas (one per line)", 
+                        board_string, 
+                        height=100,
+                        key="pinterest_boards"
+                    )
+                    pinterest['board_ideas'] = [b.strip() for b in edited_boards.split('\n') if b.strip()]
+            
+            # Tab 9: Goodreads
+            with tab9:
+                st.markdown("### 📚 Goodreads")
+                goodreads = edited.get('goodreads', {})
+                
+                if 'giveaway_description' in goodreads:
+                    goodreads['giveaway_description'] = st.text_area(
+                        "Giveaway Description", 
+                        goodreads.get('giveaway_description', ''), 
+                        height=150,
+                        key="goodreads_giveaway"
+                    )
+                
+                if 'discussion_questions' in goodreads:
+                    questions = goodreads.get('discussion_questions', [])
+                    q_string = '\n'.join(questions)
+                    edited_qs = st.text_area(
+                        "Discussion Questions (one per line)", 
+                        q_string, 
+                        height=100,
+                        key="goodreads_questions"
+                    )
+                    goodreads['discussion_questions'] = [q.strip() for q in edited_qs.split('\n') if q.strip()]
+                
+                if 'similar_books' in goodreads:
+                    similar = goodreads.get('similar_books', [])
+                    s_string = '\n'.join(similar)
+                    edited_similar = st.text_area(
+                        "Similar Books (one per line)", 
+                        s_string, 
+                        height=100,
+                        key="goodreads_similar"
+                    )
+                    goodreads['similar_books'] = [s.strip() for s in edited_similar.split('\n') if s.strip()]
+            
+            # Tab 10: Podcast
+            with tab10:
+                st.markdown("### 🎙️ Podcast Pitch")
+                podcast = edited.get('podcast_pitch', {})
+                
+                if 'pitch_email' in podcast:
+                    podcast['pitch_email'] = st.text_area(
+                        "Pitch Email", 
+                        podcast.get('pitch_email', ''), 
+                        height=200,
+                        key="podcast_email"
+                    )
+                
+                if 'talking_points' in podcast:
+                    points = podcast.get('talking_points', [])
+                    point_string = '\n'.join(points)
+                    edited_points = st.text_area(
+                        "Talking Points (one per line)", 
+                        point_string, 
+                        height=100,
+                        key="podcast_points"
+                    )
+                    podcast['talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
+                
+                if 'podcast_ideas' in podcast:
+                    ideas = podcast.get('podcast_ideas', [])
+                    idea_string = '\n'.join(ideas)
+                    edited_ideas = st.text_area(
+                        "Podcast Episode Ideas (one per line)", 
+                        idea_string, 
+                        height=100,
+                        key="podcast_ideas"
+                    )
+                    podcast['podcast_ideas'] = [i.strip() for i in edited_ideas.split('\n') if i.strip()]
+            
+            st.success("✅ Edits saved in current session")
 
 
 def generate_marketing_assets(client, analysis_data):
@@ -293,6 +431,9 @@ def generate_marketing_assets(client, analysis_data):
     
     # Extract the actual analysis
     book_analysis = analysis_data.get('book_info', {})
+    if isinstance(book_analysis, dict) and 'book_info' in book_analysis:
+        book_analysis = book_analysis['book_info']
+    
     cover_analysis = analysis_data.get('cover_analysis', {})
     
     prompt = f"""
