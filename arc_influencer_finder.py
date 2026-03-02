@@ -75,12 +75,29 @@ def get_all_genres():
         st.error(f"Error fetching genres: {e}")
         return ["All"]
 
+@st.cache_data(ttl=300)
+def get_total_count():
+    """Get total number of records in database"""
+    conn = get_db_connection()
+    if not conn:
+        return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM arc_readers_central")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return count
+    except Exception as e:
+        st.error(f"Error counting records: {e}")
+        return 0
+
 def find_advocates(role_type="any", selected_platforms=None, selected_genre="All", min_followers=0, search_term=""):
     """
     Find ARC readers and/or influencers based on filters
     
     Args:
-        role_type: "arc", "influencer", or "both"
+        role_type: "any", "arc", "influencer", or "both"
         selected_platforms: list of platforms to filter by
         selected_genre: genre to filter by
         min_followers: minimum follower count
@@ -106,15 +123,17 @@ def find_advocates(role_type="any", selected_platforms=None, selected_genre="All
         elif role_type == "influencer":
             query += " AND roles @> '[\"Influencer\"]'::jsonb"
         elif role_type == "both":
-            query += " AND roles @> '[\"ARC Reader\", \"Influencer\"]'::jsonb"
+            query += " AND roles @> '[\"ARC Reader\"]'::jsonb AND roles @> '[\"Influencer\"]'::jsonb"
         
         # Filter by platforms
         if selected_platforms and len(selected_platforms) > 0:
-            placeholders = []
-            for platform in selected_platforms:
-                placeholders.append("platforms ? %s")
-                params.append(platform)
-            query += " AND (" + " OR ".join(placeholders) + ")"
+            # If "All Platforms" is selected or it's empty, don't filter
+            if "All" not in selected_platforms:
+                placeholders = []
+                for platform in selected_platforms:
+                    placeholders.append("platforms ? %s")
+                    params.append(platform)
+                query += " AND (" + " OR ".join(placeholders) + ")"
         
         # Filter by genre
         if selected_genre and selected_genre != "All":
@@ -161,72 +180,81 @@ def render_finder():
     st.title("🔍 ARC Reader & Influencer Finder")
     st.markdown("### Find the perfect advocates for your book")
     
+    # Get total count for reference
+    total_count = get_total_count()
+    st.caption(f"Total in database: {total_count} advocates")
+    
     # Get filter options
     platforms = get_unique_platforms()
+    platform_options = ["All"] + platforms if platforms else ["All"]
+    
     genres = get_all_genres()
     
-    # Create filters in sidebar
-    with st.sidebar:
-        st.markdown("## 🔎 Filter Advocates")
-        
-        role_filter = st.radio(
-            "Who are you looking for?",
+    # Create filters in main area (not sidebar)
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        role_filter = st.selectbox(
+            "👤 Role",
             options=["any", "arc", "influencer", "both"],
             format_func=lambda x: {
                 "any": "🎭 Anyone",
                 "arc": "📚 ARC Readers Only",
                 "influencer": "📢 Influencers Only",
-                "both": "⭐ ARC Readers who are also Influencers"
+                "both": "⭐ Both (ARC + Influencer)"
             }[x],
             index=0
         )
-        
-        st.markdown("---")
-        
+    
+    with col2:
         platform_filter = st.multiselect(
-            "Platforms they use",
-            options=platforms,
-            default=[]
+            "📱 Platforms",
+            options=platform_options,
+            default=["All"],
+            help="Select specific platforms or leave 'All' for any"
         )
-        
-        st.markdown("---")
-        
+    
+    with col3:
         genre_filter = st.selectbox(
-            "Genre",
+            "📚 Genre",
             options=genres,
             index=0
         )
-        
-        st.markdown("---")
-        
+    
+    # Second row - follower slider and search
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
         min_followers = st.slider(
-            "Minimum followers",
+            "👥 Minimum followers",
             min_value=0,
-            max_value=100000,
-            value=1000,
-            step=1000
-        )
-        
-        st.markdown("---")
-        
-        search_term = st.text_input(
-            "🔍 Search in username or bio",
-            placeholder="e.g., fantasy, romance, arc..."
+            max_value=50000,
+            value=0,
+            step=1000,
+            help="Filter by minimum follower count"
         )
     
-    # Main content area
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown(f"### Results")
     with col2:
+        search_term = st.text_input(
+            "🔍 Search by username or bio",
+            placeholder="e.g., fantasy, romance, arc...",
+            help="Search in usernames and bios"
+        )
+    
+    # Search button
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
         search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+    
+    st.markdown("---")
     
     # Perform search when button clicked
     if search_button:
         with st.spinner("Searching for advocates..."):
             results = find_advocates(
                 role_type=role_filter,
-                selected_platforms=platform_filter if platform_filter else None,
+                selected_platforms=None if "All" in platform_filter else platform_filter,
                 selected_genre=genre_filter,
                 min_followers=min_followers,
                 search_term=search_term
@@ -235,9 +263,30 @@ def render_finder():
         if results:
             st.success(f"✅ Found {len(results)} advocates matching your criteria")
             
+            # Summary stats
+            arc_count = sum(1 for r in results if "ARC Reader" in r.get('roles', []))
+            inf_count = sum(1 for r in results if "Influencer" in r.get('roles', []))
+            both_count = sum(1 for r in results if "ARC Reader" in r.get('roles', []) and "Influencer" in r.get('roles', []))
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total", len(results))
+            col2.metric("ARC Readers", arc_count)
+            col3.metric("Influencers", inf_count)
+            col4.metric("Both", both_count)
+            
+            st.markdown("---")
+            
             # Display results
             for advocate in results:
-                with st.expander(f"**@{advocate['username']}** - {advocate['follower_count']:,} followers"):
+                # Determine role icons
+                role_icons = []
+                if "ARC Reader" in advocate.get('roles', []):
+                    role_icons.append("📚 ARC")
+                if "Influencer" in advocate.get('roles', []):
+                    role_icons.append("📢 INF")
+                role_display = " | ".join(role_icons) if role_icons else "❓ Unknown"
+                
+                with st.expander(f"**@{advocate['username']}** - {advocate['follower_count']:,} followers | {role_display}"):
                     col1, col2, col3 = st.columns([3, 1, 1])
                     
                     with col1:
@@ -246,28 +295,21 @@ def render_finder():
                             st.markdown(f"**Bio:** {advocate['bio'][:200]}..." if len(advocate['bio']) > 200 else f"**Bio:** {advocate['bio']}")
                         
                         # Show platforms
-                        if advocate['platforms']:
+                        if advocate.get('platforms') and len(advocate['platforms']) > 0:
                             platform_badges = ", ".join([f"`{p}`" for p in advocate['platforms']])
                             st.markdown(f"**Platforms:** {platform_badges}")
+                        else:
+                            st.markdown("**Platforms:** `Not specified`")
                         
-                        # Show roles
-                        if advocate['roles']:
-                            role_icons = []
-                            if "ARC Reader" in advocate['roles']:
-                                role_icons.append("📚 ARC Reader")
-                            if "Influencer" in advocate['roles']:
-                                role_icons.append("📢 Influencer")
-                            st.markdown(f"**Role:** {' + '.join(role_icons)}")
-                        
-                        # Show genres
-                        if advocate['genres']:
-                            genre_preview = advocate['genres'][:5]
+                        # Show genres (first 8)
+                        if advocate.get('genres') and len(advocate['genres']) > 0:
+                            genre_preview = advocate['genres'][:8]
                             genre_text = ", ".join(genre_preview)
-                            if len(advocate['genres']) > 5:
-                                genre_text += f" +{len(advocate['genres'])-5} more"
+                            if len(advocate['genres']) > 8:
+                                genre_text += f" +{len(advocate['genres'])-8} more"
                             st.markdown(f"**Genres:** {genre_text}")
                         
-                        if advocate['email']:
+                        if advocate.get('email'):
                             st.success(f"📧 {advocate['email']}")
                     
                     with col2:
@@ -285,14 +327,41 @@ def render_finder():
                             st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
                     
                     with col3:
-                        if advocate['email']:
-                            st.button("📤 Contact", key=f"contact_{advocate['id']}", 
+                        if advocate.get('email'):
+                            st.button("📤 Email", key=f"email_{advocate['id']}", 
                                     help=f"Email: {advocate['email']}")
                         else:
                             st.button("🔗 DM", key=f"dm_{advocate['id']}", 
                                     help="No email. Try social media DM.")
         else:
             st.warning("No advocates found matching your criteria. Try widening your filters.")
+    else:
+        # Show preview of recent advocates
+        st.markdown("### 👀 Recent Advocates (Top 10 by followers)")
+        preview = find_advocates(min_followers=0)[:10]
+        
+        for advocate in preview:
+            # Determine role icons
+            role_icons = []
+            if "ARC Reader" in advocate.get('roles', []):
+                role_icons.append("📚 ARC")
+            if "Influencer" in advocate.get('roles', []):
+                role_icons.append("📢 INF")
+            role_display = " | ".join(role_icons) if role_icons else "❓ Unknown"
+            
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.markdown(f"**@{advocate['username']}** - {advocate['follower_count']:,} followers | {role_display}")
+                if advocate.get('platforms') and len(advocate['platforms']) > 0:
+                    st.caption(f"Platforms: {', '.join(advocate['platforms'])}")
+            with col2:
+                is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
+                if not is_saved:
+                    if st.button("❤️", key=f"preview_save_{advocate['id']}"):
+                        if 'saved_readers' not in st.session_state:
+                            st.session_state.saved_readers = []
+                        st.session_state.saved_readers.append(advocate)
+                        st.rerun()
     
     # Show saved count in sidebar
     st.sidebar.markdown("---")
