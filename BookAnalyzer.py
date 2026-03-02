@@ -52,6 +52,35 @@ def show_analyzer():
     if 'current_book_id' not in st.session_state:
         st.session_state.current_book_id = None
     
+    # ============================================================================
+    # AUTO-LOAD MOST RECENT ANALYSIS IF LOGGED IN
+    # ============================================================================
+    if st.session_state.get('authenticated', False) and not st.session_state.analysis_result:
+        try:
+            conn = get_db_connection()
+            if conn:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute("""
+                    SELECT * FROM user_book_analyses 
+                    WHERE user_id = %s 
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                """, (st.session_state.user_id,))
+                latest = cur.fetchone()
+                if latest:
+                    # Load the analysis into session state
+                    analysis_result = latest['analysis_result']
+                    if isinstance(analysis_result, str):
+                        analysis_result = json.loads(analysis_result)
+                    st.session_state.analysis_result = analysis_result
+                    st.session_state.analysis_complete = True
+                    st.session_state.current_book_id = f"loaded_{latest['id']}"
+                    st.success(f"✅ Loaded your most recent analysis: {latest['book_title']}")
+                cur.close()
+                conn.close()
+        except Exception as e:
+            st.error(f"Error loading saved analysis: {e}")
+    
     # Header
     st.title("📖 Book Analyzer with Marketability Dashboard")
     st.markdown("Upload your manuscript and cover for deep literary analysis with **commercial potential scoring**")
