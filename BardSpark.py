@@ -224,7 +224,7 @@ menu_options = [
     "🎨 Marketing Assets",
     "🎬 Video Generator",
     "📊 Competitor Tracker",
-    "🧠 Author Persona"
+    "🧠 Author Persona",
     "🌐 Website Builder"
 ]
 
