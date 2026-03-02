@@ -392,39 +392,83 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-                    # Save button - WITH DATABASE SAVING
+                    # ============================================================================
+                    # SAVE BUTTON WITH MAXIMUM DEBUGGING
+                    # ============================================================================
+                    st.markdown("---")
+                    st.markdown("**🔍 DEBUG INFORMATION:**")
+                    
                     col_a, col_b, col_c = st.columns([1, 1, 3])
                     with col_a:
                         is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
                         
                         if not is_saved:
                             if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+                                st.write("=== SAVE BUTTON CLICKED ===")
+                                st.write(f"**Step 1:** Button clicked for @{advocate['username']}")
+                                st.write(f"**Step 2:** Authenticated = {st.session_state.get('authenticated', False)}")
+                                st.write(f"**Step 3:** User ID = {st.session_state.get('user_id', 'None')}")
+                                st.write(f"**Step 4:** Advocate ID = {advocate['id']}")
+                                
                                 if st.session_state.get('authenticated', False):
-                                    # Save to database
+                                    st.write("**Step 5:** User is authenticated - attempting database connection")
                                     conn = get_db_connection()
+                                    st.write(f"**Step 6:** Database connection = {'SUCCESS' if conn else 'FAILED'}")
+                                    
                                     if conn:
+                                        st.write("**Step 7:** Connection successful - creating cursor")
                                         cur = conn.cursor()
                                         try:
+                                            st.write("**Step 8:** Executing INSERT query...")
+                                            st.code(f"""
+                                            INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                                            VALUES ({st.session_state.user_id}, {advocate['id']}, {datetime.now()})
+                                            ON CONFLICT (user_id, reader_id) DO NOTHING
+                                            """)
+                                            
                                             cur.execute("""
                                                 INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
                                                 VALUES (%s, %s, %s)
                                                 ON CONFLICT (user_id, reader_id) DO NOTHING
                                             """, (st.session_state.user_id, advocate['id'], datetime.now()))
+                                            
+                                            st.write("**Step 9:** INSERT executed - attempting commit")
                                             conn.commit()
+                                            st.write("**Step 10:** COMMIT successful")
                                             
                                             # Update session state
+                                            st.write("**Step 11:** Updating session state")
                                             if 'saved_readers' not in st.session_state:
                                                 st.session_state.saved_readers = []
                                             st.session_state.saved_readers.append(advocate)
-                                            st.success(f"✅ @{advocate['username']} saved!")
+                                            
+                                            st.write("**Step 12:** Save complete - showing success message")
+                                            st.success(f"✅ @{advocate['username']} saved to database!")
+                                            
+                                            # Verify by checking database
+                                            st.write("**Step 13:** Verifying save...")
+                                            verify_cur = conn.cursor()
+                                            verify_cur.execute("""
+                                                SELECT * FROM user_saved_arc_readers 
+                                                WHERE user_id = %s AND reader_id = %s
+                                            """, (st.session_state.user_id, advocate['id']))
+                                            verify_result = verify_cur.fetchone()
+                                            st.write(f"**Step 14:** Verification result = {verify_result}")
+                                            verify_cur.close()
+                                            
                                             st.rerun()
                                         except Exception as e:
-                                            st.error(f"Error saving: {e}")
+                                            st.error(f"❌ Database error: {str(e)}")
+                                            st.write(f"**Error type:** {type(e).__name__}")
+                                            st.write(f"**Error details:** {e}")
                                         finally:
                                             cur.close()
                                             conn.close()
+                                            st.write("**Step 15:** Database connection closed")
+                                    else:
+                                        st.error("❌ Could not connect to database")
                                 else:
-                                    st.warning("Please login to save readers")
+                                    st.warning("⚠️ Please login to save readers")
                         else:
                             st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
         else:
