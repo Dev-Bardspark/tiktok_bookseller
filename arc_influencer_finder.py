@@ -30,24 +30,58 @@ def get_db_connection():
 # DATA FUNCTIONS
 # ============================================================================
 @st.cache_data(ttl=300)
-def get_unique_platforms():
-    """Get all unique platforms that appear in the database"""
+def get_platforms_with_counts():
+    """Get all possible platforms with count of advocates on each"""
     conn = get_db_connection()
     if not conn:
         return []
     
     try:
         cur = conn.cursor()
+        
+        # First, get all platforms that actually appear
         cur.execute("""
-            SELECT DISTINCT jsonb_array_elements_text(platforms) as platform
-            FROM arc_readers_central
-            WHERE platforms != '[]'::jsonb
+            SELECT 
+                platform,
+                COUNT(*) as count
+            FROM (
+                SELECT jsonb_array_elements_text(platforms) as platform
+                FROM arc_readers_central
+                WHERE platforms != '[]'::jsonb
+            ) p
+            GROUP BY platform
             ORDER BY platform
         """)
-        platforms = [row[0] for row in cur.fetchall()]
+        results = cur.fetchall()
+        
+        # Build dictionary of all platforms (including ones with 0)
+        platform_counts = {}
+        
+        # Master list of ALL possible platforms (from your earlier list)
+        all_platforms = [
+            "TikTok", "Instagram", "YouTube", "Goodreads", "X (Twitter)", 
+            "Facebook", "Bluesky", "StoryGraph", "Amazon", "BookBub",
+            "NetGalley", "BookSirens", "Booksprout", "Pinterest", "Discord",
+            "Patreon", "Ream", "Email Newsletter", "Author Website"
+        ]
+        
+        # Initialize all with 0
+        for platform in all_platforms:
+            platform_counts[platform] = 0
+        
+        # Update with actual counts
+        for platform, count in results:
+            if platform in platform_counts:
+                platform_counts[platform] = count
+        
+        # Convert to list of tuples for display
+        platforms_with_counts = [(p, c) for p, c in platform_counts.items()]
+        platforms_with_counts.sort(key=lambda x: x[1], reverse=True)  # Sort by count descending
+        
         cur.close()
         conn.close()
-        return platforms
+        return platforms_with_counts
+        
     except Exception as e:
         st.error(f"Error fetching platforms: {e}")
         return []
@@ -127,13 +161,11 @@ def find_advocates(role_type="any", selected_platforms=None, selected_genre="All
         
         # Filter by platforms
         if selected_platforms and len(selected_platforms) > 0:
-            # If "All Platforms" is selected or it's empty, don't filter
-            if "All" not in selected_platforms:
-                placeholders = []
-                for platform in selected_platforms:
-                    placeholders.append("platforms ? %s")
-                    params.append(platform)
-                query += " AND (" + " OR ".join(placeholders) + ")"
+            placeholders = []
+            for platform in selected_platforms:
+                placeholders.append("platforms ? %s")
+                params.append(platform)
+            query += " AND (" + " OR ".join(placeholders) + ")"
         
         # Filter by genre
         if selected_genre and selected_genre != "All":
@@ -184,13 +216,14 @@ def render_finder():
     total_count = get_total_count()
     st.caption(f"Total in database: {total_count} advocates")
     
-    # Get filter options
-    platforms = get_unique_platforms()
-    platform_options = ["All"] + platforms if platforms else ["All"]
+    # Get platforms with counts
+    platforms_with_counts = get_platforms_with_counts()
+    platform_options = [f"{p} ({c})" for p, c in platforms_with_counts]
+    platform_values = [p for p, c in platforms_with_counts]
     
     genres = get_all_genres()
     
-    # Create filters in main area (not sidebar)
+    # Create filters in main area
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     
@@ -208,12 +241,18 @@ def render_finder():
         )
     
     with col2:
-        platform_filter = st.multiselect(
+        platform_filter_display = st.multiselect(
             "📱 Platforms",
             options=platform_options,
-            default=["All"],
-            help="Select specific platforms or leave 'All' for any"
+            default=[],
+            help="Select specific platforms to filter by"
         )
+        # Convert display strings back to platform names
+        platform_filter = []
+        for item in platform_filter_display:
+            # Extract platform name before the (count)
+            platform_name = item.split(" (")[0]
+            platform_filter.append(platform_name)
     
     with col3:
         genre_filter = st.selectbox(
@@ -249,12 +288,28 @@ def render_finder():
     
     st.markdown("---")
     
+    # Show platform summary
+    with st.expander("📊 Platform Summary (click to expand)"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Top Platforms:**")
+            top_platforms = platforms_with_counts[:5]
+            for platform, count in top_platforms:
+                st.markdown(f"- {platform}: **{count}** advocates")
+        with col2:
+            st.markdown("**Other Platforms:**")
+            other_platforms = platforms_with_counts[5:10]
+            for platform, count in other_platforms:
+                st.markdown(f"- {platform}: **{count}** advocates")
+    
+    st.markdown("---")
+    
     # Perform search when button clicked
     if search_button:
         with st.spinner("Searching for advocates..."):
             results = find_advocates(
                 role_type=role_filter,
-                selected_platforms=None if "All" in platform_filter else platform_filter,
+                selected_platforms=platform_filter if platform_filter else None,
                 selected_genre=genre_filter,
                 min_followers=min_followers,
                 search_term=search_term
@@ -335,33 +390,6 @@ def render_finder():
                                     help="No email. Try social media DM.")
         else:
             st.warning("No advocates found matching your criteria. Try widening your filters.")
-    else:
-        # Show preview of recent advocates
-        st.markdown("### 👀 Recent Advocates (Top 10 by followers)")
-        preview = find_advocates(min_followers=0)[:10]
-        
-        for advocate in preview:
-            # Determine role icons
-            role_icons = []
-            if "ARC Reader" in advocate.get('roles', []):
-                role_icons.append("📚 ARC")
-            if "Influencer" in advocate.get('roles', []):
-                role_icons.append("📢 INF")
-            role_display = " | ".join(role_icons) if role_icons else "❓ Unknown"
-            
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                st.markdown(f"**@{advocate['username']}** - {advocate['follower_count']:,} followers | {role_display}")
-                if advocate.get('platforms') and len(advocate['platforms']) > 0:
-                    st.caption(f"Platforms: {', '.join(advocate['platforms'])}")
-            with col2:
-                is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
-                if not is_saved:
-                    if st.button("❤️", key=f"preview_save_{advocate['id']}"):
-                        if 'saved_readers' not in st.session_state:
-                            st.session_state.saved_readers = []
-                        st.session_state.saved_readers.append(advocate)
-                        st.rerun()
     
     # Show saved count in sidebar
     st.sidebar.markdown("---")
