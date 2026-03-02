@@ -46,7 +46,18 @@ def get_author_data():
             data["latest_book"] = analysis
     
     return data
-
+def render_questionnaire():
+    st.title("🌐 Author Website Builder")
+    st.markdown("### Create your professional author website in minutes")
+    
+    # DEBUG: Show what's in session state
+    with st.expander("🔍 DEBUG - Session State Contents"):
+        st.write("Has 'analysis_result':", 'analysis_result' in st.session_state)
+        if 'analysis_result' in st.session_state:
+            st.write("Type:", type(st.session_state.analysis_result))
+            st.write("Keys:", list(st.session_state.analysis_result.keys()) if isinstance(st.session_state.analysis_result, dict) else "Not a dict")
+            st.json(st.session_state.analysis_result)
+        st.write("Has 'saved_readers':", 'saved_readers' in st.session_state)
 # ============================================================================
 # QUESTIONNAIRE UI
 # ============================================================================
@@ -392,7 +403,9 @@ def render_questionnaire():
                 soloist_url = f"https://soloist.ai/create?data={json_data}"
                 
                 # Open in new tab
-                webbrowser.open_new_tab(soloist_url)
+                st.markdown(f'**[Click here to open Soloist.ai with your data]({soloist_url})**')
+                st.info("If the link doesn't work, copy this URL manually:")
+                st.code(soloist_url)
                 
                 st.success("✅ Opening Soloist.ai with your data!")
                 st.info("Complete the final steps on Soloist.ai to publish your site.")
