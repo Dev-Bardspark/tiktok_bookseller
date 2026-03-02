@@ -3,6 +3,25 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from enum import Enum
+import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from datetime import datetime
+
+# Add database connection function (same as in BardSpark.py)
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
 
 class AuthorType(Enum):
     SHADOW = "The Shadow"
@@ -247,11 +266,16 @@ def get_quick_win(author_type, interaction_style, genre):
 def render_quiz():
     """Main function to render the Streamlit quiz interface"""
     
-    st.set_page_config(
-        page_title="Author Persona Discovery",
-        page_icon="📚",
-        layout="wide"
-    )
+    # Check if this is being run as standalone or within BardSpark
+    if __name__ != "__main__":
+        # We're inside BardSpark, no need for page config
+        pass
+    else:
+        st.set_page_config(
+            page_title="Author Persona Discovery",
+            page_icon="📚",
+            layout="wide"
+        )
     
     # Initialize session state for quiz progress
     if 'quiz_started' not in st.session_state:
@@ -517,6 +541,49 @@ def render_results():
         # Quick win
         quick_win = get_quick_win(author_type, interaction_style, st.session_state.answers['q6'])
         st.success(f"⚡ **Your Quick Win:** {quick_win}")
+    
+    st.markdown("---")
+    
+    # ADD SAVE BUTTON HERE - RIGHT AFTER RESULTS
+    if st.session_state.get('authenticated', False):
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("💾 Save This Persona to My Account", type="primary", use_container_width=True):
+                try:
+                    # Prepare data for saving
+                    persona_data = {
+                        "author_type": author_type.value,
+                        "visibility_score": visibility_score,
+                        "interaction_style": interaction_style.value,
+                        "social_battery": social_battery.value,
+                        "quick_win": quick_win,
+                        "answers": st.session_state.answers,
+                        "platform_scores": calculate_platform_scores(author_type, interaction_style, st.session_state.answers['q6'])
+                    }
+                    
+                    # Save to database
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO user_author_personas 
+                        (user_id, persona_name, persona_data, created_at, is_active)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (
+                        st.session_state.user_id,
+                        f"My {author_type.value} Persona",
+                        json.dumps(persona_data),
+                        datetime.now(),
+                        True
+                    ))
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                    
+                    st.success("✅ Persona saved to your account!")
+                except Exception as e:
+                    st.error(f"Error saving: {e}")
+    else:
+        st.info("👤 Login to save this persona to your account")
     
     st.markdown("---")
     
