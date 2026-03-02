@@ -7,6 +7,166 @@ import plotly.graph_objects as go
 import json
 import os
 from pathlib import Path
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# ============================================================================
+# DATABASE CONNECTION
+# ============================================================================
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+def save_tracked_author_to_db(user_id, author_name, author_data, notes=None):
+    """Save a tracked author to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_tracked_authors 
+            (user_id, author_name, author_data, notes, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            author_name,
+            json.dumps(author_data),
+            notes,
+            datetime.now()
+        ))
+        
+        tracked_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return tracked_id
+    except Exception as e:
+        st.error(f"Error saving tracked author: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def load_user_tracked_authors(user_id):
+    """Load all tracked authors for a user"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM user_tracked_authors 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        
+        authors = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Convert to list with parsed JSON
+        result = []
+        for a in authors:
+            author_dict = dict(a)
+            if author_dict.get('author_data'):
+                if isinstance(author_dict['author_data'], str):
+                    author_dict['author_data'] = json.loads(author_dict['author_data'])
+            result.append(author_dict)
+        
+        return result
+    except Exception as e:
+        st.error(f"Error loading tracked authors: {e}")
+        return []
+
+def update_tracked_author_metrics(user_id, author_id, mentions, top_views):
+    """Update metrics for a tracked author"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        
+        # Get current data
+        cur.execute("""
+            SELECT author_data FROM user_tracked_authors 
+            WHERE user_id = %s AND id = %s
+        """, (user_id, author_id))
+        
+        result = cur.fetchone()
+        if not result:
+            cur.close()
+            conn.close()
+            return False
+        
+        author_data = result[0]
+        if isinstance(author_data, str):
+            author_data = json.loads(author_data)
+        
+        # Update metrics
+        author_data['mentions'] = mentions
+        author_data['top_views'] = top_views
+        
+        # Save back
+        cur.execute("""
+            UPDATE user_tracked_authors 
+            SET author_data = %s, notes = %s
+            WHERE user_id = %s AND id = %s
+        """, (
+            json.dumps(author_data),
+            json.dumps({"last_updated": datetime.now().isoformat()}),
+            user_id,
+            author_id
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error updating metrics: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def delete_tracked_author(user_id, author_id):
+    """Delete a tracked author"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            DELETE FROM user_tracked_authors 
+            WHERE user_id = %s AND id = %s
+        """, (user_id, author_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error deleting tracked author: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
 
 def show_competitor_tracker():
     """Display the BookTok competitor tracking dashboard"""
@@ -14,9 +174,41 @@ def show_competitor_tracker():
     st.markdown("## 📚 BookTok Competitor Analysis")
     st.markdown("Track similar books launching on BookTok and learn from their success")
     
-    # Initialize session state for competitor data
-    if 'competitor_books' not in st.session_state:
-        st.session_state.competitor_books = load_sample_competitors()
+    # Check authentication
+    if not st.session_state.get('authenticated', False):
+        st.warning("Please login to track competitors")
+        return
+    
+    # Initialize session state for competitor data from database
+    if 'competitor_books' not in st.session_state or not st.session_state.competitor_books:
+        # Load from database
+        db_books = load_user_tracked_authors(st.session_state.user_id)
+        if db_books:
+            # Convert database format to session format
+            st.session_state.competitor_books = []
+            for book in db_books:
+                author_data = book.get('author_data', {})
+                if author_data:
+                    book_dict = {
+                        "id": book['id'],
+                        "title": author_data.get('title', 'Unknown'),
+                        "author": author_data.get('author', 'Unknown'),
+                        "genre": author_data.get('genre', 'Unknown'),
+                        "sub_genre": author_data.get('sub_genre', ''),
+                        "launch_date": author_data.get('launch_date', ''),
+                        "booktok_handle": author_data.get('booktok_handle', ''),
+                        "mentions": author_data.get('mentions', 0),
+                        "top_views": author_data.get('top_views', 0),
+                        "viral_sound": author_data.get('viral_sound', ''),
+                        "praise": author_data.get('praise', []),
+                        "criticism": author_data.get('criticism', []),
+                        "date_added": book.get('created_at', '')[:10] if book.get('created_at') else '',
+                        "last_updated": datetime.now().strftime("%Y-%m-%d")
+                    }
+                    st.session_state.competitor_books.append(book_dict)
+        else:
+            # Load sample data if no books tracked yet
+            st.session_state.competitor_books = load_sample_competitors()
     
     # Create tabs for different views
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -93,8 +285,8 @@ def show_competitor_tracking():
             submitted = st.form_submit_button("🚀 Start Tracking This Book")
             
             if submitted and title and author:
-                new_book = {
-                    "id": len(st.session_state.competitor_books) + 1,
+                # Prepare author data
+                author_data = {
                     "title": title,
                     "author": author,
                     "genre": genre,
@@ -106,14 +298,39 @@ def show_competitor_tracking():
                     "viral_sound": viral_sound,
                     "praise": [p.strip() for p in praise.split("\n") if p.strip()],
                     "criticism": [c.strip() for c in criticism.split("\n") if c.strip()],
-                    "date_added": datetime.now().strftime("%Y-%m-%d"),
-                    "last_updated": datetime.now().strftime("%Y-%m-%d")
+                    "date_added": datetime.now().strftime("%Y-%m-%d")
                 }
                 
-                st.session_state.competitor_books.append(new_book)
-                save_competitor_data(st.session_state.competitor_books)
-                st.success(f"✅ Now tracking '{title}'! Add more books or view insights below.")
-                st.rerun()
+                # Save to database
+                tracked_id = save_tracked_author_to_db(
+                    st.session_state.user_id,
+                    f"{title} by {author}",
+                    author_data,
+                    "Tracked from competitor analyzer"
+                )
+                
+                if tracked_id:
+                    # Add to session state
+                    new_book = {
+                        "id": tracked_id,
+                        "title": title,
+                        "author": author,
+                        "genre": genre,
+                        "sub_genre": sub_genre,
+                        "launch_date": launch_date.strftime("%Y-%m-%d"),
+                        "booktok_handle": booktok_handle,
+                        "mentions": mentions,
+                        "top_views": top_views,
+                        "viral_sound": viral_sound,
+                        "praise": [p.strip() for p in praise.split("\n") if p.strip()],
+                        "criticism": [c.strip() for c in criticism.split("\n") if c.strip()],
+                        "date_added": datetime.now().strftime("%Y-%m-%d"),
+                        "last_updated": datetime.now().strftime("%Y-%m-%d")
+                    }
+                    
+                    st.session_state.competitor_books.append(new_book)
+                    st.success(f"✅ Now tracking '{title}'! Add more books or view insights below.")
+                    st.rerun()
     
     # Display tracked competitors
     st.markdown("### 📖 Books You're Tracking")
@@ -125,7 +342,7 @@ def show_competitor_tracking():
     # Filters
     col1, col2 = st.columns(2)
     with col1:
-        genres = ["All"] + list(set(b["genre"] for b in st.session_state.competitor_books))
+        genres = ["All"] + list(set(b["genre"] for b in st.session_state.competitor_books if b.get("genre")))
         selected_genre = st.selectbox("Filter by Genre", genres)
     with col2:
         sort_by = st.selectbox("Sort by", ["Recently Added", "Most Mentions", "Launch Date"])
@@ -133,38 +350,46 @@ def show_competitor_tracking():
     # Filter books
     filtered_books = st.session_state.competitor_books
     if selected_genre != "All":
-        filtered_books = [b for b in filtered_books if b["genre"] == selected_genre]
+        filtered_books = [b for b in filtered_books if b.get("genre") == selected_genre]
     
     # Sort books
     if sort_by == "Recently Added":
-        filtered_books.sort(key=lambda x: x["date_added"], reverse=True)
+        filtered_books.sort(key=lambda x: x.get("date_added", ""), reverse=True)
     elif sort_by == "Most Mentions":
-        filtered_books.sort(key=lambda x: x["mentions"], reverse=True)
+        filtered_books.sort(key=lambda x: x.get("mentions", 0), reverse=True)
     elif sort_by == "Launch Date":
-        filtered_books.sort(key=lambda x: x["launch_date"])
+        filtered_books.sort(key=lambda x: x.get("launch_date", ""))
     
     # Display books in cards
     for book in filtered_books:
         with st.container():
-            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
             
             with col1:
-                st.markdown(f"**{book['title']}** by {book['author']}")
-                st.caption(f"📅 {book['launch_date']} | {book['genre']} | {book.get('sub_genre', '')}")
+                st.markdown(f"**{book.get('title', 'Unknown')}** by {book.get('author', 'Unknown')}")
+                st.caption(f"📅 {book.get('launch_date', '')} | {book.get('genre', '')}")
             
             with col2:
                 st.metric("Mentions", book.get('mentions', 0))
             
             with col3:
-                if book.get('top_views', 0) > 1000000:
-                    views = f"{book['top_views']/1000000:.1f}M"
+                views = book.get('top_views', 0)
+                if views > 1000000:
+                    views_display = f"{views/1000000:.1f}M"
                 else:
-                    views = f"{book['top_views']/1000:.1f}K"
-                st.metric("Top Views", views)
+                    views_display = f"{views/1000:.1f}K"
+                st.metric("Top Views", views_display)
             
             with col4:
-                if st.button("🔍 View Details", key=f"view_{book['id']}"):
+                if st.button("🔍 Details", key=f"view_{book['id']}"):
                     st.session_state.selected_book = book['id']
+            
+            with col5:
+                if st.button("🗑️ Delete", key=f"delete_{book['id']}"):
+                    if delete_tracked_author(st.session_state.user_id, book['id']):
+                        st.session_state.competitor_books = [b for b in st.session_state.competitor_books if b['id'] != book['id']]
+                        st.success(f"Removed {book.get('title', '')}")
+                        st.rerun()
             
             # Show details if selected
             if st.session_state.get('selected_book') == book['id']:
@@ -197,26 +422,27 @@ def show_book_details(book):
     with col3:
         new_mentions = st.number_input(
             "Update Mentions", 
-            value=book['mentions'],
+            value=book.get('mentions', 0),
             key=f"mentions_{book['id']}"
         )
     with col4:
         new_views = st.number_input(
             "Update Top Views",
-            value=book['top_views'],
+            value=book.get('top_views', 0),
             key=f"views_{book['id']}"
         )
     with col5:
         if st.button("Update", key=f"update_{book['id']}"):
-            # Update in session state
-            for b in st.session_state.competitor_books:
-                if b['id'] == book['id']:
-                    b['mentions'] = new_mentions
-                    b['top_views'] = new_views
-                    b['last_updated'] = datetime.now().strftime("%Y-%m-%d")
-            save_competitor_data(st.session_state.competitor_books)
-            st.success("Updated!")
-            st.rerun()
+            # Update in database
+            if update_tracked_author_metrics(st.session_state.user_id, book['id'], new_mentions, new_views):
+                # Update in session state
+                for b in st.session_state.competitor_books:
+                    if b['id'] == book['id']:
+                        b['mentions'] = new_mentions
+                        b['top_views'] = new_views
+                        b['last_updated'] = datetime.now().strftime("%Y-%m-%d")
+                st.success("Updated!")
+                st.rerun()
 
 def show_genre_trends():
     """Analyze trends across your genre"""
@@ -230,10 +456,17 @@ def show_genre_trends():
         st.info("Add some competitor books first to see genre trends!")
         return
     
+    # Filter out books without genre
+    valid_books = [b for b in books if b.get('genre')]
+    
+    if not valid_books:
+        st.info("No genre data available yet.")
+        return
+    
     # Genre distribution
     genre_counts = pd.DataFrame([
-        {"genre": b["genre"], "mentions": b["mentions"]} 
-        for b in books
+        {"genre": b["genre"], "mentions": b.get("mentions", 0)} 
+        for b in valid_books
     ])
     
     fig = px.pie(
@@ -252,19 +485,22 @@ def show_genre_trends():
         all_praise.extend(book.get('praise', []))
         all_criticism.extend(book.get('criticism', []))
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🔥 Most Common PRAISE")
-        praise_df = pd.Series(all_praise).value_counts().head(10)
-        for item, count in praise_df.items():
-            st.markdown(f"✅ {item} *({count} books)*")
-    
-    with col2:
-        st.markdown("#### ⚠️ Most Common CRITICISM")
-        criticism_df = pd.Series(all_criticism).value_counts().head(10)
-        for item, count in criticism_df.items():
-            st.markdown(f"❌ {item} *({count} books)*")
+    if all_praise:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🔥 Most Common PRAISE")
+            praise_df = pd.Series(all_praise).value_counts().head(10)
+            for item, count in praise_df.items():
+                if item:  # Only show non-empty items
+                    st.markdown(f"✅ {item} *({count} books)*")
+        
+        with col2:
+            st.markdown("#### ⚠️ Most Common CRITICISM")
+            criticism_df = pd.Series(all_criticism).value_counts().head(10)
+            for item, count in criticism_df.items():
+                if item:  # Only show non-empty items
+                    st.markdown(f"❌ {item} *({count} books)*")
 
 def show_booktok_insights():
     """Display actionable insights for your book"""
@@ -287,12 +523,14 @@ def show_booktok_insights():
             all_praise.extend(book.get('praise', []))
     
     if all_praise:
-        top_praise = pd.Series(all_praise).value_counts().head(3)
-        insights.append({
-            "type": "success",
-            "title": "🎯 What's Working for Similar Books",
-            "points": [f"Emphasize {item.lower()} in your marketing" for item in top_praise.index]
-        })
+        praise_counts = pd.Series(all_praise).value_counts()
+        if not praise_counts.empty:
+            top_praise = praise_counts.head(3)
+            insights.append({
+                "type": "success",
+                "title": "🎯 What's Working for Similar Books",
+                "points": [f"Emphasize {item.lower()} in your marketing" for item in top_praise.index if item]
+            })
     
     # Find what to avoid
     all_criticism = []
@@ -301,23 +539,30 @@ def show_booktok_insights():
             all_criticism.extend(book.get('criticism', []))
     
     if all_criticism:
-        top_criticism = pd.Series(all_criticism).value_counts().head(3)
-        insights.append({
-            "type": "warning",
-            "title": "⚠️ What to Avoid",
-            "points": [f"Avoid {item.lower()} in your story/marketing" for item in top_criticism.index]
-        })
+        criticism_counts = pd.Series(all_criticism).value_counts()
+        if not criticism_counts.empty:
+            top_criticism = criticism_counts.head(3)
+            insights.append({
+                "type": "warning",
+                "title": "⚠️ What to Avoid",
+                "points": [f"Avoid {item.lower()} in your story/marketing" for item in top_criticism.index if item]
+            })
     
     # Sound trends
     viral_sounds = [b.get('viral_sound') for b in books if b.get('viral_sound')]
     if viral_sounds:
+        sound_counts = pd.Series(viral_sounds).value_counts().head(3)
         insights.append({
             "type": "info",
             "title": "🎵 Trending Sounds in Your Genre",
-            "points": [f"Consider using: {sound}" for sound in viral_sounds[:3]]
+            "points": [f"Consider using: {sound}" for sound in sound_counts.index if sound]
         })
     
     # Display insights
+    if not insights:
+        st.info("Add more competitor data to generate insights!")
+        return
+    
     for insight in insights:
         if insight["type"] == "success":
             with st.expander(insight["title"], expanded=True):
@@ -345,17 +590,26 @@ def show_launch_analysis():
         st.info("Add competitor books to analyze launch patterns!")
         return
     
-    # Create launch timeline
-    launch_data = []
+    # Filter books with valid dates
+    valid_books = []
     for book in books:
-        launch_data.append({
-            "title": book["title"],
-            "launch_date": pd.to_datetime(book["launch_date"]),
-            "mentions": book["mentions"],
-            "genre": book["genre"]
-        })
+        try:
+            launch_date = pd.to_datetime(book.get('launch_date', ''))
+            if pd.notna(launch_date):
+                valid_books.append({
+                    "title": book.get('title', 'Unknown'),
+                    "launch_date": launch_date,
+                    "mentions": book.get('mentions', 0),
+                    "genre": book.get('genre', 'Unknown')
+                })
+        except:
+            pass
     
-    df = pd.DataFrame(launch_data)
+    if not valid_books:
+        st.info("No valid launch date data available yet.")
+        return
+    
+    df = pd.DataFrame(valid_books)
     
     # Launch timing chart
     fig = px.scatter(
@@ -376,11 +630,12 @@ def show_launch_analysis():
     df['month'] = df['launch_date'].dt.month
     monthly_avg = df.groupby('month')['mentions'].mean()
     
-    best_month = monthly_avg.idxmax()
-    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    st.info(f"🎯 Based on your tracked books, **{month_names[best_month-1]}** shows the highest BookTok engagement in your genre!")
+    if not monthly_avg.empty:
+        best_month = monthly_avg.idxmax()
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        
+        st.info(f"🎯 Based on your tracked books, **{month_names[best_month-1]}** shows the highest BookTok engagement in your genre!")
 
 # Helper functions
 def load_sample_competitors():
@@ -419,21 +674,3 @@ def load_sample_competitors():
             "last_updated": "2024-01-15"
         }
     ]
-
-def save_competitor_data(data):
-    """Save to local JSON file"""
-    try:
-        with open('competitor_books.json', 'w') as f:
-            json.dump(data, f, indent=2)
-    except:
-        pass  # Silently fail in demo
-
-def load_competitor_data():
-    """Load from local JSON file"""
-    try:
-        if os.path.exists('competitor_books.json'):
-            with open('competitor_books.json', 'r') as f:
-                return json.load(f)
-    except:
-        pass
-    return load_sample_competitors()
