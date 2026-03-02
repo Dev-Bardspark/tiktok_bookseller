@@ -310,7 +310,7 @@ if selected != st.session_state.page:
 st.session_state.current_page = st.session_state.page
 
 # ============================================================================
-# PROFILE PAGE (NEW)
+# PROFILE PAGE (FIXED)
 # ============================================================================
 
 if st.session_state.page == "👤 My Profile":
@@ -327,13 +327,23 @@ if st.session_state.page == "👤 My Profile":
             st.markdown(f"**Username:** {st.session_state.user['username']}")
             st.markdown(f"**Email:** {st.session_state.user['email']}")
             st.markdown(f"**Display Name:** {st.session_state.user.get('display_name', 'Not set')}")
-            st.markdown(f"**Member Since:** {st.session_state.user.get('created_at', 'Unknown')[:10] if st.session_state.user.get('created_at') else 'Unknown'}")
+            
+            # FIXED: Safe handling of created_at
+            created_at = st.session_state.user.get('created_at')
+            if created_at and isinstance(created_at, str) and len(created_at) >= 10:
+                member_since = created_at[:10]
+            else:
+                member_since = "Unknown"
+            st.markdown(f"**Member Since:** {member_since}")
         
         with col2:
             st.markdown("**Your Stats**")
             st.markdown(f"**Saved Readers:** {len(st.session_state.saved_readers)}")
-            st.markdown(f"**Books Analyzed:** {len(st.session_state.user_data.get('book_analyses', [])) if st.session_state.user_data else 0}")
-            st.markdown(f"**Author Personas:** {len(st.session_state.user_data.get('author_persona', [])) if st.session_state.user_data else 0}")
+            book_count = len(st.session_state.user_data.get('book_analyses', [])) if st.session_state.user_data else 0
+            st.markdown(f"**Books Analyzed:** {book_count}")
+            
+            persona_count = 1 if st.session_state.user_data and st.session_state.user_data.get('author_persona') else 0
+            st.markdown(f"**Author Personas:** {persona_count}")
         
         st.markdown("---")
         
@@ -350,7 +360,6 @@ if st.session_state.page == "👤 My Profile":
                 file_name=f"bardspark_export_{st.session_state.user['username']}.json",
                 mime="application/json"
             )
-
 # ============================================================================
 # DASHBOARD PAGE
 # ============================================================================
