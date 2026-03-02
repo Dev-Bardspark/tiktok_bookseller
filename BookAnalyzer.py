@@ -13,7 +13,9 @@ import re
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-# Add database connection function (same as in BardSpark.py)
+# ============================================================================
+# DATABASE CONNECTION
+# ============================================================================
 def get_db_connection():
     try:
         conn = psycopg2.connect(
@@ -27,52 +29,6 @@ def get_db_connection():
     except Exception as e:
         st.error(f"Database connection failed: {e}")
         return None
-
-def save_analysis_to_db(user_id, book_title, analysis_result, cover_image=None):
-    """Save book analysis to database"""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    
-    try:
-        cur = conn.cursor()
-        
-        # Get genre from analysis if available
-        book_info = analysis_result.get('book_info', {})
-        book_genre = book_info.get('genre', 'Unknown')
-        
-        # Handle cover image if provided
-        cover_url = None
-        # In a real implementation, you might upload to cloud storage
-        # For now, we'll store a placeholder
-        cover_url = "uploaded_cover"
-        
-        cur.execute("""
-            INSERT INTO user_book_analyses 
-            (user_id, book_title, book_genre, analysis_result, cover_image_url, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            user_id,
-            book_title,
-            book_genre,
-            json.dumps(analysis_result),
-            cover_url,
-            datetime.now(),
-            datetime.now()
-        ))
-        
-        analysis_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-        conn.close()
-        return analysis_id
-    except Exception as e:
-        st.error(f"Error saving to database: {e}")
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return False
 
 def show_analyzer():
     """Complete book analysis with marketability dashboard"""
@@ -123,7 +79,7 @@ def show_analyzer():
                 st.rerun()
         return
     
-    # If analysis is complete, show ONLY the dashboard (no upload screen)
+    # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
         show_results()
         return
@@ -181,77 +137,62 @@ def show_upload_screen():
                 
                 analysis = analyze_manuscript_complete(client, manuscript_text, cover_analysis)
                 st.session_state.analysis_result = analysis
-                
                 st.session_state.analysis_complete = True
+                
+                # AUTO-SAVE to database if logged in
+                if st.session_state.get('authenticated', False):
+                    try:
+                        book_title = analysis.get('book_info', {}).get('title', 'Untitled')
+                        conn = get_db_connection()
+                        if conn:
+                            cur = conn.cursor()
+                            cur.execute("""
+                                INSERT INTO user_book_analyses 
+                                (user_id, book_title, analysis_result, created_at, updated_at)
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (
+                                st.session_state.user_id,
+                                book_title,
+                                json.dumps(analysis),
+                                datetime.now(),
+                                datetime.now()
+                            ))
+                            conn.commit()
+                            cur.close()
+                            conn.close()
+                            st.success("✅ Analysis auto-saved to your library!")
+                    except Exception as e:
+                        st.error(f"Auto-save failed: {e}")
+                
                 st.rerun()
     else:
         st.info("👆 Please upload both manuscript and cover to begin")
 
 
 def show_results():
-    """Display ONLY the results dashboard (no upload interface)"""
+    """Display the results dashboard"""
     
-    st.success("✅ Analysis complete! Your book has been analyzed with marketability scoring.")
+    st.success("✅ Analysis complete!")
     
-    # Action buttons
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        book_title = st.session_state.analysis_result.get('book_info', {}).get('title', 'Untitled')
-        filename = f"{book_title.replace(' ', '_')}_analysis.json"
-        
-        if st.button("💾 Save to Library", use_container_width=True):
-            # Check if user is logged in
-            if st.session_state.get('authenticated', False):
-                # Save to database
-                analysis_id = save_analysis_to_db(
-                    st.session_state.user_id,
-                    book_title,
-                    st.session_state.analysis_result
-                )
-                if analysis_id:
-                    st.success(f"✅ Analysis saved to your library!")
-                else:
-                    st.error("Failed to save to database")
-            else:
-                # Fallback to session state for non-logged in users
-                save_data = {
-                    "book_info": st.session_state.analysis_result,
-                    "cover_analysis": st.session_state.cover_analysis,
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "book_id": st.session_state.current_book_id
-                }
-                
-                if 'analysis_library' not in st.session_state:
-                    st.session_state.analysis_library = {}
-                
-                st.session_state.analysis_library[filename] = save_data
-                st.warning("⚠️ Not logged in - saved to current session only. Login to save permanently.")
-    
-    with col2:
-        if st.button("🎨 Marketing Assets", use_container_width=True):
-            st.session_state.page = "🎨 Marketing Assets"
-            st.rerun()
-    
-    with col3:
-        if st.button("📊 Export Report", use_container_width=True):
-            st.info("Export feature coming soon!")
-    
-    with col4:
-        if st.button("🔄 New Analysis", use_container_width=True):
-            st.session_state.analysis_complete = False
-            st.session_state.analysis_result = None
-            st.session_state.cover_analysis = None
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Show marketability dashboard FIRST
+    # Show marketability dashboard
     show_marketability_dashboard(st.session_state.analysis_result)
     
     # Then show complete literary analysis in expander
     with st.expander("📚 View Complete Literary Analysis", expanded=False):
         show_complete_analysis(st.session_state.analysis_result, st.session_state.cover_analysis)
+    
+    # Navigation buttons
+    col1, col2, col3, col4 = st.columns(4)
+    with col2:
+        if st.button("🎨 Marketing Assets", use_container_width=True):
+            st.session_state.page = "🎨 Marketing Assets"
+            st.rerun()
+    with col3:
+        if st.button("🔄 New Analysis", use_container_width=True):
+            st.session_state.analysis_complete = False
+            st.session_state.analysis_result = None
+            st.session_state.cover_analysis = None
+            st.rerun()
 
 
 def analyze_cover(client, cover_base64):
@@ -310,7 +251,7 @@ def analyze_cover(client, cover_base64):
 
 
 def analyze_manuscript_complete(client, text, cover_analysis):
-    """Complete manuscript analysis with ALL metrics - REMOVED fake comparable sections"""
+    """Complete manuscript analysis"""
     
     if len(text) > 50000:
         text = text[:50000] + "... [truncated]"
@@ -523,7 +464,7 @@ def extract_text(file) -> str:
 
 
 def show_marketability_dashboard(analysis):
-    """Display marketability dashboard with BEAUTIFUL design but NORMAL fonts"""
+    """Display marketability dashboard"""
     
     st.markdown("## 📊 MARKETABILITY DASHBOARD")
     st.markdown("---")
@@ -534,7 +475,6 @@ def show_marketability_dashboard(analysis):
     
     market = analysis['marketability']
     
-    # Overall score - Beautiful card with NORMAL font sizes
     overall_score = market.get('overall_score', 0)
     overall_grade = market.get('overall_grade', 'N/A')
     
@@ -555,7 +495,6 @@ def show_marketability_dashboard(analysis):
         emoji = "⚠️"
         score_text = "NEEDS WORK"
     
-    # Beautiful card with normal sized text (48px max)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown(f"""
@@ -566,14 +505,10 @@ def show_marketability_dashboard(analysis):
         </div>
         """, unsafe_allow_html=True)
     
-    # Overall assessment - normal font
     st.markdown(f"**Overall Assessment:** {market.get('overall_assessment', 'No assessment available')}")
-    
     st.markdown("---")
     
-    # Individual scores - Beautiful cards with normal fonts
     st.markdown("### 📈 Detailed Scores")
-    
     scores = market.get('scores', {})
     
     if scores:
@@ -618,10 +553,8 @@ def show_marketability_dashboard(analysis):
     
     st.markdown("---")
     
-    # Title Analysis - Beautiful but normal fonts
     if 'title_analysis' in analysis:
         title_analysis = analysis['title_analysis']
-        
         st.markdown("### 🏷️ Title Analysis & Suggestions")
         
         col1, col2 = st.columns([1, 1])
@@ -634,10 +567,6 @@ def show_marketability_dashboard(analysis):
             if effectiveness:
                 score = effectiveness.get('score', 0)
                 st.markdown(f"**Effectiveness Score:** {score}/100")
-                st.markdown(f"*Memorability:* {effectiveness.get('memorability', '')}")
-                st.markdown(f"*Genre Appropriateness:* {effectiveness.get('genre_appropriateness', '')}")
-                st.markdown(f"*Uniqueness:* {effectiveness.get('uniqueness', '')}")
-                st.markdown(f"*Searchability:* {effectiveness.get('searchability', '')}")
         
         with col2:
             rec = title_analysis.get('title_change_recommendation', '')
@@ -647,40 +576,11 @@ def show_marketability_dashboard(analysis):
             subtitle = title_analysis.get('subtitle_suggestion', '')
             if subtitle:
                 st.markdown(f"**Suggested Subtitle:** {subtitle}")
-        
-        suggestions = title_analysis.get('suggested_titles', [])
-        if suggestions:
-            st.markdown("#### 💡 Alternative Title Suggestions")
-            
-            for i, suggestion in enumerate(suggestions, 1):
-                if isinstance(suggestion, dict):
-                    impact = suggestion.get('estimated_impact', 'Medium')
-                    if impact.lower() == 'high':
-                        impact_color = "#ff4444"
-                        impact_display = "🔴 HIGH IMPACT"
-                    elif impact.lower() == 'medium':
-                        impact_color = "#ffaa00"
-                        impact_display = "🟡 MEDIUM IMPACT"
-                    else:
-                        impact_color = "#00cc66"
-                        impact_display = "🟢 LOW IMPACT"
-                    
-                    st.markdown(f"""
-                    <div style="padding: 15px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-weight: 600; font-size: 16px;">{i}. {suggestion.get('title', '')}</span>
-                            <span style="background-color: {impact_color}; color: white; padding: 3px 10px; border-radius: 15px; font-size: 12px;">{impact_display}</span>
-                        </div>
-                        <p style="margin: 0; color: #666; font-size: 14px;"><em>{suggestion.get('rationale', '')}</em></p>
-                    </div>
-                    """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Salability Analysis - Beautiful but normal fonts
     if 'salability_analysis' in analysis:
         salability = analysis['salability_analysis']
-        
         st.markdown("### 💰 Salability Analysis")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -692,96 +592,11 @@ def show_marketability_dashboard(analysis):
             st.markdown(f"**Adaptation**  \n{salability.get('adaptation_potential', 'Unknown')}")
         with col4:
             st.markdown(f"**Price Point**  \n{salability.get('estimated_price_point', 'Unknown')}")
-        
-        format_potential = salability.get('format_potential', {})
-        if format_potential:
-            st.markdown("**Format Potential:**")
-            cols = st.columns(4)
-            formats = list(format_potential.items())
-            for i, (fmt, potential) in enumerate(formats[:4]):
-                with cols[i]:
-                    if potential.lower() == 'high':
-                        color = "#00cc66"
-                    elif potential.lower() == 'medium':
-                        color = "#ffaa00"
-                    else:
-                        color = "#ff4444"
-                    st.markdown(f"**{fmt.title()}:**  \n<span style='color: {color}; font-weight: bold;'>{potential}</span>", unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Market Position - Beautiful but normal fonts
-    if 'marketability' in analysis:
-        market = analysis['marketability']
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### 📍 Market Position")
-            st.markdown(f"**Market Gap:** {market.get('market_gap_analysis', 'Not specified')}")
-            st.markdown(f"**Competitive Advantage:** {market.get('competitive_advantage', 'Not specified')}")
-        
-        with col2:
-            challenges = market.get('potential_challenges', [])
-            if challenges:
-                st.markdown("### ⚠️ Potential Challenges")
-                for challenge in challenges:
-                    st.markdown(f"• {challenge}")
-    
-    st.markdown("---")
-    
-    # Writing Quality (condensed, normal font)
-    if 'writing_quality_detailed' in analysis:
-        writing = analysis['writing_quality_detailed']
-        
-        with st.expander("✍️ Writing Quality Details", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
-                st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
-                st.markdown(f"**Description:** {writing.get('description', '')}")
-            with col2:
-                st.markdown(f"**Voice:** {writing.get('voice', '')}")
-                st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**✅ Writing Strengths:**")
-                for s in writing.get('strengths', []):
-                    st.write(f"• {s}")
-            with col2:
-                st.markdown("**📝 Needed Improvements:**")
-                for i in writing.get('improvements', []):
-                    st.write(f"• {i}")
-    
-    # Marketing insights
-    if 'marketing' in analysis:
-        marketing = analysis['marketing']
-        
-        with st.expander("📈 Marketing Insights", expanded=False):
-            if marketing.get('unique_selling_points'):
-                st.markdown("**Unique Selling Points:**")
-                for usp in marketing['unique_selling_points']:
-                    st.write(f"• {usp}")
-            
-            if marketing.get('keyword_cloud'):
-                st.markdown("**Keywords:**")
-                st.write(', '.join(marketing['keyword_cloud']))
-            
-            if marketing.get('compelling_quotes'):
-                st.markdown("**Pull Quotes:**")
-                for quote in marketing['compelling_quotes']:
-                    st.info(f"“{quote}”")
-            
-            if marketing.get('blurb_suggestion'):
-                st.markdown("**Suggested Blurb:**")
-                st.write(marketing['blurb_suggestion'])
 
 
 def show_complete_analysis(analysis, cover):
-    """Display complete literary analysis - PACING ANALYSIS REMOVED (redundant)"""
+    """Display complete literary analysis"""
     
-    # Cover Analysis
     if cover:
         with st.expander("🎨 Cover Analysis", expanded=False):
             col1, col2, col3 = st.columns(3)
@@ -793,24 +608,7 @@ def show_complete_analysis(analysis, cover):
                 st.write(f"**Composition:** {cover.get('composition', '')}")
             with col3:
                 st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
-                if cover.get('has_figure'):
-                    st.write(f"**Figure:** {cover.get('figure_description', '')}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**✅ Strengths:**")
-                for s in cover.get('strengths', []):
-                    st.write(f"• {s}")
-            with col2:
-                st.markdown("**❌ Weaknesses:**")
-                for w in cover.get('weaknesses', []):
-                    st.write(f"• {w}")
-            
-            st.markdown("**💡 Suggestions:**")
-            for s in cover.get('suggestions', []):
-                st.write(f"• {s}")
     
-    # Book Info - INCLUDES PACING SUMMARY
     book_info = analysis.get('book_info', {})
     st.markdown("### 📖 Book Overview")
     
@@ -818,163 +616,9 @@ def show_complete_analysis(analysis, cover):
     with col1:
         st.markdown(f"**Title:** {book_info.get('title', 'Unknown')}")
         st.markdown(f"**Genre:** {book_info.get('genre', 'Unknown')}")
-        st.markdown(f"**Subgenres:** {', '.join(book_info.get('subgenres', []))}")
     with col2:
         st.markdown(f"**Tone:** {book_info.get('tone', 'Unknown')}")
         st.markdown(f"**Writing Style:** {book_info.get('writing_style', 'Unknown')}")
-        st.markdown(f"**Pacing Summary:** {book_info.get('pacing_summary', 'Unknown')}")
-    
-    st.divider()
-    
-    # Narrative Arc
-    narrative = analysis.get('narrative_arc', {})
-    if narrative:
-        st.markdown("### 📊 Narrative Arc")
-        
-        st.markdown(f"**Exposition:** {narrative.get('exposition', 'Not specified')}")
-        st.markdown(f"**Rising Action:** {narrative.get('rising_action', 'Not specified')}")
-        st.markdown(f"**Climax:** {narrative.get('climax', 'Not specified')}")
-        st.markdown(f"**Falling Action:** {narrative.get('falling_action', 'Not specified')}")
-        st.markdown(f"**Resolution:** {narrative.get('resolution', 'Not specified')}")
-        
-        st.divider()
-    
-    # Characters
-    chars = analysis.get('characters', {})
-    st.markdown("### 👥 Characters")
-    
-    main_chars = chars.get('main', [])
-    if main_chars:
-        st.markdown("**Main Characters**")
-        for char in main_chars:
-            st.markdown(f"**{char.get('name', 'Unknown')}** *({char.get('role', '')})*")
-            st.markdown(f"*Description:* {char.get('description', '')}")
-            if char.get('motivation'):
-                st.markdown(f"*Motivation:* {char.get('motivation')}")
-            if char.get('conflict'):
-                st.markdown(f"*Conflict:* {char.get('conflict')}")
-            if char.get('arc'):
-                st.markdown(f"*Arc:* {char.get('arc')}")
-            if char.get('appeal_factor'):
-                st.markdown(f"*Appeal:* {char.get('appeal_factor')}")
-            st.markdown("---")
-    
-    # Character Development
-    dev = analysis.get('character_development', {})
-    if dev:
-        with st.expander("📈 Character Development", expanded=False):
-            if dev.get('protagonist_journey'):
-                st.markdown(f"**Protagonist Journey:** {dev['protagonist_journey']}")
-            if dev.get('antagonist_motivation'):
-                st.markdown(f"**Antagonist Motivation:** {dev['antagonist_motivation']}")
-            if dev.get('supporting_arcs'):
-                st.markdown("**Supporting Arcs:**")
-                for arc in dev['supporting_arcs']:
-                    st.write(f"• {arc}")
-    
-    # Supporting Characters
-    if chars.get('supporting'):
-        with st.expander("👥 Supporting Characters", expanded=False):
-            for char in chars.get('supporting', []):
-                st.write(f"• {char}")
-    
-    # Relationships
-    if chars.get('relationships'):
-        with st.expander("🔄 Key Relationships", expanded=False):
-            for rel in chars.get('relationships', []):
-                st.write(f"• {rel}")
-    
-    st.divider()
-    
-    # Plot
-    plot = analysis.get('plot', {})
-    if plot:
-        st.markdown("### 📊 Plot")
-        
-        if plot.get('opening_hook'):
-            st.markdown(f"**Opening Hook:** {plot['opening_hook']}")
-        
-        if plot.get('inciting_incident'):
-            st.markdown(f"**Inciting Incident:** {plot['inciting_incident']}")
-        
-        if plot.get('major_plot_points'):
-            st.markdown("**Major Plot Points:**")
-            for point in plot['major_plot_points']:
-                st.write(f"• {point}")
-        
-        if plot.get('plot_twists'):
-            st.markdown("**Plot Twists:**")
-            for twist in plot['plot_twists']:
-                st.write(f"• {twist}")
-        
-        if plot.get('subplots'):
-            st.markdown("**Subplots:**")
-            for subplot in plot['subplots']:
-                st.write(f"• {subplot}")
-        
-        st.divider()
-    
-    # Themes
-    themes = analysis.get('themes', {})
-    if themes:
-        st.markdown("### 🎨 Themes")
-        
-        if themes.get('primary'):
-            st.markdown("**Primary Themes:**")
-            for theme in themes['primary']:
-                if isinstance(theme, dict):
-                    st.write(f"• {theme.get('theme', theme)}: {theme.get('explanation', '')}")
-                else:
-                    st.write(f"• {theme}")
-        
-        if themes.get('secondary'):
-            st.markdown("**Secondary Themes:**")
-            for theme in themes['secondary']:
-                if isinstance(theme, dict):
-                    st.write(f"• {theme.get('theme', theme)}: {theme.get('explanation', '')}")
-                else:
-                    st.write(f"• {theme}")
-        
-        if themes.get('motifs'):
-            st.markdown("**Motifs:**")
-            for motif in themes['motifs']:
-                st.write(f"• {motif}")
-        
-        st.divider()
-    
-    # Strengths & Improvements
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        strengths = analysis.get('strengths', [])
-        if strengths:
-            st.markdown("### ✅ Strengths")
-            for s in strengths:
-                st.write(f"• {s}")
-    
-    with col2:
-        improvements = analysis.get('areas_for_improvement', [])
-        if improvements:
-            st.markdown("### 📝 Areas to Improve")
-            for i in improvements:
-                st.write(f"• {i}")
-    
-    st.divider()
-    
-    # Target Audience
-    target = analysis.get('target_audience', {})
-    if target:
-        st.markdown("### 🎯 Target Audience")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if target.get('primary'):
-                st.markdown(f"**Primary:** {target['primary']}")
-            if target.get('appeal'):
-                st.markdown(f"**Appeal:** {target['appeal']}")
-        with col2:
-            if target.get('demographics'):
-                st.markdown(f"**Demographics:** {', '.join(target['demographics'])}")
 
 
 # For direct testing
