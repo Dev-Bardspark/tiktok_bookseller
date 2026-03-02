@@ -15,6 +15,7 @@ import BookAnalyzer
 import MarketingGenerator
 import author_persona_discovery
 import arc_influencer_finder
+import author_website_builder
 
 # ============================================================================
 # PAGE CONFIG
@@ -224,6 +225,7 @@ menu_options = [
     "🎬 Video Generator",
     "📊 Competitor Tracker",
     "🧠 Author Persona"
+    "🌐 Website Builder"
 ]
 
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
@@ -293,12 +295,19 @@ if st.session_state.page == "🏠 Dashboard":
     # Row 3
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
+        if st.button("🌐 Website Builder", use_container_width=True):
+            st.session_state.page = "🌐 Website Builder"
+            st.rerun()
     with col2:
-        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
+        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     with col3:
-        st.button("📚 Book Preview", use_container_width=True, disabled=True)
+        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
     with col4:
+        st.button("📚 Book Preview", use_container_width=True, disabled=True)
+    
+    # Row 4 (if it exists, otherwise ignore)
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
         st.button("⭐ Reviews", use_container_width=True, disabled=True)
     
     # ============================================================================
@@ -476,6 +485,13 @@ elif st.session_state.page == "📊 Competitor Tracker":
 
 elif st.session_state.page == "🧠 Author Persona":
     author_persona_discovery.render_quiz()
+
+# ============================================================================
+# WEBSITE BUILDER PAGE - ADD THIS HERE
+# ============================================================================
+
+elif st.session_state.page == "🌐 Website Builder":
+    author_website_builder.show_website_builder()
 
 # ============================================================================
 # FOOTER
