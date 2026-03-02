@@ -7,7 +7,157 @@ import streamlit as st
 import json
 import webbrowser
 import base64
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
+
+# ============================================================================
+# DATABASE CONNECTION
+# ============================================================================
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+def save_website_draft_to_db(user_id, draft_name, basic_info, design_preferences, book_content, cover_image_url=None):
+    """Save a website builder draft to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        
+        # Combine all website data
+        website_data = {
+            "basic_info": basic_info,
+            "design_preferences": design_preferences,
+            "book_content": book_content,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        cur.execute("""
+            INSERT INTO user_website_drafts 
+            (user_id, draft_name, website_data, cover_image_url, created_at, updated_at, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            draft_name,
+            json.dumps(website_data),
+            cover_image_url,
+            datetime.now(),
+            datetime.now(),
+            'draft'
+        ))
+        
+        draft_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return draft_id
+    except Exception as e:
+        st.error(f"Error saving website draft: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def load_user_website_drafts(user_id):
+    """Load all website drafts for a user"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM user_website_drafts 
+            WHERE user_id = %s
+            ORDER BY updated_at DESC
+        """, (user_id,))
+        
+        drafts = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Parse JSON data
+        result = []
+        for d in drafts:
+            draft_dict = dict(d)
+            if draft_dict.get('website_data'):
+                if isinstance(draft_dict['website_data'], str):
+                    draft_dict['website_data'] = json.loads(draft_dict['website_data'])
+            result.append(draft_dict)
+        
+        return result
+    except Exception as e:
+        st.error(f"Error loading website drafts: {e}")
+        return []
+
+def update_website_draft(user_id, draft_id, website_data, cover_image_url=None):
+    """Update an existing website draft"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE user_website_drafts 
+            SET website_data = %s, cover_image_url = %s, updated_at = %s
+            WHERE user_id = %s AND id = %s
+        """, (
+            json.dumps(website_data),
+            cover_image_url,
+            datetime.now(),
+            user_id,
+            draft_id
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error updating website draft: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def delete_website_draft(user_id, draft_id):
+    """Delete a website draft"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            DELETE FROM user_website_drafts 
+            WHERE user_id = %s AND id = %s
+        """, (user_id, draft_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error deleting website draft: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
 
 # ============================================================================
 # DATA FUNCTIONS - Pull from existing session data
@@ -54,12 +204,34 @@ def render_questionnaire():
     st.title("🌐 Author Website Builder")
     st.markdown("### Create your professional author website in minutes")
     
+    # Check authentication
+    if not st.session_state.get('authenticated', False):
+        st.warning("Please login to save your website drafts")
+    
+    # Initialize session state for website drafts
+    if 'website_drafts' not in st.session_state:
+        st.session_state.website_drafts = []
+        if st.session_state.get('authenticated', False):
+            st.session_state.website_drafts = load_user_website_drafts(st.session_state.user_id)
+    
     # Pull existing data
     author_data = get_author_data()
     
     # Progress tracking
     if 'website_step' not in st.session_state:
         st.session_state.website_step = 1
+    
+    # Create tabs for builder and saved drafts
+    tab1, tab2 = st.tabs(["🏗️ Website Builder", "💾 My Saved Drafts"])
+    
+    with tab1:
+        show_builder(author_data)
+    
+    with tab2:
+        show_saved_drafts()
+
+def show_builder(author_data):
+    """Main website builder interface"""
     
     # Step indicators
     col1, col2, col3, col4 = st.columns(4)
@@ -306,7 +478,7 @@ def render_questionnaire():
                 st.rerun()
     
     # ============================================================================
-    # STEP 4: REVIEW & BUILD (WITH CORRECT SOLOIST.AI LINK)
+    # STEP 4: REVIEW & BUILD
     # ============================================================================
     elif st.session_state.website_step == 4:
         st.header("Step 4: Review & Build")
@@ -349,6 +521,31 @@ def render_questionnaire():
                 st.session_state.website_step = 3
                 st.rerun()
         
+        with col2:
+            # Save draft button
+            if st.button("💾 Save Draft", use_container_width=True):
+                if st.session_state.get('authenticated', False):
+                    basic = st.session_state.get('website_basic', {})
+                    design = st.session_state.get('website_design', {})
+                    books = st.session_state.get('website_books', {})
+                    
+                    draft_name = f"{books.get('book_title', 'My Website')} - {datetime.now().strftime('%Y-%m-%d')}"
+                    
+                    draft_id = save_website_draft_to_db(
+                        st.session_state.user_id,
+                        draft_name,
+                        basic,
+                        design,
+                        books
+                    )
+                    
+                    if draft_id:
+                        st.success("✅ Draft saved to your library!")
+                        # Refresh drafts
+                        st.session_state.website_drafts = load_user_website_drafts(st.session_state.user_id)
+                else:
+                    st.warning("Please login to save drafts")
+        
         with col3:
             if st.button("🚀 Build My Site", type="primary", use_container_width=True):
                 books = st.session_state.get('website_books', {})
@@ -382,11 +579,52 @@ def render_questionnaire():
                         st.markdown("**Advocates to Showcase:**")
                         for a in author_data['saved_advocates'][:5]:
                             st.markdown(f"- @{a.get('username')} ({a.get('follower_count', 0)} followers)")
+
+def show_saved_drafts():
+    """Display user's saved website drafts"""
     
-    # Show saved count in sidebar
-    st.sidebar.markdown("---")
-    saved_count = len(st.session_state.get('saved_readers', []))
-    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
+    if not st.session_state.get('authenticated', False):
+        st.warning("Please login to view your saved drafts")
+        return
+    
+    if not st.session_state.website_drafts:
+        st.info("You haven't saved any website drafts yet. Build a site and click 'Save Draft' in Step 4.")
+        return
+    
+    st.markdown(f"### 📚 Your Saved Drafts ({len(st.session_state.website_drafts)})")
+    
+    for draft in st.session_state.website_drafts:
+        with st.expander(f"🌐 {draft.get('draft_name', 'Untitled')} - {draft.get('created_at', '')[:10] if draft.get('created_at') else ''}"):
+            website_data = draft.get('website_data', {})
+            
+            if website_data:
+                st.markdown("**Basic Info:**")
+                basic = website_data.get('basic_info', {})
+                st.markdown(f"- Name: {basic.get('author_name', 'N/A')}")
+                st.markdown(f"- Tagline: {basic.get('tagline', 'N/A')}")
+                
+                st.markdown("**Book:**")
+                book = website_data.get('book_content', {})
+                st.markdown(f"- Title: {book.get('book_title', 'N/A')}")
+                st.markdown(f"- Genre: {book.get('book_genre', 'N/A')}")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("📂 Load Draft", key=f"load_{draft['id']}"):
+                    # Load draft into session
+                    website_data = draft.get('website_data', {})
+                    st.session_state.website_basic = website_data.get('basic_info', {})
+                    st.session_state.website_design = website_data.get('design_preferences', {})
+                    st.session_state.website_books = website_data.get('book_content', {})
+                    st.session_state.website_step = 4
+                    st.rerun()
+            
+            with col2:
+                if st.button("🗑️ Delete", key=f"delete_{draft['id']}"):
+                    if delete_website_draft(st.session_state.user_id, draft['id']):
+                        st.session_state.website_drafts = [d for d in st.session_state.website_drafts if d['id'] != draft['id']]
+                        st.success("Draft deleted!")
+                        st.rerun()
 
 # ============================================================================
 # MAIN FUNCTION TO CALL FROM BARDSPARK
