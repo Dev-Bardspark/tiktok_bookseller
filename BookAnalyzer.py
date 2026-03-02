@@ -10,6 +10,69 @@ from PIL import Image
 import io
 from datetime import datetime
 import re
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# Add database connection function (same as in BardSpark.py)
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+def save_analysis_to_db(user_id, book_title, analysis_result, cover_image=None):
+    """Save book analysis to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        
+        # Get genre from analysis if available
+        book_info = analysis_result.get('book_info', {})
+        book_genre = book_info.get('genre', 'Unknown')
+        
+        # Handle cover image if provided
+        cover_url = None
+        # In a real implementation, you might upload to cloud storage
+        # For now, we'll store a placeholder
+        cover_url = "uploaded_cover"
+        
+        cur.execute("""
+            INSERT INTO user_book_analyses 
+            (user_id, book_title, book_genre, analysis_result, cover_image_url, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            book_title,
+            book_genre,
+            json.dumps(analysis_result),
+            cover_url,
+            datetime.now(),
+            datetime.now()
+        ))
+        
+        analysis_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return analysis_id
+    except Exception as e:
+        st.error(f"Error saving to database: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
 
 def show_analyzer():
     """Complete book analysis with marketability dashboard"""
@@ -138,18 +201,32 @@ def show_results():
         filename = f"{book_title.replace(' ', '_')}_analysis.json"
         
         if st.button("💾 Save to Library", use_container_width=True):
-            save_data = {
-                "book_info": st.session_state.analysis_result,
-                "cover_analysis": st.session_state.cover_analysis,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "book_id": st.session_state.current_book_id
-            }
-            
-            if 'analysis_library' not in st.session_state:
-                st.session_state.analysis_library = {}
-            
-            st.session_state.analysis_library[filename] = save_data
-            st.success(f"✅ Saved!")
+            # Check if user is logged in
+            if st.session_state.get('authenticated', False):
+                # Save to database
+                analysis_id = save_analysis_to_db(
+                    st.session_state.user_id,
+                    book_title,
+                    st.session_state.analysis_result
+                )
+                if analysis_id:
+                    st.success(f"✅ Analysis saved to your library!")
+                else:
+                    st.error("Failed to save to database")
+            else:
+                # Fallback to session state for non-logged in users
+                save_data = {
+                    "book_info": st.session_state.analysis_result,
+                    "cover_analysis": st.session_state.cover_analysis,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "book_id": st.session_state.current_book_id
+                }
+                
+                if 'analysis_library' not in st.session_state:
+                    st.session_state.analysis_library = {}
+                
+                st.session_state.analysis_library[filename] = save_data
+                st.warning("⚠️ Not logged in - saved to current session only. Login to save permanently.")
     
     with col2:
         if st.button("🎨 Marketing Assets", use_container_width=True):
