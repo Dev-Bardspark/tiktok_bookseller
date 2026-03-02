@@ -4,6 +4,82 @@ import streamlit.components.v1 as components
 import json
 from typing import Dict, List
 import time
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from datetime import datetime
+
+# ============================================================================
+# DATABASE CONNECTION
+# ============================================================================
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+def save_video_project_to_db(user_id, book_title, video_title, video_script, video_data=None):
+    """Save video project to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_videos 
+            (user_id, video_title, video_script, video_data, created_at, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            video_title,
+            video_script,
+            json.dumps(video_data) if video_data else None,
+            datetime.now(),
+            'draft'
+        ))
+        
+        video_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return video_id
+    except Exception as e:
+        st.error(f"Error saving video: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def load_user_videos(user_id):
+    """Load user's saved video projects"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM user_videos 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        
+        videos = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(v) for v in videos]
+    except Exception as e:
+        st.error(f"Error loading videos: {e}")
+        return []
 
 def show_video_generator():
     """Browser-based video generator - no installation needed"""
@@ -11,8 +87,18 @@ def show_video_generator():
     st.title("🎬 TikTok Video Generator")
     st.markdown("Create professional BookTok videos using free online editors")
     
+    # Initialize session state for video projects
+    if 'video_projects' not in st.session_state:
+        st.session_state.video_projects = []
+    
     # Check if we have generated assets from BookReader
     if 'generated_assets' not in st.session_state or not st.session_state.generated_assets:
+        # Check if user has saved videos
+        if st.session_state.get('authenticated', False):
+            saved_videos = load_user_videos(st.session_state.user_id)
+            if saved_videos:
+                st.info("You have saved video projects. Load them from the 'My Saved Videos' section.")
+        
         st.warning("No marketing assets found. Please generate assets in the Book Reader tab first.")
         if st.button("📖 Go to Book Reader", use_container_width=True):
             st.session_state.current_page = "📖 Book Reader"
@@ -41,18 +127,18 @@ def show_video_generator():
     st.markdown(f"**Genre:** {genre.title()} | **Scripts available:** {len(scripts)}")
     st.divider()
     
-    # Create tabs for different approaches
-    tab1, tab2 = st.tabs(["🎬 Video Editor (Recommended)", "📋 Copy/Paste Method"])
+    # Create tabs for generator and saved videos
+    tab1, tab2 = st.tabs(["🎬 Video Generator", "💾 My Saved Videos"])
     
     with tab1:
         show_video_editor_guide(scripts, book_title, genre)
     
     with tab2:
-        show_copy_paste_method(scripts, book_title)
+        show_saved_videos(book_title)
 
 
 def show_video_editor_guide(scripts: List, book_title: str, genre: str):
-    """Guide users to free online video editors"""
+    """Guide users to free online video editors with save functionality"""
     
     st.markdown("""
     ### 🎥 Choose a Free Video Editor
@@ -99,6 +185,30 @@ def show_video_editor_guide(scripts: List, book_title: str, genre: str):
                         st.info(str(value))
             else:
                 st.write(selected_script)
+        
+        # Save this script button
+        if st.session_state.get('authenticated', False):
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                if st.button("💾 Save Script", use_container_width=True):
+                    # Save to database
+                    video_data = {
+                        'script': selected_script,
+                        'genre': genre,
+                        'book_title': book_title,
+                        'timestamp': str(datetime.now())
+                    }
+                    
+                    script_text = str(selected_script) if not isinstance(selected_script, dict) else json.dumps(selected_script)
+                    video_id = save_video_project_to_db(
+                        st.session_state.user_id,
+                        book_title,
+                        f"{book_title} - Script {selected_idx+1}",
+                        script_text[:500],  # First 500 chars as preview
+                        video_data
+                    )
+                    if video_id:
+                        st.success("✅ Script saved to your library!")
     else:
         st.warning("No scripts available to select")
         return
@@ -383,6 +493,36 @@ def show_copy_paste_method(scripts: List, book_title: str):
     5. Add background music
     6. Export in 9:16 format for TikTok
     """)
+
+
+def show_saved_videos(current_book_title):
+    """Display user's saved video projects"""
+    
+    if not st.session_state.get('authenticated', False):
+        st.warning("Please login to view your saved videos")
+        return
+    
+    saved_videos = load_user_videos(st.session_state.user_id)
+    
+    if not saved_videos:
+        st.info("You haven't saved any video scripts yet. Save scripts from the Video Generator tab.")
+        return
+    
+    st.markdown(f"### 📚 Your Saved Video Projects ({len(saved_videos)})")
+    
+    for video in saved_videos:
+        with st.expander(f"🎬 {video.get('video_title', 'Untitled')} - {video.get('created_at', '')[:10]}"):
+            st.markdown(f"**Script Preview:**")
+            st.info(video.get('video_script', 'No script'))
+            
+            if video.get('video_data'):
+                st.markdown("**Full Data:**")
+                st.json(video.get('video_data'))
+            
+            # Option to load this video
+            if st.button("📂 Load This Script", key=f"load_video_{video['id']}"):
+                st.session_state.loaded_video = video
+                st.success("Script loaded!")
 
 
 def show_video_preview(video_url: str):
