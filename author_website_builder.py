@@ -13,21 +13,36 @@ from datetime import datetime
 # ============================================================================
 def get_author_data():
     """Pull existing author data from session state"""
+    # Safely get current_user
+    current_user = st.session_state.get('current_user')
+    author_name = ''
+    if current_user and isinstance(current_user, dict):
+        author_name = current_user.get('name', '')
+    
+    # Safely get saved readers
+    saved_readers = st.session_state.get('saved_readers', [])
+    if not isinstance(saved_readers, list):
+        saved_readers = []
+    
     data = {
-        "author_name": st.session_state.get('current_user', {}).get('name', ''),
+        "author_name": author_name,
         "author_persona": {},
         "latest_book": {},
-        "saved_advocates": st.session_state.get('saved_readers', [])[:6],  # Top 6 saved
+        "saved_advocates": saved_readers[:6],  # Top 6 saved
         "genres": []
     }
     
     # Try to get from author_persona if it exists
     if 'persona_results' in st.session_state:
-        data["author_persona"] = st.session_state.persona_results
+        persona = st.session_state.persona_results
+        if isinstance(persona, dict):
+            data["author_persona"] = persona
     
     # Try to get from book analyzer
     if 'analysis_result' in st.session_state:
-        data["latest_book"] = st.session_state.analysis_result
+        analysis = st.session_state.analysis_result
+        if isinstance(analysis, dict):
+            data["latest_book"] = analysis
     
     return data
 
