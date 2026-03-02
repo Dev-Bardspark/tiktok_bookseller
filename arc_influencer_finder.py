@@ -8,6 +8,7 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
+from datetime import datetime
 
 # ============================================================================
 # DATABASE CONNECTION (reused from BardSpark.py)
@@ -57,7 +58,7 @@ def get_platforms_with_counts():
         # Build dictionary of all platforms (including ones with 0)
         platform_counts = {}
         
-        # Master list of ALL possible platforms (from your earlier list)
+        # Master list of ALL possible platforms
         all_platforms = [
             "TikTok", "Instagram", "YouTube", "Goodreads", "X (Twitter)", 
             "Facebook", "Bluesky", "StoryGraph", "Amazon", "BookBub",
@@ -195,15 +196,6 @@ def find_advocates(role_type="any", selected_platforms=None, selected_genre="All
     except Exception as e:
         st.error(f"Error finding advocates: {e}")
         return []
-
-def save_to_session(advocates):
-    """Save selected advocates to session state for later use"""
-    if 'saved_readers' not in st.session_state:
-        st.session_state.saved_readers = []
-    
-    for adv in advocates:
-        if not any(r['id'] == adv['id'] for r in st.session_state.saved_readers):
-            st.session_state.saved_readers.append(adv)
 
 # ============================================================================
 # MAIN UI FUNCTION
@@ -400,18 +392,41 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-                    # Save button
-                    is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
-                    
-                    if not is_saved:
-                        if st.button("❤️ Save Advocate", key=f"save_{advocate['id']}"):
-                            if 'saved_readers' not in st.session_state:
-                                st.session_state.saved_readers = []
-                            st.session_state.saved_readers.append(advocate)
-                            st.success(f"✅ @{advocate['username']} saved!")
-                            st.rerun()
-                    else:
-                        st.button("✅ Already Saved", key=f"saved_{advocate['id']}", disabled=True)
+                    # Save button - WITH DATABASE SAVING
+                    col_a, col_b, col_c = st.columns([1, 1, 3])
+                    with col_a:
+                        is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
+                        
+                        if not is_saved:
+                            if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+                                if st.session_state.get('authenticated', False):
+                                    # Save to database
+                                    conn = get_db_connection()
+                                    if conn:
+                                        cur = conn.cursor()
+                                        try:
+                                            cur.execute("""
+                                                INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                                                VALUES (%s, %s, %s)
+                                                ON CONFLICT (user_id, reader_id) DO NOTHING
+                                            """, (st.session_state.user_id, advocate['id'], datetime.now()))
+                                            conn.commit()
+                                            
+                                            # Update session state
+                                            if 'saved_readers' not in st.session_state:
+                                                st.session_state.saved_readers = []
+                                            st.session_state.saved_readers.append(advocate)
+                                            st.success(f"✅ @{advocate['username']} saved!")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error saving: {e}")
+                                        finally:
+                                            cur.close()
+                                            conn.close()
+                                else:
+                                    st.warning("Please login to save readers")
+                        else:
+                            st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
         else:
             st.warning("No advocates found matching your criteria. Try widening your filters.")
     
