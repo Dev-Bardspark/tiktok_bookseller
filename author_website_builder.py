@@ -46,18 +46,7 @@ def get_author_data():
             data["latest_book"] = analysis
     
     return data
-def render_questionnaire():
-    st.title("🌐 Author Website Builder")
-    st.markdown("### Create your professional author website in minutes")
-    
-    # DEBUG: Show what's in session state
-    with st.expander("🔍 DEBUG - Session State Contents"):
-        st.write("Has 'analysis_result':", 'analysis_result' in st.session_state)
-        if 'analysis_result' in st.session_state:
-            st.write("Type:", type(st.session_state.analysis_result))
-            st.write("Keys:", list(st.session_state.analysis_result.keys()) if isinstance(st.session_state.analysis_result, dict) else "Not a dict")
-            st.json(st.session_state.analysis_result)
-        st.write("Has 'saved_readers':", 'saved_readers' in st.session_state)
+
 # ============================================================================
 # QUESTIONNAIRE UI
 # ============================================================================
@@ -224,7 +213,7 @@ def render_questionnaire():
                 st.rerun()
     
     # ============================================================================
-    # STEP 3: BOOKS & CONTENT
+    # STEP 3: BOOKS & CONTENT (WITH BOOK ANALYZER DATA)
     # ============================================================================
     elif st.session_state.website_step == 3:
         st.header("Step 3: Books & Content")
@@ -257,7 +246,7 @@ def render_questionnaire():
             )
         
         with col2:
-            # COVER UPLOAD - THIS IS NEW
+            # COVER UPLOAD
             book_cover = st.file_uploader(
                 "📸 Book Cover Image",
                 type=['jpg', 'jpeg', 'png', 'webp'],
@@ -272,7 +261,7 @@ def render_questionnaire():
                 placeholder="https://goodreads.com/book/..."
             )
         
-        # Book description
+        # Book description (pulled from analyzer)
         default_desc = book_info.get('description', market_data.get('overall_assessment', ''))
         book_description = st.text_area(
             "Book Description",
@@ -317,7 +306,7 @@ def render_questionnaire():
                 st.rerun()
     
     # ============================================================================
-    # STEP 4: REVIEW & BUILD
+    # STEP 4: REVIEW & BUILD (WITH CORRECT SOLOIST.AI LINK)
     # ============================================================================
     elif st.session_state.website_step == 4:
         st.header("Step 4: Review & Build")
@@ -364,51 +353,35 @@ def render_questionnaire():
             if st.button("🚀 Build My Site", type="primary", use_container_width=True):
                 books = st.session_state.get('website_books', {})
                 
-                # Handle cover image if uploaded - convert to data URL
-                cover_data_url = None
-                if books.get('book_cover'):
-                    bytes_data = books['book_cover'].getvalue()
-                    base64_str = base64.b64encode(bytes_data).decode('utf-8')
-                    file_ext = books['book_cover'].name.split('.')[-1]
-                    mime_type = f"image/{file_ext}"
-                    cover_data_url = f"data:{mime_type};base64,{base64_str}"
+                # CORRECT URL for Soloist.ai onboarding
+                onboarding_url = "https://soloist.ai/onboarding"
                 
-                # Create JSON-serializable data
-                json_safe_data = {
-                    "author": st.session_state.get('website_basic', {}),
-                    "design": st.session_state.get('website_design', {}),
-                    "books": {
-                        "book_title": books.get('book_title', book_info.get('title', '')),
-                        "book_genre": books.get('book_genre', book_info.get('genre', '')),
-                        "book_description": books.get('book_description', book_info.get('description', market_data.get('overall_assessment', ''))),
-                        "book_cover_data_url": cover_data_url,  # This contains the actual image
-                        "book_link_amazon": books.get('book_link_amazon', ''),
-                        "book_link_goodreads": books.get('book_link_goodreads', ''),
-                        "showcase_advocates": books.get('showcase_advocates', False)
-                    },
-                    "advocates": [
-                        {
-                            "username": a.get('username'),
-                            "platforms": a.get('platforms', []),
-                            "follower_count": a.get('follower_count', 0)
-                        }
-                        for a in author_data.get('saved_advocates', [])
-                    ] if books.get('showcase_advocates') else []
-                }
+                # Open the onboarding page
+                st.markdown(f"**[Click here to start building your site on Soloist.ai]({onboarding_url})**")
                 
-                # Convert to JSON for passing to Soloist
-                json_data = json.dumps(json_safe_data)
+                # Show helpful info with their data
+                st.info("""
+                **📋 Next Steps:**
+                1. Click the link above to open Soloist.ai
+                2. Enter your **Author Name** as the Business name
+                3. Use your book description below
+                4. Complete the remaining steps
+                """)
                 
-                # Soloist.ai URL with data (they support URL parameters)
-                soloist_url = f"https://soloist.ai/create?data={json_data}"
-                
-                # Open in new tab
-                st.markdown(f'**[Click here to open Soloist.ai with your data]({soloist_url})**')
-                st.info("If the link doesn't work, copy this URL manually:")
-                st.code(soloist_url)
-                
-                st.success("✅ Opening Soloist.ai with your data!")
-                st.info("Complete the final steps on Soloist.ai to publish your site.")
+                # Show their data in an expander for easy copying
+                with st.expander("📋 Your Book Data (Copy this into Soloist.ai)", expanded=True):
+                    st.markdown(f"**Business Name:** {basic.get('author_name', '')}")
+                    st.markdown(f"**Book Title:** {books.get('book_title', book_info.get('title', ''))}")
+                    st.markdown(f"**Genre:** {books.get('book_genre', book_info.get('genre', ''))}")
+                    st.markdown(f"**Description:** {books.get('book_description', book_info.get('description', market_data.get('overall_assessment', '')))}")
+                    
+                    if books.get('book_cover'):
+                        st.markdown("**Cover Image:** ✅ Uploaded (you'll need to upload it manually on Soloist.ai)")
+                    
+                    if books.get('showcase_advocates') and author_data.get('saved_advocates'):
+                        st.markdown("**Advocates to Showcase:**")
+                        for a in author_data['saved_advocates'][:5]:
+                            st.markdown(f"- @{a.get('username')} ({a.get('follower_count', 0)} followers)")
     
     # Show saved count in sidebar
     st.sidebar.markdown("---")
