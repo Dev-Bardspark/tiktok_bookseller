@@ -4,6 +4,81 @@ from openai import OpenAI
 import json
 import time
 from datetime import datetime
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+# ============================================================================
+# DATABASE CONNECTION
+# ============================================================================
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            host=st.secrets["postgres"]["host"],
+            port=st.secrets["postgres"]["port"],
+            database=st.secrets["postgres"]["database"],
+            user=st.secrets["postgres"]["user"],
+            password=st.secrets["postgres"]["password"]
+        )
+        return conn
+    except Exception as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+def save_marketing_asset_to_db(user_id, book_title, asset_type, asset_data):
+    """Save marketing asset to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_marketing_assets 
+            (user_id, asset_type, asset_name, asset_data, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            user_id,
+            asset_type,
+            f"{book_title} - {asset_type}",
+            json.dumps(asset_data),
+            datetime.now(),
+            datetime.now()
+        ))
+        
+        asset_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        return asset_id
+    except Exception as e:
+        st.error(f"Error saving to database: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+def load_user_marketing_assets(user_id):
+    """Load user's saved marketing assets"""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM user_marketing_assets 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (user_id,))
+        
+        assets = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(a) for a in assets]
+    except Exception as e:
+        st.error(f"Error loading assets: {e}")
+        return []
 
 def show_generator():
     """Generate marketing assets from saved analysis"""
@@ -40,42 +115,97 @@ def show_generator():
         return
     
     # ============================================================================
-    # BOOK SELECTION SECTION (Full width)
+    # BOOK SELECTION SECTION
     # ============================================================================
     
     st.markdown("### 📚 Select a Book to Market")
     
-    # Check for saved analyses
+    # Check for saved analyses in session and database
     if 'analysis_library' not in st.session_state:
         st.session_state.analysis_library = {}
     
-    col1, col2 = st.columns([3, 1])
+    # Also check database for saved analyses (if logged in)
+    db_analyses = []
+    if st.session_state.get('authenticated', False):
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute("""
+                    SELECT * FROM user_book_analyses 
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                """, (st.session_state.user_id,))
+                db_analyses = cur.fetchall()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                st.error(f"Error loading saved analyses: {e}")
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        if st.session_state.analysis_library:
-            book_titles = list(st.session_state.analysis_library.keys())
-            selected_book = st.selectbox(
-                "Choose a book from your analyzed library:",
-                book_titles,
+        # Combine session and database analyses for selection
+        all_books = []
+        
+        # Add session analyses
+        for filename, data in st.session_state.analysis_library.items():
+            book_info = data.get('book_info', {})
+            if isinstance(book_info, dict) and 'book_info' in book_info:
+                book_info = book_info['book_info']
+            title = book_info.get('title', 'Unknown')
+            all_books.append({
+                'display': f"📁 {title} (Session)",
+                'source': 'session',
+                'data': data,
+                'filename': filename
+            })
+        
+        # Add database analyses
+        for analysis in db_analyses:
+            analysis_data = analysis.get('analysis_result', {})
+            if isinstance(analysis_data, str):
+                analysis_data = json.loads(analysis_data)
+            title = analysis.get('book_title', 'Unknown')
+            all_books.append({
+                'display': f"💾 {title} (Saved)",
+                'source': 'database',
+                'data': analysis_data,
+                'analysis_id': analysis['id']
+            })
+        
+        if all_books:
+            book_options = [b['display'] for b in all_books]
+            selected_index = st.selectbox(
+                "Choose a book to market:",
+                range(len(book_options)),
+                format_func=lambda x: book_options[x],
                 key="book_selector"
             )
+            selected_book = all_books[selected_index]
         else:
-            st.info("No books found in your library. Please analyze a book first in the Book Analyzer.")
+            st.info("No books found. Please analyze a book first in the Book Analyzer.")
             if st.button("📖 Go to Book Analyzer"):
                 st.session_state.page = "📖 Book Analyzer"
                 st.rerun()
             return
     
     with col2:
-        if st.session_state.analysis_library:
-            if st.button("📂 Load Selected Book", type="primary", use_container_width=True):
-                st.session_state.loaded_analysis = st.session_state.analysis_library[selected_book]
-                st.session_state.generated_assets = None
-                st.session_state.edited_assets = None
-                st.rerun()
+        if all_books and st.button("📂 Load Book", type="primary", use_container_width=True):
+            if selected_book['source'] == 'session':
+                st.session_state.loaded_analysis = selected_book['data']
+            else:
+                st.session_state.loaded_analysis = selected_book['data']
+            st.session_state.generated_assets = None
+            st.session_state.edited_assets = None
+            st.rerun()
+    
+    with col3:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
     
     # ============================================================================
-    # ASSET GENERATION SECTION (Full width, only shows when book is loaded)
+    # ASSET GENERATION SECTION
     # ============================================================================
     
     if st.session_state.loaded_analysis:
@@ -114,6 +244,24 @@ def show_generator():
         
         with col3:
             if st.session_state.edited_assets:
+                # Save to database button
+                if st.session_state.get('authenticated', False):
+                    if st.button("💾 Save to My Library", use_container_width=True):
+                        # Save each asset type separately
+                        for asset_type in ['blurb', 'tiktok_scripts', 'instagram', 'amazon', 
+                                          'facebook_ads', 'email_sequence', 'press_kit', 
+                                          'pinterest', 'goodreads', 'podcast_pitch']:
+                            if asset_type in st.session_state.edited_assets:
+                                asset_data = {asset_type: st.session_state.edited_assets[asset_type]}
+                                asset_id = save_marketing_asset_to_db(
+                                    st.session_state.user_id,
+                                    title,
+                                    asset_type,
+                                    asset_data
+                                )
+                        st.success("✅ Assets saved to your library!")
+                
+                # Export button
                 export_data = json.dumps(st.session_state.edited_assets, indent=2)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"{title.replace(' ', '_')}_assets_{timestamp}.json"
@@ -127,7 +275,7 @@ def show_generator():
                 )
         
         # ============================================================================
-        # ASSET DISPLAY AND EDITING SECTION (Full width tabs)
+        # ASSET DISPLAY AND EDITING SECTION
         # ============================================================================
         
         if st.session_state.generated_assets and st.session_state.edited_assets:
