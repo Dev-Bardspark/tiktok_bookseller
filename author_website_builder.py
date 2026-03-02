@@ -6,6 +6,7 @@ Creates a website using Mozilla Soloist.ai based on author data and questionnair
 import streamlit as st
 import json
 import webbrowser
+import base64
 from datetime import datetime
 
 # ============================================================================
@@ -84,36 +85,30 @@ def render_questionnaire():
         with col1:
             author_name = st.text_input(
                 "Your Name *",
-                value=author_data.get('author_name', ''),
-                help="This will appear in your site header"
+                value=author_data.get('author_name', '')
             )
             
             pen_name = st.text_input(
                 "Pen Name (if different)",
-                value="",
-                help="Leave blank if using your real name"
+                value=""
             )
             
             tagline = st.text_input(
                 "Tagline",
-                placeholder="e.g., Award-winning Fantasy Author",
-                help="A short description that appears under your name"
+                placeholder="e.g., Award-winning Fantasy Author"
             )
         
         with col2:
             email = st.text_input(
                 "Email for Contact *",
-                placeholder="author@example.com",
-                help="Where readers can reach you"
+                placeholder="author@example.com"
             )
             
             website_url = st.text_input(
                 "Current Website (if any)",
-                placeholder="https://...",
-                help="Leave blank if new site"
+                placeholder="https://..."
             )
             
-            # Pull from author persona if available
             if author_data.get('author_persona'):
                 default_audience = author_data['author_persona'].get('target_audience', '')
             else:
@@ -122,8 +117,7 @@ def render_questionnaire():
             target_audience = st.text_area(
                 "Target Audience",
                 value=default_audience,
-                placeholder="e.g., Romance readers who love slow-burn and spice",
-                help="Who reads your books?"
+                placeholder="e.g., Romance readers who love slow-burn and spice"
             )
         
         st.markdown("---")
@@ -131,7 +125,6 @@ def render_questionnaire():
         col1, col2, col3 = st.columns(3)
         with col3:
             if st.button("Next →", type="primary", use_container_width=True):
-                # Save to session
                 st.session_state.website_basic = {
                     "author_name": author_name,
                     "pen_name": pen_name,
@@ -181,7 +174,6 @@ def render_questionnaire():
         with col2:
             st.subheader("📄 Pages to Include")
             
-            # Default pages that should always be included
             st.markdown("**Required Pages:**")
             st.markdown("- ✅ Home Page (auto-included)")
             st.markdown("- ✅ About Me (auto-included)")
@@ -226,45 +218,51 @@ def render_questionnaire():
     elif st.session_state.website_step == 3:
         st.header("Step 3: Books & Content")
         
-        # Pre-fill from book analyzer if available
-        if author_data.get('latest_book'):
-            default_book = author_data['latest_book'].get('title', '')
-            default_desc = author_data['latest_book'].get('description', '')
-        else:
-            default_book = ''
-            default_desc = ''
+        # Get book data from analyzer
+        book_data = author_data.get('latest_book', {})
+        book_info = book_data.get('book_info', {}) if isinstance(book_data, dict) else {}
         
-        st.subheader("📚 Your Books")
+        # Get marketability data for description fallback
+        market_data = book_data.get('marketability', {}) if isinstance(book_data, dict) else {}
         
-        # We'll just do one book for now, can expand later
-        book_title = st.text_input(
-            "Latest Book Title *",
-            value=default_book,
-            placeholder="e.g., Shadows of Midnight"
-        )
+        st.subheader("📚 Your Book")
         
         col1, col2 = st.columns(2)
+        
         with col1:
+            book_title = st.text_input(
+                "Book Title *",
+                value=book_info.get('title', '')
+            )
+            
             book_genre = st.text_input(
                 "Genre",
-                placeholder="e.g., Fantasy Romance"
+                value=book_info.get('genre', '')
             )
+            
             book_link_amazon = st.text_input(
                 "Amazon Link",
                 placeholder="https://amazon.com/dp/..."
             )
         
         with col2:
+            # COVER UPLOAD - THIS IS NEW
             book_cover = st.file_uploader(
-                "Book Cover Image",
-                type=['jpg', 'png', 'webp'],
-                help="Upload your book cover"
+                "📸 Book Cover Image",
+                type=['jpg', 'jpeg', 'png', 'webp'],
+                help="Upload your book cover (this will be included in your site)"
             )
+            
+            if book_cover:
+                st.image(book_cover, width=150, caption="Cover Preview")
+            
             book_link_goodreads = st.text_input(
                 "Goodreads Link",
                 placeholder="https://goodreads.com/book/..."
             )
         
+        # Book description
+        default_desc = book_info.get('description', market_data.get('overall_assessment', ''))
         book_description = st.text_area(
             "Book Description",
             value=default_desc,
@@ -272,7 +270,7 @@ def render_questionnaire():
             height=150
         )
         
-        # Pull from saved advocates if available
+        # Advocate showcase option
         if author_data.get('saved_advocates'):
             st.subheader("⭐ Showcase Your Advocates")
             st.markdown(f"**{len(author_data['saved_advocates'])} saved advocates available**")
@@ -334,25 +332,16 @@ def render_questionnaire():
             books = st.session_state.get('website_books', {})
             st.markdown(f"- Title: {books.get('book_title', '—')}")
             st.markdown(f"- Genre: {books.get('book_genre', '—')}")
+            st.markdown(f"- Cover: {'✅ Uploaded' if books.get('book_cover') else '❌ Not uploaded'}")
             st.markdown(f"- Showcase Advocates: {'✅' if books.get('showcase_advocates') else '❌'}")
         
         st.markdown("---")
         st.markdown("### 🚀 Ready to Build")
-        st.markdown("Click below to create your author website with **Mozilla Soloist.ai**")
         
-        # The data payload that will be sent
-        website_data = {
-            "author": st.session_state.get('website_basic', {}),
-            "design": st.session_state.get('website_design', {}),
-            "books": st.session_state.get('website_books', {}),
-            "advocates": [
-                {
-                    "username": a.get('username'),
-                    "platforms": a.get('platforms', [])
-                }
-                for a in author_data.get('saved_advocates', [])
-            ] if books.get('showcase_advocates') else []
-        }
+        # Get book data from analyzer for additional info
+        book_data = author_data.get('latest_book', {})
+        book_info = book_data.get('book_info', {}) if isinstance(book_data, dict) else {}
+        market_data = book_data.get('marketability', {}) if isinstance(book_data, dict) else {}
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -361,10 +350,43 @@ def render_questionnaire():
                 st.rerun()
         
         with col3:
-            # Build button that opens Soloist.ai with data
             if st.button("🚀 Build My Site", type="primary", use_container_width=True):
+                books = st.session_state.get('website_books', {})
+                
+                # Handle cover image if uploaded - convert to data URL
+                cover_data_url = None
+                if books.get('book_cover'):
+                    bytes_data = books['book_cover'].getvalue()
+                    base64_str = base64.b64encode(bytes_data).decode('utf-8')
+                    file_ext = books['book_cover'].name.split('.')[-1]
+                    mime_type = f"image/{file_ext}"
+                    cover_data_url = f"data:{mime_type};base64,{base64_str}"
+                
+                # Create JSON-serializable data
+                json_safe_data = {
+                    "author": st.session_state.get('website_basic', {}),
+                    "design": st.session_state.get('website_design', {}),
+                    "books": {
+                        "book_title": books.get('book_title', book_info.get('title', '')),
+                        "book_genre": books.get('book_genre', book_info.get('genre', '')),
+                        "book_description": books.get('book_description', book_info.get('description', market_data.get('overall_assessment', ''))),
+                        "book_cover_data_url": cover_data_url,  # This contains the actual image
+                        "book_link_amazon": books.get('book_link_amazon', ''),
+                        "book_link_goodreads": books.get('book_link_goodreads', ''),
+                        "showcase_advocates": books.get('showcase_advocates', False)
+                    },
+                    "advocates": [
+                        {
+                            "username": a.get('username'),
+                            "platforms": a.get('platforms', []),
+                            "follower_count": a.get('follower_count', 0)
+                        }
+                        for a in author_data.get('saved_advocates', [])
+                    ] if books.get('showcase_advocates') else []
+                }
+                
                 # Convert to JSON for passing to Soloist
-                json_data = json.dumps(website_data)
+                json_data = json.dumps(json_safe_data)
                 
                 # Soloist.ai URL with data (they support URL parameters)
                 soloist_url = f"https://soloist.ai/create?data={json_data}"
@@ -374,6 +396,11 @@ def render_questionnaire():
                 
                 st.success("✅ Opening Soloist.ai with your data!")
                 st.info("Complete the final steps on Soloist.ai to publish your site.")
+    
+    # Show saved count in sidebar
+    st.sidebar.markdown("---")
+    saved_count = len(st.session_state.get('saved_readers', []))
+    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
 
 # ============================================================================
 # MAIN FUNCTION TO CALL FROM BARDSPARK
