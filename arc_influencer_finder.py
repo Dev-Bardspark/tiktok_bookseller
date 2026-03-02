@@ -332,12 +332,12 @@ def render_finder():
             
             st.markdown("---")
             
-            # INSTRUCTION MESSAGE (exactly as requested)
+            # INSTRUCTION MESSAGE
             st.info("📝 **Many of these results have email addresses. If not, visit the platform and search for the username.**")
             
             st.markdown("---")
             
-            # Display results
+            # Display results with collapsible sections
             for advocate in results:
                 # Determine role icons
                 role_icons = []
@@ -354,67 +354,64 @@ def render_finder():
                     if len(advocate['platforms']) > 3:
                         platforms_display += f" +{len(advocate['platforms'])-3}"
                 
-                # Main line with name, followers, role, and platforms
-                st.markdown(f"**@{advocate['username']}** - {advocate['follower_count']:,} followers {role_display}{platforms_display}")
+                # Main line for expander
+                expander_label = f"**@{advocate['username']}** - {advocate['follower_count']:,} followers {role_display}{platforms_display}"
                 
-                # Email if available (as clickable link)
-                if advocate.get('email'):
-                    st.markdown(f"📧 [{advocate['email']}](mailto:{advocate['email']})")
-                
-                # Create platform links if username exists
-                if advocate.get('username'):
-                    links = []
-                    base_username = advocate['username'].replace('@', '')
+                # Create expander for each advocate
+                with st.expander(expander_label):
+                    # Email if available
+                    if advocate.get('email'):
+                        st.markdown(f"📧 **Email:** [{advocate['email']}](mailto:{advocate['email']})")
                     
-                    # Common platform URLs
-                    platform_links = {
-                        "TikTok": f"https://tiktok.com/@{base_username}",
-                        "Instagram": f"https://instagram.com/{base_username}",
-                        "YouTube": f"https://youtube.com/@{base_username}",
-                        "X (Twitter)": f"https://twitter.com/{base_username}",
-                        "Facebook": f"https://facebook.com/{base_username}",
-                        "Bluesky": f"https://bsky.app/profile/{base_username}",
-                        "Goodreads": f"https://goodreads.com/{base_username}",
-                        "Pinterest": f"https://pinterest.com/{base_username}"
-                    }
+                    # Full bio
+                    if advocate.get('bio'):
+                        st.markdown(f"📝 **Bio:** {advocate['bio']}")
                     
-                    # Add links for platforms they use
-                    if advocate.get('platforms'):
-                        for platform in advocate['platforms'][:3]:  # Limit to 3 links
-                            if platform in platform_links:
-                                links.append(f"[{platform}]({platform_links[platform]})")
+                    # All platforms
+                    if advocate.get('platforms') and len(advocate['platforms']) > 0:
+                        st.markdown(f"📱 **All Platforms:** {', '.join(advocate['platforms'])}")
                     
-                    if links:
-                        st.markdown(" | ".join(links))
-                
-                # Bio preview
-                if advocate.get('bio'):
-                    st.caption(advocate['bio'][:150] + "..." if len(advocate['bio']) > 150 else advocate['bio'])
-                
-                # Genres preview
-                if advocate.get('genres') and len(advocate['genres']) > 0:
-                    genre_preview = advocate['genres'][:5]
-                    genre_text = ", ".join(genre_preview)
-                    if len(advocate['genres']) > 5:
-                        genre_text += f" +{len(advocate['genres'])-5} more"
-                    st.caption(f"📚 {genre_text}")
-                
-                # Save button (only action button)
-                col1, col2 = st.columns([1, 5])
-                with col1:
+                    # All genres
+                    if advocate.get('genres') and len(advocate['genres']) > 0:
+                        st.markdown(f"📚 **Genres:** {', '.join(advocate['genres'])}")
+                    
+                    # Create platform links
+                    if advocate.get('username'):
+                        base_username = advocate['username'].replace('@', '')
+                        
+                        # Common platform URLs
+                        platform_links = {
+                            "TikTok": f"https://tiktok.com/@{base_username}",
+                            "Instagram": f"https://instagram.com/{base_username}",
+                            "YouTube": f"https://youtube.com/@{base_username}",
+                            "X (Twitter)": f"https://twitter.com/{base_username}",
+                            "Facebook": f"https://facebook.com/{base_username}",
+                            "Bluesky": f"https://bsky.app/profile/{base_username}",
+                            "Goodreads": f"https://goodreads.com/{base_username}",
+                            "Pinterest": f"https://pinterest.com/{base_username}"
+                        }
+                        
+                        links = []
+                        if advocate.get('platforms'):
+                            for platform in advocate['platforms']:
+                                if platform in platform_links:
+                                    links.append(f"[{platform}]({platform_links[platform]})")
+                        
+                        if links:
+                            st.markdown("🔗 **Quick Links:** " + " | ".join(links))
+                    
+                    # Save button
                     is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
                     
                     if not is_saved:
-                        if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+                        if st.button("❤️ Save Advocate", key=f"save_{advocate['id']}"):
                             if 'saved_readers' not in st.session_state:
                                 st.session_state.saved_readers = []
                             st.session_state.saved_readers.append(advocate)
-                            st.success("Saved!")
+                            st.success(f"✅ @{advocate['username']} saved!")
                             st.rerun()
                     else:
-                        st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
-                
-                st.markdown("---")
+                        st.button("✅ Already Saved", key=f"saved_{advocate['id']}", disabled=True)
         else:
             st.warning("No advocates found matching your criteria. Try widening your filters.")
     
