@@ -13,7 +13,8 @@ import LaunchTimeline
 import BookTokCompetitorTracker
 import BookAnalyzer
 import MarketingGenerator
-import author_persona_discovery  # NEW IMPORT
+import author_persona_discovery
+import arc_influencer_finder  # NEW IMPORT
 
 # ============================================================================
 # PAGE CONFIG
@@ -212,17 +213,18 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================================
-# UPDATED NAVIGATION - WITH AUTHOR PERSONA
+# UPDATED NAVIGATION - WITH ADVOCATE FINDER
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "📚 ARC Readers", 
     "❤️ Saved Readers", 
+    "🔍 Advocate Finder",  # NEW MENU ITEM
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
     "🎬 Video Generator",
     "📊 Competitor Tracker",
-    "🧠 Author Persona"  # NEW MENU ITEM
+    "🧠 Author Persona"
 ]
 
 selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
@@ -247,7 +249,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - WITH AUTHOR PERSONA
+    # QUICK ACTIONS BUTTON GRID - WITH ADVOCATE FINDER
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -260,45 +262,58 @@ if st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col2:
+        if st.button("🔍 Advocate Finder", use_container_width=True):  # NEW BUTTON
+            st.session_state.page = "🔍 Advocate Finder"
+            st.rerun()
+    
+    with col3:
         if st.button("📖 Book Analyzer", use_container_width=True):
             st.session_state.page = "📖 Book Analyzer"
             st.rerun()
     
-    with col3:
+    with col4:
         if st.button("🎨 Marketing Assets", use_container_width=True):
             st.session_state.page = "🎨 Marketing Assets"
-            st.rerun()
-    
-    with col4:
-        if st.button("🎬 Video Generator", use_container_width=True):
-            st.session_state.page = "🎬 Video Generator"
             st.rerun()
     
     # Row 2
     col1, col2, col3, col4 = st.columns(4)
     with col1:
+        if st.button("🎬 Video Generator", use_container_width=True):
+            st.session_state.page = "🎬 Video Generator"
+            st.rerun()
+    with col2:
         if st.button("📊 Competitor Tracker", use_container_width=True):
             st.session_state.page = "📊 Competitor Tracker"
             st.rerun()
-    with col2:
-        if st.button("🧠 Author Persona", use_container_width=True):  # NEW BUTTON
+    with col3:
+        if st.button("🧠 Author Persona", use_container_width=True):
             st.session_state.page = "🧠 Author Persona"
             st.rerun()
-    with col3:
-        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     with col4:
-        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     
     # Row 3
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     with col2:
-        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
+        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     with col3:
-        st.button("📚 Book Preview", use_container_width=True, disabled=True)
+        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
     with col4:
+        st.button("📚 Book Preview", use_container_width=True, disabled=True)
+    
+    # Row 4
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
         st.button("⭐ Reviews", use_container_width=True, disabled=True)
+    with col2:
+        st.button("", use_container_width=True, disabled=True)
+    with col3:
+        st.button("", use_container_width=True, disabled=True)
+    with col4:
+        st.button("", use_container_width=True, disabled=True)
     
     # ============================================================================
     # STATS SECTION
@@ -311,18 +326,25 @@ if st.session_state.page == "🏠 Dashboard":
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) FROM arc_readers_central")
         total_readers = cur.fetchone()[0]
+        
+        # Get influencer count
+        cur.execute("SELECT COUNT(*) FROM arc_readers_central WHERE roles @> '[\"Influencer\"]'::jsonb")
+        total_influencers = cur.fetchone()[0]
+        
         cur.close()
         conn.close()
     else:
         total_readers = "?"
+        total_influencers = "?"
     
     # Check if any analysis exists
     books_analyzed = 1 if st.session_state.get('analysis_result') else 0
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("ARC Readers Available", total_readers)
-    col2.metric("Saved Readers", len(st.session_state.saved_readers))
-    col3.metric("Books Analyzed", books_analyzed)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("ARC Readers", total_readers)
+    col2.metric("Influencers", total_influencers)
+    col3.metric("Saved Readers", len(st.session_state.saved_readers))
+    col4.metric("Books Analyzed", books_analyzed)
 
 # ============================================================================
 # ARC READERS PAGE
@@ -365,9 +387,26 @@ elif st.session_state.page == "📚 ARC Readers":
                 st.markdown(f"**Name:** {reader['display_name']}")
                 st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                 
+                # Show platforms if available
+                if reader.get('platforms') and len(reader['platforms']) > 0:
+                    platform_badges = ", ".join([f"`{p}`" for p in reader['platforms']])
+                    st.markdown(f"**Platforms:** {platform_badges}")
+                
+                # Show roles if available
+                if reader.get('roles') and len(reader['roles']) > 0:
+                    role_icons = []
+                    if "ARC Reader" in reader['roles']:
+                        role_icons.append("📚 ARC Reader")
+                    if "Influencer" in reader['roles']:
+                        role_icons.append("📢 Influencer")
+                    st.markdown(f"**Role:** {' + '.join(role_icons)}")
+                
                 if reader['genres']:
-                    genre_list = reader['genres']
-                    st.markdown(f"**Genres:** {', '.join(genre_list)}")
+                    genre_list = reader['genres'][:8]  # Show first 8
+                    genre_text = ", ".join(genre_list)
+                    if len(reader['genres']) > 8:
+                        genre_text += f" +{len(reader['genres'])-8} more"
+                    st.markdown(f"**Genres:** {genre_text}")
                 
                 if reader['email']:
                     st.success(f"📧 {reader['email']}")
@@ -388,15 +427,22 @@ elif st.session_state.page == "📚 ARC Readers":
 # ============================================================================
 
 elif st.session_state.page == "❤️ Saved Readers":
-    st.title("❤️ My Saved ARC Readers")
+    st.title("❤️ My Saved Advocates")
     
     if not st.session_state.saved_readers:
-        st.info("You haven't saved any readers yet. Go to the ARC Readers page to find some!")
-        if st.button("🔍 Find ARC Readers Now", key="find_now"):
-            st.session_state.page = "📚 ARC Readers"
-            st.rerun()
+        st.info("You haven't saved any advocates yet. Go to ARC Readers or Advocate Finder to find some!")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📚 ARC Readers", use_container_width=True):
+                st.session_state.page = "📚 ARC Readers"
+                st.rerun()
+        with col2:
+            if st.button("🔍 Advocate Finder", use_container_width=True):
+                st.session_state.page = "🔍 Advocate Finder"
+                st.rerun()
     else:
-        st.markdown(f"### You have {len(st.session_state.saved_readers)} saved readers")
+        st.markdown(f"### You have {len(st.session_state.saved_readers)} saved advocates")
         
         if st.button("📥 Export as CSV", key="export_csv"):
             df = pd.DataFrame(st.session_state.saved_readers)
@@ -404,7 +450,7 @@ elif st.session_state.page == "❤️ Saved Readers":
             st.download_button(
                 "Download CSV",
                 csv,
-                "my_saved_readers.csv",
+                "my_saved_advocates.csv",
                 "text/csv",
                 key="download_csv"
             )
@@ -419,9 +465,26 @@ elif st.session_state.page == "❤️ Saved Readers":
                     st.markdown(f"**Name:** {reader['display_name']}")
                     st.markdown(f"**Bio:** {reader['bio'][:200]}..." if reader['bio'] and len(reader['bio']) > 200 else f"**Bio:** {reader['bio']}")
                     
+                    # Show platforms if available
+                    if reader.get('platforms') and len(reader['platforms']) > 0:
+                        platform_badges = ", ".join([f"`{p}`" for p in reader['platforms']])
+                        st.markdown(f"**Platforms:** {platform_badges}")
+                    
+                    # Show roles if available
+                    if reader.get('roles') and len(reader['roles']) > 0:
+                        role_icons = []
+                        if "ARC Reader" in reader['roles']:
+                            role_icons.append("📚 ARC Reader")
+                        if "Influencer" in reader['roles']:
+                            role_icons.append("📢 Influencer")
+                        st.markdown(f"**Role:** {' + '.join(role_icons)}")
+                    
                     if reader['genres']:
-                        genre_list = reader['genres']
-                        st.markdown(f"**Genres:** {', '.join(genre_list)}")
+                        genre_list = reader['genres'][:8]
+                        genre_text = ", ".join(genre_list)
+                        if len(reader['genres']) > 8:
+                            genre_text += f" +{len(reader['genres'])-8} more"
+                        st.markdown(f"**Genres:** {genre_text}")
                     
                     if reader['email']:
                         st.success(f"📧 {reader['email']}")
@@ -435,7 +498,14 @@ elif st.session_state.page == "❤️ Saved Readers":
                         if reader['email']:
                             st.info(f"Email them at: {reader['email']}")
                         else:
-                            st.warning("No email found. Try DM on TikTok")
+                            st.warning("No email found. Try DM on their platform")
+
+# ============================================================================
+# ADVOCATE FINDER PAGE
+# ============================================================================
+
+elif st.session_state.page == "🔍 Advocate Finder":
+    arc_influencer_finder.show_finder()
 
 # ============================================================================
 # BOOK ANALYZER PAGE
