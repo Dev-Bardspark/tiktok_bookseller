@@ -16,6 +16,7 @@ import MarketingGenerator
 import author_persona_discovery
 import arc_influencer_finder
 import author_website_builder
+import auth  # ADD THIS IMPORT
 
 # ============================================================================
 # PAGE CONFIG
@@ -186,40 +187,108 @@ def get_all_genres():
 if 'saved_readers' not in st.session_state:
     st.session_state.saved_readers = []
 
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = None
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.user = None
+    st.session_state.user_id = None
+    st.session_state.user_data = None
 
 if 'page' not in st.session_state:
     st.session_state.page = "🏠 Dashboard"
 
 # ============================================================================
-# SIDEBAR
+# SIDEBAR - AUTHENTICATION WITH REGISTER BUTTON
 # ============================================================================
 st.sidebar.title("✨ BardSpark")
 st.sidebar.markdown("---")
 
-# Simple login
-st.sidebar.subheader("👤 Author Demo")
-if st.session_state.current_user is None:
-    author_name = st.sidebar.text_input("Your name", value="Demo Author", key="login_name")
-    if st.sidebar.button("Login as Demo", key="login_button"):
-        st.session_state.current_user = {"id": 1, "name": author_name}
-        st.rerun()
+# Auth UI
+st.sidebar.subheader("👤 Account")
+
+if not st.session_state.authenticated:
+    # Create tabs for Login and Register
+    auth_tab1, auth_tab2 = st.sidebar.tabs(["🔑 Login", "📝 Register"])
+    
+    with auth_tab1:
+        with st.form("login_form"):
+            username = st.text_input("Username or Email", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            submitted = st.form_submit_button("Login", use_container_width=True)
+            
+            if submitted:
+                if username and password:
+                    success, result = auth.login_user(username, password)
+                    if success:
+                        st.session_state.authenticated = True
+                        st.session_state.user = result
+                        st.session_state.user_id = result['id']
+                        
+                        # Load all user data
+                        user_data = auth.load_all_user_data(result['id'])
+                        st.session_state.saved_readers = user_data.get('saved_arc_readers', [])
+                        st.session_state.user_data = user_data
+                        
+                        st.rerun()
+                    else:
+                        st.sidebar.error(result)
+                else:
+                    st.sidebar.error("Please enter username and password")
+    
+    with auth_tab2:
+        with st.form("register_form"):
+            new_username = st.text_input("Username", key="reg_username")
+            new_email = st.text_input("Email", key="reg_email")
+            new_password = st.text_input("Password", type="password", key="reg_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm")
+            display_name = st.text_input("Display Name (optional)", key="reg_display")
+            submitted = st.form_submit_button("Register", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not new_username or not new_email or not new_password:
+                    st.sidebar.error("All fields required")
+                elif new_password != confirm_password:
+                    st.sidebar.error("Passwords don't match")
+                elif len(new_password) < 6:
+                    st.sidebar.error("Password must be at least 6 characters")
+                else:
+                    success, result = auth.register_user(
+                        new_username, new_email, new_password, 
+                        display_name if display_name else None
+                    )
+                    if success:
+                        st.sidebar.success("✅ Registration successful! Please login.")
+                    else:
+                        st.sidebar.error(result)
+
 else:
-    st.sidebar.success(f"Logged in as: {st.session_state.current_user['name']}")
-    if st.sidebar.button("Logout", key="logout_button"):
-        st.session_state.current_user = None
-        st.rerun()
+    st.sidebar.success(f"✅ Logged in as: {st.session_state.user.get('display_name', st.session_state.user['username'])}")
+    
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        if st.button("👤 Profile", use_container_width=True):
+            st.session_state.page = "👤 My Profile"
+            st.rerun()
+    with col2:
+        if st.button("🚪 Logout", use_container_width=True):
+            # Clear session state
+            st.session_state.authenticated = False
+            st.session_state.user = None
+            st.session_state.user_id = None
+            st.session_state.user_data = None
+            st.session_state.saved_readers = []
+            st.session_state.analysis_result = None
+            st.session_state.persona_results = None
+            st.rerun()
 
 st.sidebar.markdown("---")
 
 # ============================================================================
-# UPDATED NAVIGATION - REMOVED ARC READERS, RENAMED ADVOCATE FINDER
+# NAVIGATION MENU
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "❤️ Saved Readers", 
-    "🔍 ARC Readers/Influencers",  # RENAMED
+    "🔍 ARC Readers/Influencers",
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
     "🎬 Video Generator",
@@ -228,7 +297,11 @@ menu_options = [
     "🌐 Website Builder"
 ]
 
-selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page))
+# Add profile page if logged in
+if st.session_state.authenticated:
+    menu_options.insert(1, "👤 My Profile")
+
+selected = st.sidebar.radio("Menu", menu_options, index=menu_options.index(st.session_state.page) if st.session_state.page in menu_options else 0)
 
 if selected != st.session_state.page:
     st.session_state.page = selected
@@ -237,12 +310,58 @@ if selected != st.session_state.page:
 st.session_state.current_page = st.session_state.page
 
 # ============================================================================
+# PROFILE PAGE (NEW)
+# ============================================================================
+
+if st.session_state.page == "👤 My Profile":
+    st.title("👤 My Profile")
+    st.markdown("### Your account information")
+    
+    if not st.session_state.authenticated:
+        st.warning("Please login to view your profile")
+    else:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Account Details**")
+            st.markdown(f"**Username:** {st.session_state.user['username']}")
+            st.markdown(f"**Email:** {st.session_state.user['email']}")
+            st.markdown(f"**Display Name:** {st.session_state.user.get('display_name', 'Not set')}")
+            st.markdown(f"**Member Since:** {st.session_state.user.get('created_at', 'Unknown')[:10] if st.session_state.user.get('created_at') else 'Unknown'}")
+        
+        with col2:
+            st.markdown("**Your Stats**")
+            st.markdown(f"**Saved Readers:** {len(st.session_state.saved_readers)}")
+            st.markdown(f"**Books Analyzed:** {len(st.session_state.user_data.get('book_analyses', [])) if st.session_state.user_data else 0}")
+            st.markdown(f"**Author Personas:** {len(st.session_state.user_data.get('author_persona', [])) if st.session_state.user_data else 0}")
+        
+        st.markdown("---")
+        
+        if st.button("📥 Export My Data", use_container_width=True):
+            # Create export of all user data
+            export_data = {
+                'user': st.session_state.user,
+                'saved_readers': st.session_state.saved_readers,
+                'user_data': st.session_state.user_data
+            }
+            st.download_button(
+                "Download Data (JSON)",
+                data=json.dumps(export_data, indent=2, default=str),
+                file_name=f"bardspark_export_{st.session_state.user['username']}.json",
+                mime="application/json"
+            )
+
+# ============================================================================
 # DASHBOARD PAGE
 # ============================================================================
 
-if st.session_state.page == "🏠 Dashboard":
+elif st.session_state.page == "🏠 Dashboard":
     st.title("✨ BardSpark")
     st.markdown("### Write. Not Marketing.")
+    
+    # Welcome message for logged in users
+    if st.session_state.authenticated:
+        st.success(f"Welcome back, {st.session_state.user.get('display_name', st.session_state.user['username'])}!")
     
     # ============================================================================
     # TIMELINE WIDGET (from LaunchTimeline module)
@@ -250,7 +369,7 @@ if st.session_state.page == "🏠 Dashboard":
     LaunchTimeline.show_timeline_widget()
     
     # ============================================================================
-    # QUICK ACTIONS BUTTON GRID - REMOVED ARC READERS BUTTON
+    # QUICK ACTIONS BUTTON GRID
     # ============================================================================
     st.markdown("### 🚀 Quick Actions")
     
@@ -258,7 +377,7 @@ if st.session_state.page == "🏠 Dashboard":
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("🔍 ARC Readers/Influencers", use_container_width=True):  # RENAMED
+        if st.button("🔍 ARC Readers/Influencers", use_container_width=True):
             st.session_state.page = "🔍 ARC Readers/Influencers"
             st.rerun()
     
@@ -288,27 +407,22 @@ if st.session_state.page == "🏠 Dashboard":
             st.session_state.page = "🧠 Author Persona"
             st.rerun()
     with col3:
-        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
+        if st.button("🌐 Website Builder", use_container_width=True):
+            st.session_state.page = "🌐 Website Builder"
+            st.rerun()
     with col4:
-        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     
     # Row 3
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button("🌐 Website Builder", use_container_width=True):
-            st.session_state.page = "🌐 Website Builder"
-            st.rerun()
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     with col2:
         st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     with col3:
         st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
     with col4:
         st.button("📚 Book Preview", use_container_width=True, disabled=True)
-    
-    # Row 4 (if it exists, otherwise ignore)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.button("⭐ Reviews", use_container_width=True, disabled=True)
     
     # ============================================================================
     # STATS SECTION
@@ -322,28 +436,24 @@ if st.session_state.page == "🏠 Dashboard":
         cur.execute("SELECT COUNT(*) FROM arc_readers_central")
         total_readers = cur.fetchone()[0]
         
-        # Get influencer count
         cur.execute("SELECT COUNT(*) FROM arc_readers_central WHERE roles @> '[\"Influencer\"]'::jsonb")
         total_influencers = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM users")
+        total_users = cur.fetchone()[0]
         
         cur.close()
         conn.close()
     else:
         total_readers = "?"
         total_influencers = "?"
-    
-    # Check if any analysis exists
-    books_analyzed = 1 if st.session_state.get('analysis_result') else 0
+        total_users = "?"
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("ARC Readers", total_readers)
     col2.metric("Influencers", total_influencers)
-    col3.metric("Saved Readers", len(st.session_state.saved_readers))
-    col4.metric("Books Analyzed", books_analyzed)
-
-# ============================================================================
-# ARC READERS PAGE - REMOVED COMPLETELY
-# ============================================================================
+    col3.metric("Total Users", total_users)
+    col4.metric("Your Saved Readers", len(st.session_state.saved_readers))
 
 # ============================================================================
 # SAVED READERS PAGE
@@ -352,7 +462,14 @@ if st.session_state.page == "🏠 Dashboard":
 elif st.session_state.page == "❤️ Saved Readers":
     st.title("❤️ My Saved Advocates")
     
-    if not st.session_state.saved_readers:
+    if not st.session_state.authenticated:
+        st.warning("Please login to save and view your advocates")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔍 ARC Readers/Influencers", use_container_width=True):
+                st.session_state.page = "🔍 ARC Readers/Influencers"
+                st.rerun()
+    elif not st.session_state.saved_readers:
         st.info("You haven't saved any advocates yet. Go to ARC Readers/Influencers to find some!")
         
         col1, col2 = st.columns(2)
@@ -369,7 +486,7 @@ elif st.session_state.page == "❤️ Saved Readers":
             st.download_button(
                 "Download CSV",
                 csv,
-                "my_saved_advocates.csv",
+                f"saved_advocates_{st.session_state.user['username']}.csv",
                 "text/csv",
                 key="download_csv"
             )
@@ -441,11 +558,18 @@ elif st.session_state.page == "❤️ Saved Readers":
                 
                 with col2:
                     if st.button("🗑️ Remove", key=f"remove_{reader['id']}_{i}"):
-                        st.session_state.saved_readers.pop(i)
-                        st.rerun()
+                        if st.session_state.authenticated:
+                            # Remove from database
+                            auth.remove_saved_arc_reader(st.session_state.user_id, reader['id'])
+                            # Update session state
+                            st.session_state.saved_readers.pop(i)
+                            st.rerun()
+                        else:
+                            st.session_state.saved_readers.pop(i)
+                            st.rerun()
 
 # ============================================================================
-# ARC READERS/INFLUENCERS PAGE (formerly Advocate Finder)
+# ARC READERS/INFLUENCERS PAGE
 # ============================================================================
 
 elif st.session_state.page == "🔍 ARC Readers/Influencers":
@@ -487,7 +611,7 @@ elif st.session_state.page == "🧠 Author Persona":
     author_persona_discovery.render_quiz()
 
 # ============================================================================
-# WEBSITE BUILDER PAGE - ADD THIS HERE
+# WEBSITE BUILDER PAGE
 # ============================================================================
 
 elif st.session_state.page == "🌐 Website Builder":
