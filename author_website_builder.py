@@ -1,18 +1,18 @@
 """
 Author Website Builder Module for BardSpark
-Creates a website using Mozilla Soloist.ai based on author data and questionnaire
+Generates HTML sections that users can copy-paste into their website
 """
 
 import streamlit as st
 import json
-import webbrowser
 import base64
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
+import re
 
 # ============================================================================
-# DATABASE CONNECTION
+# DATABASE CONNECTION (Keep your existing connection functions)
 # ============================================================================
 def get_db_connection():
     try:
@@ -28,606 +28,513 @@ def get_db_connection():
         st.error(f"Database connection failed: {e}")
         return None
 
-def save_website_draft_to_db(user_id, draft_name, basic_info, design_preferences, book_content, cover_image_url=None):
-    """Save a website builder draft to database"""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    
-    try:
-        cur = conn.cursor()
-        
-        # Combine all website data
-        website_data = {
-            "basic_info": basic_info,
-            "design_preferences": design_preferences,
-            "book_content": book_content,
-            "created_at": datetime.now().isoformat()
-        }
-        
-        cur.execute("""
-            INSERT INTO user_website_drafts 
-            (user_id, draft_name, website_data, cover_image_url, created_at, updated_at, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            user_id,
-            draft_name,
-            json.dumps(website_data),
-            cover_image_url,
-            datetime.now(),
-            datetime.now(),
-            'draft'
-        ))
-        
-        draft_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-        conn.close()
-        return draft_id
-    except Exception as e:
-        st.error(f"Error saving website draft: {e}")
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return False
-
-def load_user_website_drafts(user_id):
-    """Load all website drafts for a user"""
-    conn = get_db_connection()
-    if not conn:
-        return []
-    
-    try:
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT * FROM user_website_drafts 
-            WHERE user_id = %s
-            ORDER BY updated_at DESC
-        """, (user_id,))
-        
-        drafts = cur.fetchall()
-        cur.close()
-        conn.close()
-        
-        # Parse JSON data
-        result = []
-        for d in drafts:
-            draft_dict = dict(d)
-            if draft_dict.get('website_data'):
-                if isinstance(draft_dict['website_data'], str):
-                    draft_dict['website_data'] = json.loads(draft_dict['website_data'])
-            result.append(draft_dict)
-        
-        return result
-    except Exception as e:
-        st.error(f"Error loading website drafts: {e}")
-        return []
-
-def update_website_draft(user_id, draft_id, website_data, cover_image_url=None):
-    """Update an existing website draft"""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE user_website_drafts 
-            SET website_data = %s, cover_image_url = %s, updated_at = %s
-            WHERE user_id = %s AND id = %s
-        """, (
-            json.dumps(website_data),
-            cover_image_url,
-            datetime.now(),
-            user_id,
-            draft_id
-        ))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        st.error(f"Error updating website draft: {e}")
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return False
-
-def delete_website_draft(user_id, draft_id):
-    """Delete a website draft"""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            DELETE FROM user_website_drafts 
-            WHERE user_id = %s AND id = %s
-        """, (user_id, draft_id))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        st.error(f"Error deleting website draft: {e}")
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return False
-
 # ============================================================================
-# DATA FUNCTIONS - Pull from existing session data
+# IMPROVED DATA FUNCTIONS - Properly pull from all sources
 # ============================================================================
-def get_author_data():
-    """Pull existing author data from session state"""
-    # Safely get current_user
-    current_user = st.session_state.get('current_user')
-    author_name = ''
-    if current_user and isinstance(current_user, dict):
-        author_name = current_user.get('name', '')
+def get_complete_author_data():
+    """Pull ALL existing author data from session state with proper error handling"""
     
-    # Safely get saved readers
-    saved_readers = st.session_state.get('saved_readers', [])
-    if not isinstance(saved_readers, list):
-        saved_readers = []
-    
+    # Initialize with defaults
     data = {
-        "author_name": author_name,
-        "author_persona": {},
-        "latest_book": {},
-        "saved_advocates": saved_readers[:6],  # Top 6 saved
+        "profile": {},
+        "book_analysis": {},
+        "marketing_assets": {},
+        "advocates": [],
         "genres": []
     }
     
-    # Try to get from author_persona if it exists
-    if 'persona_results' in st.session_state:
-        persona = st.session_state.persona_results
-        if isinstance(persona, dict):
-            data["author_persona"] = persona
+    # 1. Get User Profile Data
+    if st.session_state.get('authenticated', False):
+        try:
+            # Try to get from current_user
+            current_user = st.session_state.get('current_user', {})
+            if isinstance(current_user, dict):
+                data["profile"] = {
+                    "name": current_user.get('name', ''),
+                    "email": current_user.get('email', ''),
+                    "pen_name": current_user.get('pen_name', ''),
+                    "bio": current_user.get('bio', ''),
+                    "website": current_user.get('website', ''),
+                    "social_media": current_user.get('social_media', {})
+                }
+        except Exception as e:
+            st.warning(f"Could not load profile data: {e}")
     
-    # Try to get from book analyzer
-    if 'analysis_result' in st.session_state:
-        analysis = st.session_state.analysis_result
-        if isinstance(analysis, dict):
-            data["latest_book"] = analysis
+    # 2. Get Book Analyzer Results
+    try:
+        # Check various possible locations for book analysis
+        if 'analysis_result' in st.session_state:
+            analysis = st.session_state.analysis_result
+            if isinstance(analysis, dict):
+                # Extract book info safely
+                book_info = analysis.get('book_info', {})
+                if isinstance(book_info, str):
+                    try:
+                        book_info = json.loads(book_info)
+                    except:
+                        book_info = {}
+                
+                # Extract marketability data
+                marketability = analysis.get('marketability', {})
+                if isinstance(marketability, str):
+                    try:
+                        marketability = json.loads(marketability)
+                    except:
+                        marketability = {}
+                
+                data["book_analysis"] = {
+                    "title": book_info.get('title', ''),
+                    "author": book_info.get('author', data["profile"].get('name', '')),
+                    "genre": book_info.get('genre', ''),
+                    "subgenres": book_info.get('subgenres', []),
+                    "description": book_info.get('description', ''),
+                    "target_audience": marketability.get('target_audience', ''),
+                    "comparable_titles": marketability.get('comparable_titles', []),
+                    "unique_selling_points": marketability.get('unique_selling_points', []),
+                    "themes": book_info.get('themes', [])
+                }
+    except Exception as e:
+        st.warning(f"Could not load book analysis: {e}")
+    
+    # 3. Get Marketing Assets
+    try:
+        if 'marketing_assets' in st.session_state:
+            assets = st.session_state.marketing_assets
+            if isinstance(assets, dict):
+                data["marketing_assets"] = {
+                    "cover_image": assets.get('cover_image'),
+                    "author_photo": assets.get('author_photo'),
+                    "book_trailer": assets.get('book_trailer'),
+                    "press_kit": assets.get('press_kit'),
+                    "review_quotes": assets.get('review_quotes', []),
+                    "endorsements": assets.get('endorsements', [])
+                }
+    except Exception as e:
+        st.warning(f"Could not load marketing assets: {e}")
+    
+    # 4. Get Saved Advocates/Readers
+    try:
+        saved_readers = st.session_state.get('saved_readers', [])
+        if saved_readers and isinstance(saved_readers, list):
+            # Get top advocates with complete data
+            data["advocates"] = []
+            for reader in saved_readers[:8]:  # Top 8 advocates
+                if isinstance(reader, dict):
+                    data["advocates"].append({
+                        "username": reader.get('username', ''),
+                        "platform": reader.get('platform', ''),
+                        "follower_count": reader.get('follower_count', 0),
+                        "engagement_rate": reader.get('engagement_rate', ''),
+                        "niche": reader.get('niche', ''),
+                        "testimonial": reader.get('testimonial', '')
+                    })
+    except Exception as e:
+        st.warning(f"Could not load advocates: {e}")
     
     return data
 
 # ============================================================================
-# QUESTIONNAIRE UI
+# HTML SECTION GENERATORS
 # ============================================================================
-def render_questionnaire():
-    st.title("🌐 Author Website Builder")
-    st.markdown("### Create your professional author website in minutes")
-    
-    # Check authentication
-    if not st.session_state.get('authenticated', False):
-        st.warning("Please login to save your website drafts")
-    
-    # Initialize session state for website drafts
-    if 'website_drafts' not in st.session_state:
-        st.session_state.website_drafts = []
-        if st.session_state.get('authenticated', False):
-            st.session_state.website_drafts = load_user_website_drafts(st.session_state.user_id)
-    
-    # Pull existing data
-    author_data = get_author_data()
-    
-    # Progress tracking
-    if 'website_step' not in st.session_state:
-        st.session_state.website_step = 1
-    
-    # Create tabs for builder and saved drafts
-    tab1, tab2 = st.tabs(["🏗️ Website Builder", "💾 My Saved Drafts"])
-    
-    with tab1:
-        show_builder(author_data)
-    
-    with tab2:
-        show_saved_drafts()
 
-def show_builder(author_data):
-    """Main website builder interface"""
+def generate_author_bio_section(data):
+    """Generate HTML for author bio section"""
     
-    # Step indicators
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown("**Step 1** 📋" if st.session_state.website_step >= 1 else "Step 1")
-    with col2:
-        st.markdown("**Step 2** 🎨" if st.session_state.website_step >= 2 else "Step 2")
-    with col3:
-        st.markdown("**Step 3** 📚" if st.session_state.website_step >= 3 else "Step 3")
-    with col4:
-        st.markdown("**Step 4** 🚀" if st.session_state.website_step >= 4 else "Step 4")
+    profile = data.get('profile', {})
+    book = data.get('book_analysis', {})
+    
+    author_name = profile.get('pen_name') or profile.get('name', 'Your Name')
+    author_bio = profile.get('bio', book.get('description', '')[:200] + '...' if book.get('description') else '')
+    
+    html = f"""
+    <!-- AUTHOR BIO SECTION - Copy and paste this where you want your bio to appear -->
+    <section class="author-bio" style="padding: 60px 20px; background-color: #f9f9f9;">
+        <div style="max-width: 800px; margin: 0 auto; text-align: center;">
+            <h2 style="font-size: 2.5em; margin-bottom: 20px; color: #333;">About {author_name}</h2>
+            <div style="width: 100px; height: 3px; background-color: #crimson; margin: 0 auto 30px;"></div>
+            <p style="font-size: 1.2em; line-height: 1.6; color: #666; margin-bottom: 30px;">
+                {author_bio}
+            </p>
+    """
+    
+    # Add social links if available
+    social = profile.get('social_media', {})
+    if social:
+        html += '<div class="social-links" style="margin-top: 30px;">'
+        for platform, url in social.items():
+            if url:
+                html += f'<a href="{url}" target="_blank" style="display: inline-block; margin: 0 10px; padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px;">{platform.title()}</a>'
+        html += '</div>'
+    
+    html += """
+        </div>
+    </section>
+    <!-- END AUTHOR BIO SECTION -->
+    """
+    
+    return html
+
+def generate_book_showcase_section(data):
+    """Generate HTML for book showcase section"""
+    
+    book = data.get('book_analysis', {})
+    assets = data.get('marketing_assets', {})
+    
+    title = book.get('title', 'My Book')
+    genre = book.get('genre', '')
+    description = book.get('description', '')
+    
+    # Get cover image if available
+    cover_image = assets.get('cover_image')
+    cover_html = ''
+    if cover_image:
+        # Handle base64 encoded image
+        if isinstance(cover_image, str) and cover_image.startswith('data:image'):
+            cover_html = f'<img src="{cover_image}" alt="{title} Cover" style="max-width: 300px; width: 100%; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">'
+    else:
+        cover_html = '<div style="width: 300px; height: 450px; background-color: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999;">Cover Image Placeholder</div>'
+    
+    # Get review quotes
+    review_quotes = assets.get('review_quotes', [])
+    reviews_html = ''
+    if review_quotes:
+        reviews_html = '<div style="margin-top: 40px;"><h3 style="color: #333;">Praise for the Book</h3><div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 20px;">'
+        for quote in review_quotes[:3]:
+            if isinstance(quote, dict):
+                reviews_html += f"""
+                <div style="flex: 1; min-width: 250px; padding: 20px; background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                    <p style="font-style: italic; color: #555;">"{quote.get('text', '')}"</p>
+                    <p style="font-weight: bold; margin-top: 10px;">— {quote.get('reviewer', 'Reviewer')}</p>
+                </div>
+                """
+        reviews_html += '</div></div>'
+    
+    html = f"""
+    <!-- BOOK SHOWCASE SECTION - Copy and paste this where you want your book featured -->
+    <section class="book-showcase" style="padding: 60px 20px; background-color: white;">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <h2 style="font-size: 2.5em; text-align: center; margin-bottom: 40px; color: #333;">My Latest Book</h2>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center; justify-content: center;">
+                <!-- Book Cover -->
+                <div style="flex: 1; min-width: 300px; text-align: center;">
+                    {cover_html}
+                </div>
+                
+                <!-- Book Info -->
+                <div style="flex: 2; min-width: 300px;">
+                    <h3 style="font-size: 2em; color: #333; margin-bottom: 10px;">{title}</h3>
+                    <p style="color: #666; font-size: 1.1em; margin-bottom: 15px;">{genre}</p>
+                    <p style="line-height: 1.8; color: #555; margin-bottom: 25px;">
+                        {description}
+                    </p>
+                    
+                    <!-- Purchase Links -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-top: 30px;">
+                        <a href="#" style="padding: 12px 30px; background-color: #crimson; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Amazon</a>
+                        <a href="#" style="padding: 12px 30px; background-color: #2e4057; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Barnes & Noble</a>
+                        <a href="#" style="padding: 12px 30px; background-color: #446688; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Goodreads</a>
+                    </div>
+                </div>
+            </div>
+            
+            {reviews_html}
+        </div>
+    </section>
+    <!-- END BOOK SHOWCASE SECTION -->
+    """
+    
+    return html
+
+def generate_advocates_section(data):
+    """Generate HTML for advocates showcase section"""
+    
+    advocates = data.get('advocates', [])
+    
+    if not advocates:
+        return "<!-- No advocates data available -->"
+    
+    html = """
+    <!-- ADVOCATES SHOWCASE SECTION - Copy and paste this where you want to showcase your supporters -->
+    <section class="advocates-showcase" style="padding: 60px 20px; background-color: #f5f5f5;">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <h2 style="font-size: 2.5em; text-align: center; margin-bottom: 20px; color: #333;">Our Amazing Advocates</h2>
+            <p style="text-align: center; color: #666; margin-bottom: 40px;">The readers and influencers who support our work</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px;">
+    """
+    
+    for advocate in advocates:
+        username = advocate.get('username', 'Reader')
+        platform = advocate.get('platform', 'Social Media')
+        followers = advocate.get('follower_count', 0)
+        engagement = advocate.get('engagement_rate', 'High')
+        testimonial = advocate.get('testimonial', f'Amazing book! Can\'t wait for more from this author.')
+        
+        # Format follower count
+        if followers >= 1000000:
+            follower_text = f"{followers/1000000:.1f}M followers"
+        elif followers >= 1000:
+            follower_text = f"{followers/1000:.1f}K followers"
+        else:
+            follower_text = f"{followers} followers"
+        
+        html += f"""
+                <div style="background-color: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                    <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                        <div style="width: 50px; height: 50px; background-color: #crimson; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; margin-right: 15px;">
+                            {username[0].upper()}
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; color: #333;">@{username}</h4>
+                            <p style="margin: 5px 0 0; color: #666; font-size: 0.9em;">{platform} • {follower_text}</p>
+                        </div>
+                    </div>
+                    <p style="color: #555; line-height: 1.6; font-style: italic;">"{testimonial}"</p>
+                    <p style="color: #crimson; margin-top: 10px; font-weight: bold;">Engagement: {engagement}</p>
+                </div>
+        """
+    
+    html += """
+            </div>
+        </div>
+    </section>
+    <!-- END ADVOCATES SHOWCASE SECTION -->
+    """
+    
+    return html
+
+def generate_marketing_assets_section(data):
+    """Generate HTML for marketing assets section"""
+    
+    assets = data.get('marketing_assets', {})
+    endorsements = assets.get('endorsements', [])
+    
+    html = """
+    <!-- MARKETING ASSETS SECTION - Copy and paste this for your press/promotion page -->
+    <section class="marketing-assets" style="padding: 60px 20px; background-color: white;">
+        <div style="max-width: 1000px; margin: 0 auto;">
+            <h2 style="font-size: 2.5em; text-align: center; margin-bottom: 40px; color: #333;">Press & Marketing</h2>
+    """
+    
+    # Endorsements section
+    if endorsements:
+        html += """
+            <div style="margin-bottom: 50px;">
+                <h3 style="color: #333; margin-bottom: 30px;">Endorsements</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 30px;">
+        """
+        
+        for endorsement in endorsements[:3]:
+            if isinstance(endorsement, dict):
+                html += f"""
+                    <div style="flex: 1; min-width: 250px; padding: 30px; background-color: #f9f9f9; border-left: 4px solid crimson;">
+                        <p style="font-size: 1.2em; font-style: italic; color: #444;">"{endorsement.get('quote', '')}"</p>
+                        <p style="font-weight: bold; margin-top: 15px;">— {endorsement.get('author', '')}</p>
+                        <p style="color: #666;">{endorsement.get('title', '')}</p>
+                    </div>
+                """
+        
+        html += """
+                </div>
+            </div>
+        """
+    
+    # Press kit link
+    if assets.get('press_kit'):
+        html += """
+            <div style="text-align: center; margin-top: 40px; padding: 30px; background-color: #f0f0f0; border-radius: 10px;">
+                <h3 style="color: #333; margin-bottom: 20px;">Download Press Kit</h3>
+                <a href="#" style="display: inline-block; padding: 15px 40px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Download Press Materials</a>
+            </div>
+        """
+    
+    html += """
+        </div>
+    </section>
+    <!-- END MARKETING ASSETS SECTION -->
+    """
+    
+    return html
+
+def generate_complete_html_package(data):
+    """Generate a complete HTML package with all sections"""
+    
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Author Website Content</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; margin: 0; padding: 0; }
+        .section-divider { text-align: center; padding: 20px; background-color: #f0f0f0; color: #999; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <!-- ========== AUTHOR WEBSITE CONTENT ========== -->
+    <!-- Copy and paste the sections you want into your website builder -->
+    
+    <div class="section-divider">--- AUTHOR BIO SECTION (START) ---</div>
+"""
+    
+    html += generate_author_bio_section(data)
+    
+    html += """
+    <div class="section-divider">--- AUTHOR BIO SECTION (END) ---</div>
+    
+    <div class="section-divider">--- BOOK SHOWCASE SECTION (START) ---</div>
+"""
+    
+    html += generate_book_showcase_section(data)
+    
+    html += """
+    <div class="section-divider">--- BOOK SHOWCASE SECTION (END) ---</div>
+    """
+    
+    if data.get('advocates'):
+        html += """
+    <div class="section-divider">--- ADVOCATES SHOWCASE SECTION (START) ---</div>
+    """
+        html += generate_advocates_section(data)
+        html += """
+    <div class="section-divider">--- ADVOCATES SHOWCASE SECTION (END) ---</div>
+    """
+    
+    if data.get('marketing_assets'):
+        html += """
+    <div class="section-divider">--- MARKETING ASSETS SECTION (START) ---</div>
+    """
+        html += generate_marketing_assets_section(data)
+        html += """
+    <div class="section-divider">--- MARKETING ASSETS SECTION (END) ---</div>
+    """
+    
+    html += """
+    <!-- ========== END AUTHOR WEBSITE CONTENT ========== -->
+</body>
+</html>
+"""
+    
+    return html
+
+# ============================================================================
+# MAIN UI FUNCTION
+# ============================================================================
+def show_website_builder():
+    """Main function to display the website builder"""
+    
+    st.title("🌐 Author Website Content Generator")
+    st.markdown("""
+    ### Generate HTML sections you can copy-paste into any website builder
+    
+    This tool pulls data from:
+    - ✅ Your user profile (name, bio, social media)
+    - ✅ Book Analyzer results (title, description, genre)
+    - ✅ Marketing Assets (cover images, endorsements, reviews)
+    - ✅ Saved Advocates (ARC readers and influencers)
+    """)
+    
+    # Pull all data
+    with st.spinner("Loading your data..."):
+        author_data = get_complete_author_data()
+    
+    # Show data summary
+    with st.expander("📊 View Data Being Used", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**Profile Data:**")
+            profile = author_data.get('profile', {})
+            st.markdown(f"- Name: {profile.get('name', 'Not found')}")
+            st.markdown(f"- Email: {profile.get('email', 'Not found')}")
+            st.markdown(f"- Bio: {'✅' if profile.get('bio') else '❌'}")
+        
+        with col2:
+            st.markdown("**Book Data:**")
+            book = author_data.get('book_analysis', {})
+            st.markdown(f"- Title: {book.get('title', 'Not found')}")
+            st.markdown(f"- Genre: {book.get('genre', 'Not found')}")
+            st.markdown(f"- Description: {'✅' if book.get('description') else '❌'}")
+        
+        with col3:
+            st.markdown("**Other Assets:**")
+            st.markdown(f"- Advocates: {len(author_data.get('advocates', []))}")
+            st.markdown(f"- Reviews: {len(author_data.get('marketing_assets', {}).get('review_quotes', []))}")
+            st.markdown(f"- Endorsements: {len(author_data.get('marketing_assets', {}).get('endorsements', []))}")
     
     st.markdown("---")
     
-    # ============================================================================
-    # STEP 1: BASIC INFO
-    # ============================================================================
-    if st.session_state.website_step == 1:
-        st.header("Step 1: Basic Information")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            author_name = st.text_input(
-                "Your Name *",
-                value=author_data.get('author_name', '')
-            )
-            
-            pen_name = st.text_input(
-                "Pen Name (if different)",
-                value=""
-            )
-            
-            tagline = st.text_input(
-                "Tagline",
-                placeholder="e.g., Award-winning Fantasy Author"
-            )
-        
-        with col2:
-            email = st.text_input(
-                "Email for Contact *",
-                placeholder="author@example.com"
-            )
-            
-            website_url = st.text_input(
-                "Current Website (if any)",
-                placeholder="https://..."
-            )
-            
-            if author_data.get('author_persona'):
-                default_audience = author_data['author_persona'].get('target_audience', '')
-            else:
-                default_audience = ''
-            
-            target_audience = st.text_area(
-                "Target Audience",
-                value=default_audience,
-                placeholder="e.g., Romance readers who love slow-burn and spice"
-            )
-        
-        st.markdown("---")
-        
-        col1, col2, col3 = st.columns(3)
-        with col3:
-            if st.button("Next →", type="primary", use_container_width=True):
-                st.session_state.website_basic = {
-                    "author_name": author_name,
-                    "pen_name": pen_name,
-                    "tagline": tagline,
-                    "email": email,
-                    "website_url": website_url,
-                    "target_audience": target_audience
-                }
-                st.session_state.website_step = 2
-                st.rerun()
+    # Section selector
+    st.subheader("1. Choose sections to generate")
     
-    # ============================================================================
-    # STEP 2: DESIGN & PAGES
-    # ============================================================================
-    elif st.session_state.website_step == 2:
-        st.header("Step 2: Design & Pages")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🎨 Color Theme")
-            color_theme = st.selectbox(
-                "Choose a color scheme",
-                options=[
-                    "Professional Blue",
-                    "Warm Romance",
-                    "Dark Fantasy", 
-                    "Minimalist Light",
-                    "Mystery Noir",
-                    "Vibrant YA"
-                ],
-                index=0
-            )
-            
-            font_style = st.selectbox(
-                "Font Style",
-                options=[
-                    "Classic Serif",
-                    "Modern Sans",
-                    "Elegant Script",
-                    "Bold Display",
-                    "Clean Minimal"
-                ],
-                index=0
-            )
-        
-        with col2:
-            st.subheader("📄 Pages to Include")
-            
-            st.markdown("**Required Pages:**")
-            st.markdown("- ✅ Home Page (auto-included)")
-            st.markdown("- ✅ About Me (auto-included)")
-            st.markdown("- ✅ Contact (auto-included)")
-            
-            st.markdown("**Optional Pages:**")
-            pages = {
-                "books": "📚 My Books (catalog)",
-                "book_detail": "📖 Individual Book Pages",
-                "blog": "✍️ Blog / News",
-                "newsletter": "📧 Newsletter Signup",
-                "arc": "⭐ ARC Readers/Influencers Showcase",
-                "events": "🗓️ Events / Appearances",
-                "reviews": "💬 Reviews / Testimonials",
-                "press": "📰 Press Kit"
-            }
-            
-            selected_pages = {}
-            for key, label in pages.items():
-                selected_pages[key] = st.checkbox(label, value=(key == "books"))
-        
-        st.markdown("---")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("← Back", use_container_width=True):
-                st.session_state.website_step = 1
-                st.rerun()
-        with col3:
-            if st.button("Next →", type="primary", use_container_width=True):
-                st.session_state.website_design = {
-                    "color_theme": color_theme,
-                    "font_style": font_style,
-                    "selected_pages": selected_pages
-                }
-                st.session_state.website_step = 3
-                st.rerun()
+    col1, col2 = st.columns(2)
     
-    # ============================================================================
-    # STEP 3: BOOKS & CONTENT (WITH BOOK ANALYZER DATA)
-    # ============================================================================
-    elif st.session_state.website_step == 3:
-        st.header("Step 3: Books & Content")
-        
-        # Get book data from analyzer
-        book_data = author_data.get('latest_book', {})
-        book_info = book_data.get('book_info', {}) if isinstance(book_data, dict) else {}
-        
-        # Get marketability data for description fallback
-        market_data = book_data.get('marketability', {}) if isinstance(book_data, dict) else {}
-        
-        st.subheader("📚 Your Book")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            book_title = st.text_input(
-                "Book Title *",
-                value=book_info.get('title', '')
-            )
+    with col1:
+        include_bio = st.checkbox("Author Bio Section", value=True)
+        include_book = st.checkbox("Book Showcase Section", value=True)
+        include_advocates = st.checkbox("Advocates Showcase Section", value=bool(author_data.get('advocates')))
+    
+    with col2:
+        include_marketing = st.checkbox("Marketing/Press Section", value=bool(author_data.get('marketing_assets', {}).get('endorsements')))
+        include_all = st.checkbox("Generate Complete HTML Package", value=False)
+    
+    st.markdown("---")
+    
+    # Generate button
+    if st.button("🎨 Generate HTML Sections", type="primary"):
+        if include_all:
+            # Generate complete HTML package
+            html_content = generate_complete_html_package(author_data)
             
-            book_genre = st.text_input(
-                "Genre",
-                value=book_info.get('genre', '')
-            )
+            st.subheader("2. Your Complete HTML Package")
+            st.markdown("Copy the entire code below and paste it into your website builder:")
             
-            book_link_amazon = st.text_input(
-                "Amazon Link",
-                placeholder="https://amazon.com/dp/..."
-            )
-        
-        with col2:
-            # COVER UPLOAD
-            book_cover = st.file_uploader(
-                "📸 Book Cover Image",
-                type=['jpg', 'jpeg', 'png', 'webp'],
-                help="Upload your book cover (this will be included in your site)"
-            )
+            # Display HTML in a code block
+            st.code(html_content, language="html")
             
-            if book_cover:
-                st.image(book_cover, width=150, caption="Cover Preview")
+            # Download button
+            b64 = base64.b64encode(html_content.encode()).decode()
+            href = f'<a href="data:text/html;base64,{b64}" download="author_website_content.html">📥 Download HTML File</a>'
+            st.markdown(href, unsafe_allow_html=True)
             
-            book_link_goodreads = st.text_input(
-                "Goodreads Link",
-                placeholder="https://goodreads.com/book/..."
-            )
-        
-        # Book description (pulled from analyzer)
-        default_desc = book_info.get('description', market_data.get('overall_assessment', ''))
-        book_description = st.text_area(
-            "Book Description",
-            value=default_desc,
-            placeholder="Enter your book blurb...",
-            height=150
-        )
-        
-        # Advocate showcase option
-        if author_data.get('saved_advocates'):
-            st.subheader("⭐ Showcase Your Advocates")
-            st.markdown(f"**{len(author_data['saved_advocates'])} saved advocates available**")
-            
-            showcase_advocates = st.checkbox(
-                "Include advocate showcase on my site",
-                value=True,
-                help="Show ARC readers and influencers who support your work"
-            )
         else:
-            showcase_advocates = False
-            st.info("Save some ARC readers/influencers first to showcase them on your site!")
-        
-        st.markdown("---")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("← Back", use_container_width=True):
-                st.session_state.website_step = 2
-                st.rerun()
-        with col3:
-            if st.button("Next →", type="primary", use_container_width=True):
-                st.session_state.website_books = {
-                    "book_title": book_title,
-                    "book_genre": book_genre,
-                    "book_description": book_description,
-                    "book_cover": book_cover,
-                    "book_link_amazon": book_link_amazon,
-                    "book_link_goodreads": book_link_goodreads,
-                    "showcase_advocates": showcase_advocates
-                }
-                st.session_state.website_step = 4
-                st.rerun()
-    
-    # ============================================================================
-    # STEP 4: REVIEW & BUILD
-    # ============================================================================
-    elif st.session_state.website_step == 4:
-        st.header("Step 4: Review & Build")
-        
-        st.markdown("### 📋 Summary")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Author Info:**")
-            basic = st.session_state.get('website_basic', {})
-            st.markdown(f"- Name: {basic.get('author_name', '—')}")
-            st.markdown(f"- Tagline: {basic.get('tagline', '—')}")
-            st.markdown(f"- Email: {basic.get('email', '—')}")
+            # Generate individual sections
+            st.subheader("2. Copy & Paste These Sections")
             
-            st.markdown("**Design:**")
-            design = st.session_state.get('website_design', {})
-            st.markdown(f"- Theme: {design.get('color_theme', '—')}")
-            st.markdown(f"- Font: {design.get('font_style', '—')}")
+            if include_bio:
+                st.markdown("### Author Bio Section")
+                st.code(generate_author_bio_section(author_data), language="html")
+                st.markdown("---")
+            
+            if include_book:
+                st.markdown("### Book Showcase Section")
+                st.code(generate_book_showcase_section(author_data), language="html")
+                st.markdown("---")
+            
+            if include_advocates and author_data.get('advocates'):
+                st.markdown("### Advocates Showcase Section")
+                st.code(generate_advocates_section(author_data), language="html")
+                st.markdown("---")
+            
+            if include_marketing:
+                st.markdown("### Marketing/Press Section")
+                st.code(generate_marketing_assets_section(author_data), language="html")
         
-        with col2:
-            st.markdown("**Book:**")
-            books = st.session_state.get('website_books', {})
-            st.markdown(f"- Title: {books.get('book_title', '—')}")
-            st.markdown(f"- Genre: {books.get('book_genre', '—')}")
-            st.markdown(f"- Cover: {'✅ Uploaded' if books.get('book_cover') else '❌ Not uploaded'}")
-            st.markdown(f"- Showcase Advocates: {'✅' if books.get('showcase_advocates') else '❌'}")
-        
-        st.markdown("---")
-        st.markdown("### 🚀 Ready to Build")
-        
-        # Get book data from analyzer for additional info
-        book_data = author_data.get('latest_book', {})
-        book_info = book_data.get('book_info', {}) if isinstance(book_data, dict) else {}
-        market_data = book_data.get('marketability', {}) if isinstance(book_data, dict) else {}
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("← Back", use_container_width=True):
-                st.session_state.website_step = 3
-                st.rerun()
-        
-        with col2:
-            # Save draft button
-            if st.button("💾 Save Draft", use_container_width=True):
-                if st.session_state.get('authenticated', False):
-                    basic = st.session_state.get('website_basic', {})
-                    design = st.session_state.get('website_design', {})
-                    books = st.session_state.get('website_books', {})
-                    
-                    draft_name = f"{books.get('book_title', 'My Website')} - {datetime.now().strftime('%Y-%m-%d')}"
-                    
-                    draft_id = save_website_draft_to_db(
-                        st.session_state.user_id,
-                        draft_name,
-                        basic,
-                        design,
-                        books
-                    )
-                    
-                    if draft_id:
-                        st.success("✅ Draft saved to your library!")
-                        # Refresh drafts
-                        st.session_state.website_drafts = load_user_website_drafts(st.session_state.user_id)
-                else:
-                    st.warning("Please login to save drafts")
-        
-        with col3:
-            if st.button("🚀 Build My Site", type="primary", use_container_width=True):
-                books = st.session_state.get('website_books', {})
-                
-                # CORRECT URL for Soloist.ai onboarding
-                onboarding_url = "https://soloist.ai/onboarding"
-                
-                # Open the onboarding page
-                st.markdown(f"**[Click here to start building your site on Soloist.ai]({onboarding_url})**")
-                
-                # Show helpful info with their data
-                st.info("""
-                **📋 Next Steps:**
-                1. Click the link above to open Soloist.ai
-                2. Enter your **Author Name** as the Business name
-                3. Use your book description below
-                4. Complete the remaining steps
-                """)
-                
-                # Show their data in an expander for easy copying
-                with st.expander("📋 Your Book Data (Copy this into Soloist.ai)", expanded=True):
-                    st.markdown(f"**Business Name:** {basic.get('author_name', '')}")
-                    st.markdown(f"**Book Title:** {books.get('book_title', book_info.get('title', ''))}")
-                    st.markdown(f"**Genre:** {books.get('book_genre', book_info.get('genre', ''))}")
-                    st.markdown(f"**Description:** {books.get('book_description', book_info.get('description', market_data.get('overall_assessment', '')))}")
-                    
-                    if books.get('book_cover'):
-                        st.markdown("**Cover Image:** ✅ Uploaded (you'll need to upload it manually on Soloist.ai)")
-                    
-                    if books.get('showcase_advocates') and author_data.get('saved_advocates'):
-                        st.markdown("**Advocates to Showcase:**")
-                        for a in author_data['saved_advocates'][:5]:
-                            st.markdown(f"- @{a.get('username')} ({a.get('follower_count', 0)} followers)")
+        st.success("✅ Sections generated! Copy the HTML code and paste into your website builder.")
+    
+    st.markdown("---")
+    st.markdown("""
+    ### 📋 Instructions:
+    1. Click "Generate HTML Sections" above
+    2. Copy the HTML code for the sections you want
+    3. In your website builder (Soloist.ai, WordPress, Wix, etc.), find the "HTML" or "Embed Code" element
+    4. Paste the code
+    5. Customize colors and links as needed
+    
+    **Note:** You'll need to manually add your purchase links and replace placeholder images.
+    """)
 
-def show_saved_drafts():
-    """Display user's saved website drafts"""
-    
-    if not st.session_state.get('authenticated', False):
-        st.warning("Please login to view your saved drafts")
-        return
-    
-    if not st.session_state.website_drafts:
-        st.info("You haven't saved any website drafts yet. Build a site and click 'Save Draft' in Step 4.")
-        return
-    
-    st.markdown(f"### 📚 Your Saved Drafts ({len(st.session_state.website_drafts)})")
-    
-    for draft in st.session_state.website_drafts:
-        with st.expander(f"🌐 {draft.get('draft_name', 'Untitled')} - {draft.get('created_at', '')[:10] if draft.get('created_at') else ''}"):
-            website_data = draft.get('website_data', {})
-            
-            if website_data:
-                st.markdown("**Basic Info:**")
-                basic = website_data.get('basic_info', {})
-                st.markdown(f"- Name: {basic.get('author_name', 'N/A')}")
-                st.markdown(f"- Tagline: {basic.get('tagline', 'N/A')}")
-                
-                st.markdown("**Book:**")
-                book = website_data.get('book_content', {})
-                st.markdown(f"- Title: {book.get('book_title', 'N/A')}")
-                st.markdown(f"- Genre: {book.get('book_genre', 'N/A')}")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("📂 Load Draft", key=f"load_{draft['id']}"):
-                    # Load draft into session
-                    website_data = draft.get('website_data', {})
-                    st.session_state.website_basic = website_data.get('basic_info', {})
-                    st.session_state.website_design = website_data.get('design_preferences', {})
-                    st.session_state.website_books = website_data.get('book_content', {})
-                    st.session_state.website_step = 4
-                    st.rerun()
-            
-            with col2:
-                if st.button("🗑️ Delete", key=f"delete_{draft['id']}"):
-                    if delete_website_draft(st.session_state.user_id, draft['id']):
-                        st.session_state.website_drafts = [d for d in st.session_state.website_drafts if d['id'] != draft['id']]
-                        st.success("Draft deleted!")
-                        st.rerun()
-
-# ============================================================================
-# MAIN FUNCTION TO CALL FROM BARDSPARK
-# ============================================================================
-def show_website_builder():
-    render_questionnaire()
+# For backward compatibility
+def render_questionnaire():
+    show_website_builder()
