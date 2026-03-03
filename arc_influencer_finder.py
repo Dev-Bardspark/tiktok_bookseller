@@ -11,12 +11,7 @@ import json
 from datetime import datetime
 
 # ============================================================================
-# DEBUG: Print when file loads
-# ============================================================================
-st.write("🔥 arc_influencer_finder.py loaded at", datetime.now())
-
-# ============================================================================
-# DATABASE CONNECTION (reused from BardSpark.py)
+# DATABASE CONNECTION
 # ============================================================================
 def get_db_connection():
     try:
@@ -209,6 +204,19 @@ def render_finder():
     st.title("🔍 ARC Reader & Influencer Finder")
     st.markdown("### Find the perfect advocates for your book")
     
+    # ============================================================================
+    # PRESERVE SEARCH STATE
+    # ============================================================================
+    if 'search_filters' not in st.session_state:
+        st.session_state.search_filters = {
+            'role': 'any',
+            'platforms': ['All'],
+            'genre': 'All',
+            'min_followers': 0,
+            'search_term': '',
+            'results': None
+        }
+    
     # Get total count for reference
     total_count = get_total_count()
     st.caption(f"Total in database: {total_count} advocates")
@@ -216,7 +224,6 @@ def render_finder():
     # Get platforms with counts
     platforms_with_counts = get_platforms_with_counts()
     platform_options = ["All"] + [f"{p} ({c})" for p, c in platforms_with_counts]
-    platform_values = ["All"] + [p for p, c in platforms_with_counts]
     
     genres = get_all_genres()
     
@@ -234,14 +241,14 @@ def render_finder():
                 "influencer": "📢 Influencers Only",
                 "both": "⭐ Both (ARC + Influencer)"
             }[x],
-            index=0
+            index=["any", "arc", "influencer", "both"].index(st.session_state.search_filters['role'])
         )
     
     with col2:
         platform_filter_display = st.multiselect(
             "📱 Platforms",
             options=platform_options,
-            default=["All"],
+            default=st.session_state.search_filters['platforms'],
             help="Select specific platforms to filter by. 'All' shows everyone."
         )
         # Convert display strings back to platform names, excluding "All"
@@ -256,7 +263,7 @@ def render_finder():
         genre_filter = st.selectbox(
             "📚 Genre",
             options=genres,
-            index=0
+            index=genres.index(st.session_state.search_filters['genre']) if st.session_state.search_filters['genre'] in genres else 0
         )
     
     # Second row - follower slider and search
@@ -267,7 +274,7 @@ def render_finder():
             "👥 Minimum followers",
             min_value=0,
             max_value=50000,
-            value=0,
+            value=st.session_state.search_filters['min_followers'],
             step=1000,
             help="Filter by minimum follower count"
         )
@@ -275,6 +282,7 @@ def render_finder():
     with col2:
         search_term = st.text_input(
             "🔍 Search by username or bio",
+            value=st.session_state.search_filters['search_term'],
             placeholder="e.g., fantasy, romance, arc...",
             help="Search in usernames and bios"
         )
@@ -305,6 +313,15 @@ def render_finder():
     # Perform search when button clicked
     if search_button:
         with st.spinner("Searching for advocates..."):
+            # Save current filters to session state
+            st.session_state.search_filters.update({
+                'role': role_filter,
+                'platforms': platform_filter_display,
+                'genre': genre_filter,
+                'min_followers': min_followers,
+                'search_term': search_term
+            })
+            
             results = find_advocates(
                 role_type=role_filter,
                 selected_platforms=platform_filter if platform_filter else None,
@@ -312,6 +329,12 @@ def render_finder():
                 min_followers=min_followers,
                 search_term=search_term
             )
+            st.session_state.search_filters['results'] = results
+            st.rerun()
+    
+    # Display results if they exist in session state
+    if st.session_state.search_filters.get('results'):
+        results = st.session_state.search_filters['results']
         
         if results:
             st.success(f"✅ Found {len(results)} advocates matching your criteria")
@@ -397,7 +420,7 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-                  # ============================================================================
+                    # ============================================================================
                     # SAVE BUTTON - SIMPLE VERSION
                     # ============================================================================
                     st.markdown("---")
@@ -415,7 +438,14 @@ def render_finder():
                                             ON CONFLICT (user_id, reader_id) DO NOTHING
                                         """, (st.session_state.user_id, advocate['id'], datetime.now()))
                                         conn.commit()
-                                        st.success("Saved!")
+                                        
+                                        # Update session state
+                                        if 'saved_readers' not in st.session_state:
+                                            st.session_state.saved_readers = []
+                                        if not any(r['id'] == advocate['id'] for r in st.session_state.saved_readers):
+                                            st.session_state.saved_readers.append(advocate)
+                                        
+                                        st.success(f"✅ @{advocate['username']} saved!")
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"Error: {e}")
@@ -423,10 +453,21 @@ def render_finder():
                                         cur.close()
                                         conn.close()
                             else:
-                                st.warning("Please login")
+                                st.warning("Please login to save readers")
+        else:
+            st.warning("No advocates found matching your criteria. Try widening your filters.")
+    
+    # Show saved count in sidebar
+    st.sidebar.markdown("---")
+    saved_count = len(st.session_state.get('saved_readers', []))
+    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
+    if saved_count > 0:
+        if st.sidebar.button("📋 View Saved Readers", use_container_width=True):
+            st.session_state.page = "❤️ Saved Readers"
+            st.rerun()
 
 # ============================================================================
-# EXPORT FUNCTION (to be called from BardSpark.py)
+# EXPORT FUNCTION
 # ============================================================================
 def show_finder():
     render_finder()
