@@ -16,67 +16,47 @@ def show_website_builder():
     """Main entry point for the website builder"""
     show_website_questionnaire()
 
-def show_website_questionnaire():
-    st.title("📚 Complete Author Website Generator")
-    st.markdown("### Build your professional author site in 5 minutes")
-    
-    # ============================================================================
-    # AGGRESSIVE AUTO-FILL from EVERY source
-    # ============================================================================
-    
-    # Initialize session state if needed
-    if 'website_data' not in st.session_state:
-        st.session_state.website_data = {
-            "author": {},
-            "books": [],
-            "social": {},
-            "content": {},
-            "design": {}
+def load_all_author_data():
+    """Load ALL data from every source"""
+    data = {
+        "author": {
+            "name": "",
+            "pen_name": "",
+            "email": "",
+            "website": "",
+            "bio": "",
+            "location": "",
+            "awards": []
+        },
+        "books": [],
+        "social": {
+            "profiles": {},
+            "newsletter": {},
+            "advocates": []
+        },
+        "content": {
+            "media": [],
+            "blog": {},
+            "bonus": {},
+            "analytics": {}
         }
+    }
     
-    # Show logged in user
+    # 1. Load from current_user
     if st.session_state.get('current_user'):
         user = st.session_state.current_user
-        st.sidebar.success(f"👤 Logged in as: {user.get('name', 'User')}")
-        
-        # ========================================================================
-        # 1. PULL FROM USER PROFILE (ALWAYS)
-        # ========================================================================
-        current_author = st.session_state.website_data.get("author", {})
-        
-        # Update with EVERY field from user profile
-        if user.get('name') and not current_author.get('name'):
-            current_author['name'] = user.get('name')
-        if user.get('pen_name') and not current_author.get('pen_name'):
-            current_author['pen_name'] = user.get('pen_name')
-        if user.get('email') and not current_author.get('email'):
-            current_author['email'] = user.get('email')
-        if user.get('website') and not current_author.get('website'):
-            current_author['website'] = user.get('website')
-        if user.get('bio') and not current_author.get('bio'):
-            current_author['bio'] = user.get('bio')
-        if user.get('location') and not current_author.get('location'):
-            current_author['location'] = user.get('location')
-        
-        st.session_state.website_data["author"] = current_author
-        
-        # ========================================================================
-        # 2. PULL SOCIAL MEDIA FROM USER PROFILE
-        # ========================================================================
-        if user.get('social_media') and not st.session_state.website_data.get('social'):
-            st.session_state.website_data["social"] = {
-                "profiles": user.get('social_media', {}),
-                "newsletter": {},
-                "advocates": []
-            }
+        data["author"]["name"] = user.get('name', '')
+        data["author"]["pen_name"] = user.get('pen_name', '')
+        data["author"]["email"] = user.get('email', '')
+        data["author"]["website"] = user.get('website', '')
+        data["author"]["bio"] = user.get('bio', '')
+        data["author"]["location"] = user.get('location', '')
+        data["social"]["profiles"] = user.get('social_media', {})
     
-    # ========================================================================
-    # 3. PULL FROM BOOK ANALYZER
-    # ========================================================================
+    # 2. Load from analysis_result
     if st.session_state.get('analysis_result'):
         analysis = st.session_state.analysis_result
         if isinstance(analysis, dict):
-            # Get book info
             book_info = analysis.get('book_info', {})
             if isinstance(book_info, str):
                 try:
@@ -84,94 +64,71 @@ def show_website_questionnaire():
                 except:
                     book_info = {}
             
-            # Get marketability data
-            marketability = analysis.get('marketability', {})
-            if isinstance(marketability, str):
-                try:
-                    marketability = json.loads(marketability)
-                except:
-                    marketability = {}
-            
-            # Create book entry if we have a title and no books yet
-            if book_info.get('title') and not st.session_state.website_data.get('books'):
-                st.session_state.website_data["books"] = [{
+            if book_info.get('title'):
+                data["books"] = [{
                     "title": book_info.get('title', ''),
                     "genre": book_info.get('genre', ''),
-                    "description": book_info.get('description', '') or marketability.get('overall_assessment', ''),
+                    "description": book_info.get('description', ''),
                     "series": "",
                     "series_order": 1,
                     "cover": None,
                     "links": {}
                 }]
     
-    # ========================================================================
-    # 4. PULL FROM MARKETING ASSETS (EVERYTHING!)
-    # ========================================================================
+    # 3. Load from marketing assets
     marketing_data = {}
-    
-    # Check session state for marketing assets
     if st.session_state.get('generated_assets'):
         marketing_data = st.session_state.generated_assets
     elif st.session_state.get('edited_assets'):
         marketing_data = st.session_state.edited_assets
     
     if marketing_data:
-        # Update books with blurbs if available
-        if marketing_data.get('blurbs') and st.session_state.website_data.get('books'):
-            books = st.session_state.website_data['books']
-            if books and isinstance(marketing_data['blurbs'], list) and marketing_data['blurbs']:
-                # Use the first blurb as enhanced description
-                books[0]['description'] = marketing_data['blurbs'][0]
-        
-        # Pull reviews for content section
-        content = st.session_state.website_data.get('content', {})
-        
-        # Get reviews from press kit
-        reviews = []
-        if marketing_data.get('press_kit_options'):
-            for kit in marketing_data['press_kit_options']:
-                if isinstance(kit, dict) and 'author_qanda' in kit:
-                    for qa in kit.get('author_qanda', []):
-                        if isinstance(qa, dict) and 'answer' in qa:
-                            reviews.append(qa['answer'][:150] + '...')
+        # Get blurbs for book description
+        if marketing_data.get('blurbs') and data["books"]:
+            blurbs = marketing_data['blurbs']
+            if blurbs and isinstance(blurbs, list) and len(blurbs) > 0:
+                data["books"][0]["description"] = blurbs[0]
         
         # Get media mentions
         media_mentions = []
         if marketing_data.get('podcast_pitches'):
             for pitch in marketing_data['podcast_pitches']:
                 if isinstance(pitch, dict) and 'podcast_ideas' in pitch:
-                    for idea in pitch.get('podcast_ideas', []):
+                    for idea in pitch.get('podcast_ideas', [])[:3]:
                         media_mentions.append(f"🎙️ {idea}")
-        
-        # Update content
-        content['media'] = list(set(media_mentions[:5]))  # Unique, max 5
-        st.session_state.website_data['content'] = content
+        data["content"]["media"] = media_mentions
     
-    # ========================================================================
-    # 5. PULL FROM SAVED ADVOCATES
-    # ========================================================================
+    # 4. Load from saved_readers
     if st.session_state.get('saved_readers'):
-        saved_advocates = st.session_state.saved_readers
-        social = st.session_state.website_data.get('social', {})
-        
-        if saved_advocates and isinstance(saved_advocates, list):
-            # Take top 6 advocates
-            advocates = []
-            for adv in saved_advocates[:6]:
-                if isinstance(adv, dict):
-                    advocates.append({
-                        "username": adv.get('username', ''),
-                        "platform": adv.get('platform', ''),
-                        "follower_count": adv.get('follower_count', 0),
-                        "testimonial": adv.get('testimonial', '')
-                    })
-            social['advocates'] = advocates
-            st.session_state.website_data['social'] = social
+        saved = st.session_state.saved_readers
+        advocates = []
+        for adv in saved[:6]:
+            if isinstance(adv, dict):
+                advocates.append({
+                    "username": adv.get('username', ''),
+                    "platform": adv.get('platform', ''),
+                    "follower_count": adv.get('follower_count', 0),
+                    "testimonial": adv.get('testimonial', '')
+                })
+        data["social"]["advocates"] = advocates
     
-    # ========================================================================
-    # 6. PULL FROM DATABASE (if needed)
-    # ========================================================================
-    # You could add database queries here for additional saved data
+    return data
+
+def show_website_questionnaire():
+    st.title("📚 Complete Author Website Generator")
+    st.markdown("### Build your professional author site in 5 minutes")
+    
+    # Show logged in user
+    if st.session_state.get('current_user'):
+        user = st.session_state.current_user
+        st.sidebar.success(f"👤 Logged in as: {user.get('name', 'User')}")
+    
+    # ============================================================================
+    # LOAD ALL DATA FIRST (before any UI elements)
+    # ============================================================================
+    if 'website_data' not in st.session_state:
+        with st.spinner("Loading your data..."):
+            st.session_state.website_data = load_all_author_data()
     
     # Progress tracking
     if 'website_step' not in st.session_state:
@@ -191,29 +148,23 @@ def show_website_questionnaire():
     
     st.markdown("---")
     
-    # Show data summary (what we found)
-    with st.expander("📊 Auto-Filled Data Summary", expanded=False):
+    # Show what was auto-filled
+    with st.expander("📊 Auto-Filled Data", expanded=False):
+        data = st.session_state.website_data
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown("**👤 Author:**")
-            author = st.session_state.website_data.get('author', {})
-            st.markdown(f"- Name: {author.get('name', '❌')}")
-            st.markdown(f"- Email: {author.get('email', '❌')}")
-            st.markdown(f"- Bio: {'✅' if author.get('bio') else '❌'}")
-        
+            st.markdown(f"- Name: {data['author']['name'] or '❌'}")
+            st.markdown(f"- Email: {data['author']['email'] or '❌'}")
+            st.markdown(f"- Bio: {'✅' if data['author']['bio'] else '❌'}")
         with col2:
             st.markdown("**📚 Books:**")
-            books = st.session_state.website_data.get('books', [])
-            st.markdown(f"- Count: {len(books)}")
-            if books:
-                st.markdown(f"- Title: {books[0].get('title', '❌')}")
-        
+            st.markdown(f"- Count: {len(data['books'])}")
+            if data['books']:
+                st.markdown(f"- Title: {data['books'][0]['title'] or '❌'}")
         with col3:
             st.markdown("**👥 Advocates:**")
-            social = st.session_state.website_data.get('social', {})
-            advocates = social.get('advocates', [])
-            st.markdown(f"- Count: {len(advocates)}")
-            st.markdown(f"- Marketing Assets: {'✅' if marketing_data else '❌'}")
+            st.markdown(f"- Count: {len(data['social']['advocates'])}")
     
     # ============================================================================
     # STEP 1: AUTHOR PROFILE
@@ -221,73 +172,69 @@ def show_website_questionnaire():
     if st.session_state.website_step == 1:
         st.header("Step 1: Author Profile")
         
-        # Get existing data (now should be fully filled)
-        existing = st.session_state.website_data.get("author", {})
+        data = st.session_state.website_data
+        author = data['author']
         
-        # Show what we auto-filled
-        if existing.get('name'):
-            st.success(f"✅ Auto-filled profile for: {existing.get('name')}")
+        # Show success if data was loaded
+        if author['name']:
+            st.success(f"✅ Auto-filled profile for: {author['name']}")
         
         col1, col2 = st.columns(2)
         
         with col1:
             author_name = st.text_input(
                 "Your Full Name *",
-                value=existing.get('name', ''),
-                key="author_name_input"
+                value=author['name'],
+                key="profile_name"
             )
             
             pen_name = st.text_input(
                 "Pen Name (if different)",
-                value=existing.get('pen_name', ''),
-                key="pen_name_input"
+                value=author['pen_name'],
+                key="profile_pen"
             )
             
             author_email = st.text_input(
                 "Email for Contact *",
-                value=existing.get('email', ''),
-                key="author_email_input"
+                value=author['email'],
+                key="profile_email"
             )
             
             author_website = st.text_input(
                 "Your Website (if any)",
-                value=existing.get('website', ''),
-                key="author_website_input"
+                value=author['website'],
+                key="profile_website"
             )
         
         with col2:
             author_photo = st.file_uploader(
                 "Author Photo (professional headshot)",
                 type=['jpg', 'png', 'webp'],
-                key="author_photo_input"
+                key="profile_photo"
             )
             
             author_bio = st.text_area(
                 "Author Bio *",
-                value=existing.get('bio', ''),
+                value=author['bio'],
                 height=150,
-                help="Tell readers about yourself, your journey, and why you write",
-                key="author_bio_input"
+                key="profile_bio"
             )
             
             location = st.text_input(
                 "Location",
-                value=existing.get('location', ''),
+                value=author['location'],
                 placeholder="City, Country",
-                key="author_location_input"
+                key="profile_location"
             )
         
         st.markdown("---")
         
-        # Awards & Recognition
+        # Awards
         st.subheader("🏆 Awards & Recognition")
-        st.caption("Add any awards, nominations, or media mentions")
-        
-        awards = existing.get('awards', [])
         num_awards = st.number_input(
             "How many awards/mentions?", 
             0, 10, 
-            len(awards),
+            len(author['awards']),
             key="num_awards"
         )
         
@@ -297,13 +244,11 @@ def show_website_questionnaire():
             with col1:
                 award_name = st.text_input(
                     f"Award {i+1} Name", 
-                    value=awards[i].split(' (')[0] if i < len(awards) else '',
                     key=f"award_name_{i}"
                 )
             with col2:
                 award_year = st.text_input(
                     f"Year", 
-                    value=awards[i].split('(')[-1].replace(')', '') if i < len(awards) and '(' in awards[i] else '',
                     key=f"award_year_{i}"
                 )
             if award_name:
@@ -313,7 +258,7 @@ def show_website_questionnaire():
         
         col1, col2, col3 = st.columns(3)
         with col3:
-            if st.button("Next: Your Books →", type="primary", use_container_width=True):
+            if st.button("Next: Your Books →", type="primary", key="next_to_books"):
                 st.session_state.website_data["author"] = {
                     "name": author_name,
                     "pen_name": pen_name,
@@ -333,21 +278,17 @@ def show_website_questionnaire():
     elif st.session_state.website_step == 2:
         st.header("Step 2: Your Books")
         
-        # Get existing books
-        existing_books = st.session_state.website_data.get('books', [])
+        data = st.session_state.website_data
+        existing_books = data['books']
         
-        # Show what we auto-filled
         if existing_books:
-            st.success(f"📖 Auto-filled {len(existing_books)} book(s) from your analysis")
-            if marketing_data:
-                st.success(f"🎨 Enhanced with marketing assets")
+            st.success(f"📖 Auto-filled {len(existing_books)} book(s)")
         
-        # How many books?
         num_books = st.number_input(
             "How many books do you have?", 
             1, 20, 
             value=max(1, len(existing_books)),
-            key="num_books_input"
+            key="num_books"
         )
         
         books = []
@@ -371,7 +312,7 @@ def show_website_questionnaire():
                     )
                     
                     series = st.text_input(
-                        "Series Name (if part of series)",
+                        "Series Name",
                         value=existing.get('series', ''),
                         key=f"book_series_{i}"
                     )
@@ -399,11 +340,10 @@ def show_website_questionnaire():
                     buy_links = st.text_area(
                         "Purchase Links (one per line)",
                         value="\n".join(existing.get('links', {}).values()) if existing.get('links') else '',
-                        placeholder="https://amazon.com/dp/...\nhttps://goodreads.com/...\nhttps://apple.com/...",
                         key=f"book_links_{i}"
                     )
                     
-                    # Parse buy links
+                    # Parse links
                     links = {}
                     if buy_links:
                         for link in buy_links.split('\n'):
@@ -414,12 +354,10 @@ def show_website_questionnaire():
                                 links['amazon'] = link
                             elif 'goodreads' in link.lower():
                                 links['goodreads'] = link
-                            elif 'apple' in link.lower() or 'books' in link.lower():
+                            elif 'apple' in link.lower():
                                 links['apple'] = link
-                            elif 'barnes' in link.lower() or 'noble' in link.lower():
+                            elif 'barnes' in link.lower():
                                 links['barnes'] = link
-                            else:
-                                links['other'] = link
                 
                 if title:
                     books.append({
@@ -432,15 +370,13 @@ def show_website_questionnaire():
                         "links": links
                     })
         
-        st.markdown("---")
-        
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("← Back", use_container_width=True):
+            if st.button("← Back", key="back_to_profile"):
                 st.session_state.website_step = 1
                 st.rerun()
         with col3:
-            if st.button("Next: Social Media →", type="primary", use_container_width=True):
+            if st.button("Next: Social Media →", type="primary", key="next_to_social"):
                 st.session_state.website_data["books"] = books
                 st.session_state.website_step = 3
                 st.rerun()
@@ -451,168 +387,97 @@ def show_website_questionnaire():
     elif st.session_state.website_step == 3:
         st.header("Step 3: Social Media & Community")
         
-        # Get existing social data
-        existing_social = st.session_state.website_data.get('social', {})
-        existing_profiles = existing_social.get('profiles', {})
-        existing_advocates = existing_social.get('advocates', [])
-        
-        # Show what we auto-filled
-        if existing_profiles:
-            st.success(f"📱 Auto-filled social media profiles")
-        if existing_advocates:
-            st.success(f"👥 Auto-filled {len(existing_advocates)} advocates")
+        data = st.session_state.website_data
+        social = data['social']
+        profiles = social['profiles']
+        advocates = social['advocates']
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("📱 Your Profiles")
-            twitter = st.text_input("Twitter/X", value=existing_profiles.get('twitter', ''), key="social_twitter")
-            instagram = st.text_input("Instagram", value=existing_profiles.get('instagram', ''), key="social_instagram")
-            facebook = st.text_input("Facebook", value=existing_profiles.get('facebook', ''), key="social_facebook")
-            tiktok = st.text_input("TikTok", value=existing_profiles.get('tiktok', ''), key="social_tiktok")
-            threads = st.text_input("Threads", value=existing_profiles.get('threads', ''), key="social_threads")
+            twitter = st.text_input("Twitter/X", value=profiles.get('twitter', ''), key="social_twitter")
+            instagram = st.text_input("Instagram", value=profiles.get('instagram', ''), key="social_instagram")
+            facebook = st.text_input("Facebook", value=profiles.get('facebook', ''), key="social_facebook")
+            tiktok = st.text_input("TikTok", value=profiles.get('tiktok', ''), key="social_tiktok")
         
         with col2:
             st.subheader("📚 Reading Platforms")
-            goodreads = st.text_input("Goodreads Author Page", value=existing_profiles.get('goodreads', ''), key="social_goodreads")
-            bookbub = st.text_input("BookBub", value=existing_profiles.get('bookbub', ''), key="social_bookbub")
-            amazon_author = st.text_input("Amazon Author Page", value=existing_profiles.get('amazon', ''), key="social_amazon")
+            goodreads = st.text_input("Goodreads", value=profiles.get('goodreads', ''), key="social_goodreads")
+            amazon = st.text_input("Amazon Author Page", value=profiles.get('amazon', ''), key="social_amazon")
         
         st.markdown("---")
         
-        # Newsletter Setup
+        # Newsletter
         st.subheader("📧 Email Newsletter")
-        st.caption("This is your most important marketing tool!")
+        newsletter = social['newsletter']
         
-        existing_newsletter = existing_social.get('newsletter', {})
+        has_newsletter = st.checkbox(
+            "I have a newsletter", 
+            value=newsletter.get('has', False),
+            key="has_newsletter"
+        )
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            has_newsletter = st.checkbox(
-                "I have a newsletter", 
-                value=existing_newsletter.get('has', False),
-                key="has_newsletter"
-            )
-            if has_newsletter:
-                newsletter_service = st.selectbox(
-                    "Which service do you use?",
-                    ["Mailchimp", "ConvertKit", "MailerLite", "Substack", "Other"],
-                    index=["Mailchimp", "ConvertKit", "MailerLite", "Substack", "Other"].index(existing_newsletter.get('service', 'Mailchimp')) 
-                        if existing_newsletter.get('service') in ["Mailchimp", "ConvertKit", "MailerLite", "Substack", "Other"] else 0,
-                    key="newsletter_service"
-                )
+        if has_newsletter:
+            col1, col2 = st.columns(2)
+            with col1:
                 newsletter_link = st.text_input(
-                    "Newsletter signup link",
-                    value=existing_newsletter.get('link', ''),
+                    "Signup link",
+                    value=newsletter.get('link', ''),
                     key="newsletter_link"
                 )
-        
-        with col2:
-            lead_magnet = st.text_input(
-                "Lead Magnet (Freebie for subscribers)",
-                value=existing_newsletter.get('lead_magnet', ''),
-                placeholder="e.g., Free prequel chapter, character art, short story",
-                key="lead_magnet"
-            )
-            
-            lead_magnet_description = st.text_area(
-                "Describe your freebie",
-                value=existing_newsletter.get('lead_magnet_desc', ''),
-                placeholder="What will they get? Why should they subscribe?",
-                height=100,
-                key="lead_magnet_desc"
-            )
+            with col2:
+                lead_magnet = st.text_input(
+                    "Freebie for subscribers",
+                    value=newsletter.get('lead_magnet', ''),
+                    key="lead_magnet"
+                )
         
         st.markdown("---")
         
-        # Advocates/ARC Readers
+        # Advocates
         st.subheader("⭐ Your Advocates")
-        st.caption("Showcase your biggest fans and ARC readers")
         
-        # Pull from saved advocates
-        saved_advocates = st.session_state.get('saved_readers', [])
-        advocates_to_show = []
-        
-        if saved_advocates:
-            st.success(f"You have {len(saved_advocates)} saved advocates!")
-            show_advocates = st.checkbox(
-                "Showcase advocates on my site", 
-                value=bool(existing_advocates),
-                key="show_advocates_main"
-            )
+        if advocates:
+            st.success(f"👥 Auto-filled {len(advocates)} advocates")
+            show_advocates = st.checkbox("Show advocates on site", value=True, key="show_advocates")
             
+            advocates_to_show = []
             if show_advocates:
-                for idx, adv in enumerate(saved_advocates[:6]):
-                    username = adv.get('username', f'reader_{idx}')
-                    col1, col2 = st.columns([3, 1])
+                for idx, adv in enumerate(advocates):
+                    col1, col2, col3 = st.columns([2, 2, 1])
                     with col1:
-                        st.write(f"**@{username}** - {adv.get('platform', '')} ({adv.get('follower_count', 0)} followers)")
+                        st.write(f"**@{adv.get('username')}**")
                     with col2:
-                        # Check if this advocate was previously selected
-                        was_selected = any(a.get('username') == username for a in existing_advocates)
-                        include = st.checkbox(
-                            "Include", 
-                            value=was_selected,
-                            key=f"adv_include_{idx}_{username}"
-                        )
+                        st.write(f"{adv.get('platform')} • {adv.get('follower_count')} followers")
+                    with col3:
+                        include = st.checkbox("Include", value=True, key=f"adv_include_{idx}")
                         if include:
                             advocates_to_show.append(adv)
         else:
-            st.info("No advocates saved yet. You can add them manually:")
-            num_advocates = st.number_input(
-                "How many advocates to showcase?", 
-                0, 10, 
-                len(existing_advocates),
-                key="num_advocates_manual"
-            )
-            for i in range(int(num_advocates)):
-                existing = existing_advocates[i] if i < len(existing_advocates) else {}
-                col1, col2 = st.columns(2)
-                with col1:
-                    username = st.text_input(
-                        f"Username {i+1}", 
-                        value=existing.get('username', ''),
-                        key=f"manual_adv_user_{i}"
-                    )
-                with col2:
-                    testimonial = st.text_input(
-                        f"Testimonial {i+1}", 
-                        value=existing.get('testimonial', ''),
-                        key=f"manual_adv_test_{i}"
-                    )
-                if username:
-                    advocates_to_show.append({
-                        "username": username,
-                        "testimonial": testimonial
-                    })
-        
-        st.markdown("---")
+            st.info("No advocates found")
+            advocates_to_show = []
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("← Back", use_container_width=True):
+            if st.button("← Back", key="back_to_books"):
                 st.session_state.website_step = 2
                 st.rerun()
         with col3:
-            if st.button("Next: Content →", type="primary", use_container_width=True):
+            if st.button("Next: Content →", type="primary", key="next_to_content"):
                 st.session_state.website_data["social"] = {
                     "profiles": {
                         "twitter": twitter,
                         "instagram": instagram,
                         "facebook": facebook,
                         "tiktok": tiktok,
-                        "threads": threads,
                         "goodreads": goodreads,
-                        "bookbub": bookbub,
-                        "amazon": amazon_author
+                        "amazon": amazon
                     },
                     "newsletter": {
                         "has": has_newsletter,
-                        "service": newsletter_service if has_newsletter else None,
                         "link": newsletter_link if has_newsletter else None,
-                        "lead_magnet": lead_magnet,
-                        "lead_magnet_desc": lead_magnet_description
+                        "lead_magnet": lead_magnet if has_newsletter else None
                     },
                     "advocates": advocates_to_show
                 }
@@ -625,130 +490,41 @@ def show_website_questionnaire():
     elif st.session_state.website_step == 4:
         st.header("Step 4: Additional Content")
         
-        existing_content = st.session_state.website_data.get('content', {})
+        data = st.session_state.website_data
+        content = data['content']
         
-        # Show if we auto-filled anything
-        if existing_content.get('media'):
-            st.success(f"🎙️ Auto-filled {len(existing_content.get('media', []))} media mentions from marketing assets")
+        if content['media']:
+            st.success(f"🎙️ Auto-filled {len(content['media'])} media mentions")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📝 Blog/News")
-            has_blog = st.checkbox(
-                "I want a blog/news section",
-                value=existing_content.get('blog', {}).get('has', False),
-                key="has_blog"
-            )
-            if has_blog:
-                blog_feed = st.text_area(
-                    "Paste your blog RSS feed or latest posts",
-                    value=existing_content.get('blog', {}).get('feed', ''),
-                    placeholder="Post 1: Title and link\nPost 2: Title and link",
-                    height=100,
-                    key="blog_feed"
-                )
-        
-        with col2:
             st.subheader("🎤 Media & Press")
-            existing_media = existing_content.get('media', [])
+            media_text = "\n".join(content['media'])
             media_mentions = st.text_area(
                 "Media mentions (one per line)",
-                value="\n".join(existing_media),
-                placeholder="Interview on Author Spotlight Podcast\nFeatured in Writer's Digest\nGuest post on JaneFriedman.com",
+                value=media_text,
                 height=100,
                 key="media_mentions"
             )
         
-        st.markdown("---")
-        
-        st.subheader("📖 Bonus Content")
-        
-        existing_bonus = existing_content.get('bonus', {})
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            has_sample = st.checkbox(
-                "Offer a free sample chapter",
-                value=bool(existing_bonus.get('sample')),
-                key="has_sample"
-            )
-            if has_sample:
-                sample_file = st.file_uploader(
-                    "Upload sample chapter (PDF)",
-                    type=['pdf'],
-                    key="sample_file"
-                )
-        
         with col2:
-            has_playlist = st.checkbox(
-                "Create a book playlist",
-                value=bool(existing_bonus.get('playlist_link')),
-                key="has_playlist"
-            )
-            if has_playlist:
-                playlist_link = st.text_input(
-                    "Spotify/Apple Music link",
-                    value=existing_bonus.get('playlist_link', ''),
-                    key="playlist_link"
-                )
-                playlist_description = st.text_area(
-                    "Describe the vibe",
-                    value=existing_bonus.get('playlist_desc', ''),
-                    height=80,
-                    key="playlist_desc"
-                )
-        
-        st.markdown("---")
-        
-        st.subheader("📊 Analytics & Tracking")
-        
-        existing_analytics = existing_content.get('analytics', {})
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            google_analytics = st.text_input(
-                "Google Analytics ID",
-                value=existing_analytics.get('ga', ''),
-                placeholder="G-XXXXXXXXXX",
-                help="Optional: Add for visitor tracking",
-                key="google_analytics"
-            )
-        
-        with col2:
-            facebook_pixel = st.text_input(
-                "Facebook Pixel ID",
-                value=existing_analytics.get('pixel', ''),
-                placeholder="XXXXXXXXXX",
-                help="Optional: For ad retargeting",
-                key="facebook_pixel"
-            )
-        
-        st.markdown("---")
+            st.subheader("📊 Analytics")
+            ga = st.text_input("Google Analytics ID", value=content['analytics'].get('ga', ''), key="ga_id")
+            fb = st.text_input("Facebook Pixel ID", value=content['analytics'].get('pixel', ''), key="fb_pixel")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("← Back", use_container_width=True):
+            if st.button("← Back", key="back_to_social"):
                 st.session_state.website_step = 3
                 st.rerun()
         with col3:
-            if st.button("Next: Design →", type="primary", use_container_width=True):
+            if st.button("Next: Design →", type="primary", key="next_to_design"):
                 st.session_state.website_data["content"] = {
-                    "blog": {
-                        "has": has_blog,
-                        "feed": blog_feed if has_blog else None
-                    },
-                    "media": [m.strip() for m in media_mentions.split('\n') if m.strip()] if media_mentions else [],
-                    "bonus": {
-                        "sample": sample_file if 'sample_file' in locals() else None,
-                        "playlist_link": playlist_link if 'playlist_link' in locals() else None,
-                        "playlist_desc": playlist_description if 'playlist_description' in locals() else None
-                    },
+                    "media": [m.strip() for m in media_mentions.split('\n') if m.strip()],
                     "analytics": {
-                        "ga": google_analytics,
-                        "pixel": facebook_pixel
+                        "ga": ga,
+                        "pixel": fb
                     }
                 }
                 st.session_state.website_step = 5
@@ -760,190 +536,184 @@ def show_website_questionnaire():
     elif st.session_state.website_step == 5:
         st.header("Step 5: Design & Generate")
         
-        existing_design = st.session_state.website_data.get('design', {})
-        
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("🎨 Color Scheme")
             color_theme = st.selectbox(
-                "Choose your vibe",
-                ["Professional & Clean", "Warm & Inviting", "Dark & Mysterious", 
-                 "Bright & Energetic", "Elegant & Sophisticated", "Minimalist"],
-                index=["Professional & Clean", "Warm & Inviting", "Dark & Mysterious", 
-                       "Bright & Energetic", "Elegant & Sophisticated", "Minimalist"].index(existing_design.get('color_theme', 'Professional & Clean'))
-                    if existing_design.get('color_theme') in ["Professional & Clean", "Warm & Inviting", "Dark & Mysterious", 
-                       "Bright & Energetic", "Elegant & Sophisticated", "Minimalist"] else 0,
+                "Color Scheme",
+                ["Professional & Clean", "Warm & Inviting", "Dark & Mysterious"],
                 key="color_theme"
-            )
-            
-            font_style = st.selectbox(
-                "Font Style",
-                ["Classic Serif (traditional)", "Modern Sans (clean)", 
-                 "Elegant (sophisticated)", "Bold (statement)"],
-                index=["Classic Serif (traditional)", "Modern Sans (clean)", 
-                       "Elegant (sophisticated)", "Bold (statement)"].index(existing_design.get('font_style', 'Modern Sans (clean)'))
-                    if existing_design.get('font_style') in ["Classic Serif (traditional)", "Modern Sans (clean)", 
-                       "Elegant (sophisticated)", "Bold (statement)"] else 1,
-                key="font_style"
             )
         
         with col2:
-            st.subheader("📱 Layout")
-            layout = st.selectbox(
-                "Page structure",
-                ["Single page (recommended)", "Multi-page with menu"],
-                index=0 if existing_design.get('layout', 'Single page (recommended)') == "Single page (recommended)" else 1,
-                key="layout"
-            )
-            
-            show_sidebar = st.checkbox(
-                "Show author sidebar", 
-                value=existing_design.get('sidebar', True),
-                key="show_sidebar"
-            )
-            
-            social_icons = st.checkbox(
-                "Show social media icons in header", 
-                value=existing_design.get('social_header', True),
-                key="social_icons"
+            font_style = st.selectbox(
+                "Font Style",
+                ["Classic Serif", "Modern Sans", "Elegant"],
+                key="font_style"
             )
         
         st.markdown("---")
         
-        # Summary of all collected data
-        with st.expander("📋 Review Your Data", expanded=True):
-            data = st.session_state.website_data
-            
-            st.markdown(f"**Author:** {data['author'].get('name', 'Not set')}")
-            st.markdown(f"**Books:** {len(data['books'])}")
-            if data['books']:
-                st.markdown(f"**Main Book:** {data['books'][0].get('title', '')}")
-            st.markdown(f"**Social Profiles:** {len([v for v in data['social'].get('profiles', {}).values() if v])}")
-            st.markdown(f"**Advocates:** {len(data['social'].get('advocates', []))}")
-            st.markdown(f"**Media Mentions:** {len(data['content'].get('media', []))}")
+        # Summary
+        data = st.session_state.website_data
+        st.markdown("### 📋 Ready to Generate")
+        st.markdown(f"**Author:** {data['author']['name']}")
+        st.markdown(f"**Books:** {len(data['books'])}")
+        st.markdown(f"**Advocates:** {len(data['social']['advocates'])}")
         
-        st.markdown("---")
-        
-        # Generate button
-        if st.button("🚀 GENERATE COMPLETE WEBSITE", type="primary", use_container_width=True):
-            with st.spinner("Building your professional author website..."):
-                html = generate_complete_author_site(st.session_state.website_data, {
-                    "color_theme": color_theme,
-                    "font_style": font_style,
-                    "layout": layout,
-                    "sidebar": show_sidebar,
-                    "social_header": social_icons
-                })
-                
+        if st.button("🚀 GENERATE WEBSITE", type="primary", key="generate"):
+            with st.spinner("Building your website..."):
+                html = generate_website_html(data)
                 if html:
-                    st.success("✅ Your website is ready!")
-                    
-                    # Preview
+                    st.success("✅ Website generated!")
                     st.components.v1.html(html, height=600, scrolling=True)
                     
                     # Download
                     b64 = base64.b64encode(html.encode()).decode()
-                    filename = f"{data['author'].get('name', 'author').replace(' ', '_')}_website.html"
-                    
-                    st.markdown(f'''
-                    <a href="data:text/html;base64,{b64}" download="{filename}" 
-                       style="display: inline-block; padding: 15px 40px; 
-                              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                              color: white; text-decoration: none; border-radius: 50px; 
-                              font-weight: bold; font-size: 1.2rem; margin-top: 20px;">
-                        📥 Download Complete Website
-                    </a>
-                    ''', unsafe_allow_html=True)
-                    
-                    st.info("""
-                    **Next Steps:**
-                    1. Download the HTML file
-                    2. Go to [app.netlify.com/drop](https://app.netlify.com/drop)
-                    3. Drag and drop the file
-                    4. Your site is live!
-                    """)
+                    filename = f"{data['author']['name'].replace(' ', '_')}_website.html"
+                    href = f'<a href="data:text/html;base64,{b64}" download="{filename}" style="display:inline-block;padding:12px 30px;background:#667eea;color:white;text-decoration:none;border-radius:5px;">📥 Download HTML</a>'
+                    st.markdown(href, unsafe_allow_html=True)
 
-
-def generate_complete_author_site(data, design):
-    """Generate complete HTML with ALL marketing features"""
+def generate_website_html(data):
+    """Generate the complete HTML website"""
+    author = data['author']
+    books = data['books']
+    social = data['social']
+    content = data['content']
     
-    author = data.get('author', {})
-    books = data.get('books', [])
-    social = data.get('social', {})
-    content = data.get('content', {})
+    author_name = author.get('pen_name') or author.get('name', 'Author')
     
-    # Build author name for display
-    author_name = author.get('pen_name') or author.get('name', 'Your Name')
-    
-    # Build book HTML
+    # Build books HTML
     books_html = ""
     for i, book in enumerate(books):
         books_html += f"""
-        <div class="book-card" id="book-{i}">
+        <div class="book-card">
             <div class="book-cover">
                 <div class="cover-placeholder">{book.get('title', 'Book Cover')}</div>
             </div>
             <div class="book-info">
                 <h3>{book.get('title')}</h3>
-                <p class="book-genre">{book.get('genre')}</p>
-                <p class="book-description">{book.get('description')}</p>
-                <div class="purchase-links">
-                    {f'<a href="{book["links"].get("amazon", "#")}" class="purchase-link amazon">Amazon</a>' if book.get('links', {}).get('amazon') else ''}
-                    {f'<a href="{book["links"].get("goodreads", "#")}" class="purchase-link goodreads">Goodreads</a>' if book.get('links', {}).get('goodreads') else ''}
-                    {f'<a href="{book["links"].get("apple", "#")}" class="purchase-link">Apple Books</a>' if book.get('links', {}).get('apple') else ''}
-                    {f'<a href="{book["links"].get("barnes", "#")}" class="purchase-link">Barnes & Noble</a>' if book.get('links', {}).get('barnes') else ''}
+                <p class="genre">{book.get('genre')}</p>
+                <p class="description">{book.get('description')}</p>
+                <div class="links">
+                    {f'<a href="{book["links"].get("amazon", "#")}" class="button amazon">Amazon</a>' if book.get('links', {}).get('amazon') else ''}
+                    {f'<a href="{book["links"].get("goodreads", "#")}" class="button goodreads">Goodreads</a>' if book.get('links', {}).get('goodreads') else ''}
                 </div>
             </div>
         </div>
         """
     
-    # Build social links HTML
+    # Build social HTML
     social_html = ""
-    profiles = social.get('profiles', {})
-    for platform, url in profiles.items():
+    for platform, url in social['profiles'].items():
         if url:
-            social_html += f'<a href="{url}" class="social-link" target="_blank">{platform.title()}</a>'
+            social_html += f'<a href="{url}" class="social-link">{platform.title()}</a>'
     
     # Build advocates HTML
     advocates_html = ""
-    for adv in social.get('advocates', []):
+    for adv in social['advocates']:
         advocates_html += f"""
         <div class="advocate-card">
-            <div class="advocate-avatar">{adv.get('username', 'R')[0].upper()}</div>
+            <div class="avatar">{adv.get('username', 'R')[0].upper()}</div>
             <h4>@{adv.get('username')}</h4>
             <p class="testimonial">"{adv.get('testimonial', '')}"</p>
         </div>
         """
     
-    # Build awards HTML
-    awards_html = ""
-    for award in author.get('awards', []):
-        awards_html += f'<span class="award-badge">🏆 {award}</span>'
-    
-    # Build media mentions HTML
+    # Build media HTML
     media_html = ""
-    for mention in content.get('media', []):
-        media_html += f'<li class="media-item">📰 {mention}</li>'
+    for mention in content['media']:
+        media_html += f'<li>{mention}</li>'
     
-    # Build newsletter HTML
-    newsletter = social.get('newsletter', {})
-    newsletter_html = ""
-    if newsletter.get('has'):
-        lead_magnet = newsletter.get('lead_magnet')
-        newsletter_html = f"""
-        <div class="newsletter-section">
-            <h3>Join the Newsletter</h3>
-            {f'<p class="lead-magnet">✨ <strong>Free:</strong> {lead_magnet}</p>' if lead_magnet else ''}
-            <p class="newsletter-desc">{newsletter.get('lead_magnet_desc', 'Get exclusive content and updates!')}</p>
-            <form class="newsletter-form" action="{newsletter.get('link', '#')}" method="post">
-                <input type="email" placeholder="Your email address" required>
-                <button type="submit">Subscribe</button>
-            </form>
+    # Simple HTML template
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{author_name} - Author Website</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 1200px; margin: 0 auto; padding: 0 20px; }}
+        nav {{ background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: sticky; top: 0; }}
+        .nav-container {{ display: flex; justify-content: space-between; align-items: center; padding: 1rem 20px; max-width: 1200px; margin: 0 auto; }}
+        .logo {{ font-size: 1.5rem; font-weight: bold; color: #667eea; text-decoration: none; }}
+        .nav-links a {{ margin-left: 2rem; text-decoration: none; color: #333; }}
+        .hero {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 100px 20px; text-align: center; }}
+        .hero h1 {{ font-size: 3rem; margin-bottom: 1rem; }}
+        .section {{ padding: 80px 20px; }}
+        .section-title {{ text-align: center; font-size: 2.5rem; margin-bottom: 50px; }}
+        .section-title:after {{ content: ''; display: block; width: 100px; height: 3px; background: #667eea; margin: 20px auto; }}
+        .book-card {{ display: flex; gap: 40px; margin-bottom: 60px; padding: 30px; background: white; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }}
+        .book-cover {{ flex: 1; min-width: 200px; }}
+        .cover-placeholder {{ width: 200px; height: 300px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; padding: 20px; }}
+        .book-info {{ flex: 2; }}
+        .button {{ display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-right: 10px; }}
+        .advocates-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; margin-top: 40px; }}
+        .advocate-card {{ background: white; padding: 30px; border-radius: 10px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+        .avatar {{ width: 80px; height: 80px; background: #667eea; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; margin: 0 auto 20px; }}
+        .social-links {{ display: flex; justify-content: center; gap: 20px; margin: 40px 0; }}
+        .social-link {{ padding: 10px 20px; background: #f0f0f0; color: #333; text-decoration: none; border-radius: 5px; }}
+        footer {{ background: #333; color: white; text-align: center; padding: 40px; }}
+        @media (max-width: 768px) {{ .book-card {{ flex-direction: column; }} .nav-links {{ display: none; }} }}
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="logo">{author_name}</a>
+            <div class="nav-links">
+                <a href="#home">Home</a>
+                <a href="#books">Books</a>
+                <a href="#about">About</a>
+                <a href="#contact">Contact</a>
+            </div>
         </div>
-        """
+    </nav>
     
-    # Complete HTML template (keeping your existing HTML here - it's long so I'll truncate for this message)
-    # [Your existing HTML generation code stays exactly the same]
+    <section id="home" class="hero">
+        <h1>{author_name}</h1>
+        <p>{author.get('bio', '')[:150]}...</p>
+        <a href="#books" class="button" style="margin-top: 30px;">Explore Books</a>
+    </section>
+    
+    <section id="books" class="section">
+        <div class="container">
+            <h2 class="section-title">My Books</h2>
+            {books_html if books_html else '<p style="text-align:center;">No books added yet.</p>'}
+        </div>
+    </section>
+    
+    {f'''
+    <section class="section" style="background:#f8f9fa;">
+        <div class="container">
+            <h2 class="section-title">Readers Love My Books</h2>
+            <div class="advocates-grid">{advocates_html}</div>
+        </div>
+    </section>
+    ''' if advocates_html else ''}
+    
+    <section id="about" class="section">
+        <div class="container">
+            <h2 class="section-title">About {author_name}</h2>
+            <p style="max-width:800px; margin:0 auto;">{author.get('bio', '')}</p>
+            {f'<ul style="margin-top:30px;">{media_html}</ul>' if media_html else ''}
+        </div>
+    </section>
+    
+    <section id="contact" class="section" style="background:#f8f9fa;">
+        <div class="container">
+            <h2 class="section-title">Connect</h2>
+            <div class="social-links">{social_html}</div>
+            <p style="text-align:center;">Email: <a href="mailto:{author.get('email', '')}">{author.get('email', '')}</a></p>
+        </div>
+    </section>
+    
+    <footer>
+        <p>© {datetime.now().year} {author_name}</p>
+    </footer>
+</body>
+</html>"""
     
     return html
