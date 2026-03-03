@@ -400,24 +400,52 @@ def render_finder():
 # ============================================================================
 # SIMPLIFIED SAVE BUTTON - TEST VERSION
 # ============================================================================
-st.markdown("---")
-col_a, col_b, col_c = st.columns([1, 1, 3])
-with col_a:
-    # Simple debug
-    st.caption(f"Debug - Advocate ID: {advocate['id']}")
-    
-    if st.button("❤️ Save", key=f"save_{advocate['id']}"):
-        st.write("✅ BUTTON CLICKED!")
-        st.write(f"User ID: {st.session_state.get('user_id')}")
-        st.write(f"Authenticated: {st.session_state.get('authenticated')}")
-        st.write(f"Advocate ID: {advocate['id']}")
-        st.write(f"Advocate Username: {advocate['username']}")
-        
-        if st.session_state.get('authenticated'):
-            st.success("User is authenticated - button works!")
-            # We'll add the actual save later
-        else:
-            st.warning("Not authenticated - please login")
+                    # Create platform links
+                    if advocate.get('username'):
+                        base_username = advocate['username'].replace('@', '')
+                        
+                        # Common platform URLs
+                        platform_links = {
+                            "TikTok": f"https://tiktok.com/@{base_username}",
+                            "Instagram": f"https://instagram.com/{base_username}",
+                            "YouTube": f"https://youtube.com/@{base_username}",
+                            "X (Twitter)": f"https://twitter.com/{base_username}",
+                            "Facebook": f"https://facebook.com/{base_username}",
+                            "Bluesky": f"https://bsky.app/profile/{base_username}",
+                            "Goodreads": f"https://goodreads.com/{base_username}",
+                            "Pinterest": f"https://pinterest.com/{base_username}"
+                        }
+                        
+                        links = []
+                        if advocate.get('platforms'):
+                            for platform in advocate['platforms']:
+                                if platform in platform_links:
+                                    links.append(f"[{platform}]({platform_links[platform]})")
+                        
+                        if links:
+                            st.markdown("🔗 **Quick Links:** " + " | ".join(links))
+                    
+                    # ============================================================================
+                    # SIMPLIFIED SAVE BUTTON - TEST VERSION
+                    # ============================================================================
+                    st.markdown("---")
+                    col_a, col_b, col_c = st.columns([1, 1, 3])
+                    with col_a:
+                        # Simple debug
+                        st.caption(f"Debug - Advocate ID: {advocate['id']}")
+                        
+                        if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+                            st.write("✅ BUTTON CLICKED!")
+                            st.write(f"User ID: {st.session_state.get('user_id')}")
+                            st.write(f"Authenticated: {st.session_state.get('authenticated')}")
+                            st.write(f"Advocate ID: {advocate['id']}")
+                            st.write(f"Advocate Username: {advocate['username']}")
+                            
+                            if st.session_state.get('authenticated'):
+                                st.success("User is authenticated - button works!")
+                                # We'll add the actual save later
+                            else:
+                                st.warning("Not authenticated - please login")
 
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
