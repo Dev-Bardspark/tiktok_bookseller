@@ -17,6 +17,7 @@ import author_persona_discovery
 import arc_influencer_finder
 import author_website_builder
 import SimpleCRM  # <--- ADDED CRM IMPORT
+import audiobook_module  # <--- LINE 1: ADD AUDIOBOOK IMPORT
 
 # ============================================================================
 # PAGE CONFIG
@@ -399,12 +400,13 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================================
-# NAVIGATION MENU - ADDED CRM HERE
+# NAVIGATION MENU - ADDED CRM AND AUDIOBOOKS HERE
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "❤️ Saved Readers", 
-    "📇 CRM",  # <--- ADDED CRM TO MENU
+    "📇 CRM",  # <--- CRM IN MENU
+    "🎧 Audiobooks",  # <--- LINE 2: AUDIOBOOKS IN MENU
     "🔍 ARC Readers/Influencers",
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
@@ -453,6 +455,7 @@ if not st.session_state.authenticated:
     - 🧠 **Author Persona** - Discover your brand voice
     - 🌐 **Website Builder** - Create your author site
     - 📇 **CRM** - Manage contacts and email campaigns
+    - 🎧 **Audiobook Marketing** - Find narrators and audiobook reviewers
     """)
     
     # Stop execution - don't show any other pages
@@ -559,20 +562,22 @@ elif st.session_state.page == "🏠 Dashboard":
             st.session_state.page = "🌐 Website Builder"
             st.rerun()
     with col4:
-        if st.button("🎬 Video Generator", use_container_width=True):  # <--- MOVED VIDEO GENERATOR HERE
+        if st.button("🎬 Video Generator", use_container_width=True):
             st.session_state.page = "🎬 Video Generator"
             st.rerun()
     
-    # Third row (disabled features)
+    # Third row (added Audiobook button)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
+        if st.button("🎧 Audiobooks", use_container_width=True):
+            st.session_state.page = "🎧 Audiobooks"
+            st.rerun()
     with col2:
-        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     with col3:
-        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     with col4:
-        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
+        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     
     st.markdown("---")
     
@@ -748,6 +753,13 @@ elif st.session_state.page == "❤️ Saved Readers":
 
 elif st.session_state.page == "📇 CRM":
     SimpleCRM.render_crm()
+
+# ============================================================================
+# AUDIOBOOK PAGE - LINE 3: ADD THIS ENTIRE BLOCK
+# ============================================================================
+
+elif st.session_state.page == "🎧 Audiobooks":
+    audiobook_module.show_audiobook_module()
 
 # ============================================================================
 # OTHER PAGES
