@@ -83,6 +83,16 @@ def load_user_marketing_assets(user_id):
 def show_generator():
     """Generate marketing assets from saved analysis"""
     
+    # ============================================================================
+    # LOGIN CHECK - ADD THIS AT THE START
+    # ============================================================================
+    if not st.session_state.get('authenticated', False):
+        st.warning("🔒 Please login to access the Marketing Asset Generator")
+        if st.button("Go to Login", use_container_width=True):
+            st.session_state.page = "🏠 Dashboard"
+            st.rerun()
+        return
+    
     if st.session_state.get('current_page') != "🎨 Marketing Assets":
         return
     
@@ -101,7 +111,7 @@ def show_generator():
     
     # Header
     st.title("🎨 Marketing Asset Generator")
-    st.markdown("Generate multi-platform marketing assets from your book analysis")
+    st.markdown("Generate LOTS of marketing options for every platform")
     st.markdown("---")
     
     # API Key input
@@ -124,7 +134,7 @@ def show_generator():
     if 'analysis_library' not in st.session_state:
         st.session_state.analysis_library = {}
     
-    # Also check database for saved analyses (if logged in)
+    # Also check database for saved analyses
     db_analyses = []
     if st.session_state.get('authenticated', False):
         conn = get_db_connection()
@@ -226,7 +236,7 @@ def show_generator():
         col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("🎬 GENERATE MARKETING ASSETS", type="primary", use_container_width=True):
-                with st.spinner("Generating assets... (30-45 seconds)"):
+                with st.spinner("Generating LOTS of assets... (60-90 seconds)"):
                     client = OpenAI(api_key=st.session_state.openai_api_key)
                     assets = generate_marketing_assets(client, st.session_state.loaded_analysis)
                     
@@ -248,9 +258,10 @@ def show_generator():
                 if st.session_state.get('authenticated', False):
                     if st.button("💾 Save to My Library", use_container_width=True):
                         # Save each asset type separately
-                        for asset_type in ['blurb', 'tiktok_scripts', 'instagram', 'amazon', 
-                                          'facebook_ads', 'email_sequence', 'press_kit', 
-                                          'pinterest', 'goodreads', 'podcast_pitch']:
+                        for asset_type in ['blurbs', 'tiktok_scripts', 'youtube_scripts', 'instagram_posts', 
+                                          'instagram_reels', 'amazon_options', 'facebook_ads', 'email_sequences', 
+                                          'press_kit_options', 'pinterest_options', 'goodreads_options', 
+                                          'podcast_pitches', 'launch_timeline']:
                             if asset_type in st.session_state.edited_assets:
                                 asset_data = {asset_type: st.session_state.edited_assets[asset_type]}
                                 asset_id = save_marketing_asset_to_db(
@@ -259,7 +270,7 @@ def show_generator():
                                     asset_type,
                                     asset_data
                                 )
-                        st.success("✅ Assets saved to your library!")
+                        st.success("✅ All assets saved to your library!")
                 
                 # Export button
                 export_data = json.dumps(st.session_state.edited_assets, indent=2)
@@ -275,39 +286,49 @@ def show_generator():
                 )
         
         # ============================================================================
-        # ASSET DISPLAY AND EDITING SECTION
+        # ASSET DISPLAY AND EDITING SECTION - WITH LOTS OF OPTIONS
         # ============================================================================
         
         if st.session_state.generated_assets and st.session_state.edited_assets:
             st.markdown("---")
-            st.success("✅ Assets generated! Edit them below.")
+            st.success("✅ Assets generated! Choose from MULTIPLE options below.")
             
             edited = st.session_state.edited_assets
             
             # Create tabs for each platform
-            tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
-                "📝 Blurb", "🎬 TikTok", "📸 Instagram", "🛒 Amazon", 
-                "📧 Email", "📢 Facebook", "📰 Press Kit", "📌 Pinterest", 
-                "📚 Goodreads", "🎙️ Podcast"
+            tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
+                "📝 Blurbs", "🎬 TikTok", "🎥 YouTube", "📸 Instagram Posts", "🎞️ Instagram Reels",
+                "🛒 Amazon", "📢 Facebook Ads", "📧 Email Sequences", "📰 Press Kits", 
+                "📌 Pinterest", "📚 Goodreads", "🎙️ Podcasts", "📅 Launch Timeline"
             ])
             
-            # Tab 1: Blurb
+            # Tab 1: Blurbs (multiple options)
             with tab1:
-                st.markdown("### 📝 Book Blurb")
-                edited['blurb'] = st.text_area(
-                    "Edit your blurb", 
-                    edited.get('blurb', ''), 
-                    height=200,
-                    key="blurb_editor"
-                )
+                st.markdown("### 📝 Book Blurb Options")
+                st.markdown("Choose from multiple blurbs with different angles:")
+                
+                blurbs = edited.get('blurbs', [])
+                if blurbs and isinstance(blurbs, list):
+                    for i, blurb in enumerate(blurbs):
+                        with st.expander(f"Blurb Option {i+1}", expanded=i==0):
+                            edited['blurbs'][i] = st.text_area(
+                                f"Edit Blurb {i+1}", 
+                                blurb, 
+                                height=150,
+                                key=f"blurb_{i}"
+                            )
+                else:
+                    st.info("No blurbs generated")
             
-            # Tab 2: TikTok Scripts
+            # Tab 2: TikTok Scripts (multiple options)
             with tab2:
-                st.markdown("### 🎬 TikTok Scripts")
+                st.markdown("### 🎬 TikTok Script Options")
+                st.markdown("Multiple script options with different hooks and styles:")
+                
                 scripts = edited.get('tiktok_scripts', [])
-                if scripts:
+                if scripts and isinstance(scripts, list):
                     for i, script in enumerate(scripts):
-                        with st.expander(f"Script {i+1}", expanded=i==0):
+                        with st.expander(f"TikTok Script {i+1}", expanded=i==0):
                             if isinstance(script, dict):
                                 for key, value in script.items():
                                     if key == 'hashtags' and isinstance(value, list):
@@ -327,15 +348,35 @@ def show_generator():
                 else:
                     st.info("No TikTok scripts generated")
             
-            # Tab 3: Instagram
+            # Tab 3: YouTube Scripts (multiple options)
             with tab3:
-                st.markdown("### 📸 Instagram")
-                insta = edited.get('instagram', {})
+                st.markdown("### 🎥 YouTube Video Script Options")
+                st.markdown("Long-form video scripts for deeper content:")
                 
-                if insta.get('posts'):
-                    st.markdown("**Posts:**")
-                    for j, post in enumerate(insta['posts']):
-                        with st.expander(f"Post {j+1}"):
+                scripts = edited.get('youtube_scripts', [])
+                if scripts and isinstance(scripts, list):
+                    for i, script in enumerate(scripts):
+                        with st.expander(f"YouTube Script {i+1}", expanded=i==0):
+                            if isinstance(script, dict):
+                                for key, value in script.items():
+                                    script[key] = st.text_area(
+                                        f"{key.title()}", 
+                                        str(value), 
+                                        height=100 if key == 'script' else 50,
+                                        key=f"youtube_{i}_{key}"
+                                    )
+                else:
+                    st.info("No YouTube scripts generated")
+            
+            # Tab 4: Instagram Posts (multiple options)
+            with tab4:
+                st.markdown("### 📸 Instagram Post Options")
+                st.markdown("Multiple post ideas with different visuals and captions:")
+                
+                posts = edited.get('instagram_posts', [])
+                if posts and isinstance(posts, list):
+                    for i, post in enumerate(posts):
+                        with st.expander(f"Instagram Post {i+1}", expanded=i==0):
                             if isinstance(post, dict):
                                 for key, value in post.items():
                                     if key == 'hashtags' and isinstance(value, list):
@@ -343,86 +384,77 @@ def show_generator():
                                         edited_tags = st.text_input(
                                             f"{key.title()}", 
                                             tag_string, 
-                                            key=f"insta_post_{j}_{key}"
+                                            key=f"insta_post_{i}_{key}"
                                         )
                                         post[key] = edited_tags.split()
                                     else:
                                         post[key] = st.text_input(
                                             f"{key.title()}", 
                                             str(value), 
-                                            key=f"insta_post_{j}_{key}"
+                                            key=f"insta_post_{i}_{key}"
                                         )
+                else:
+                    st.info("No Instagram posts generated")
+            
+            # Tab 5: Instagram Reels (multiple options)
+            with tab5:
+                st.markdown("### 🎞️ Instagram Reel Options")
+                st.markdown("Multiple reel concepts with different approaches:")
                 
-                if insta.get('reels'):
-                    st.markdown("**Reels:**")
-                    for j, reel in enumerate(insta['reels']):
-                        with st.expander(f"Reel {j+1}"):
+                reels = edited.get('instagram_reels', [])
+                if reels and isinstance(reels, list):
+                    for i, reel in enumerate(reels):
+                        with st.expander(f"Instagram Reel {i+1}", expanded=i==0):
                             if isinstance(reel, dict):
                                 for key, value in reel.items():
                                     reel[key] = st.text_input(
                                         f"{key.title()}", 
                                         str(value), 
-                                        key=f"insta_reel_{j}_{key}"
+                                        key=f"insta_reel_{i}_{key}"
                                     )
+                else:
+                    st.info("No Instagram reels generated")
             
-            # Tab 4: Amazon
-            with tab4:
-                st.markdown("### 🛒 Amazon")
-                amazon = edited.get('amazon', {})
-                if isinstance(amazon, dict):
-                    # A+ Content
-                    if 'a_plus_content' in amazon:
-                        with st.expander("A+ Content", expanded=True):
-                            ap = amazon['a_plus_content']
-                            ap['title'] = st.text_input("Title", ap.get('title', ''), key="amazon_ap_title")
-                            ap['description'] = st.text_area("Description", ap.get('description', ''), height=100, key="amazon_ap_desc")
-                            
-                            features = ap.get('key_features', [])
-                            for f_idx, feature in enumerate(features):
-                                features[f_idx] = st.text_input(f"Feature {f_idx+1}", feature, key=f"amazon_feat_{f_idx}")
-                    
-                    # Search Terms
-                    with st.expander("Search Terms", expanded=True):
-                        terms = amazon.get('search_terms', [])
-                        term_string = ', '.join(terms)
-                        edited_terms = st.text_input("Keywords (comma separated)", term_string, key="amazon_terms")
-                        amazon['search_terms'] = [t.strip() for t in edited_terms.split(',') if t.strip()]
-                    
-                    # Categories
-                    cats = amazon.get('categories', [])
-                    cat_string = ', '.join(cats)
-                    edited_cats = st.text_input("Categories (comma separated)", cat_string, key="amazon_cats")
-                    amazon['categories'] = [c.strip() for c in edited_cats.split(',') if c.strip()]
-                    
-                    # Author Bio
-                    amazon['author_bio'] = st.text_area("Author Bio", amazon.get('author_bio', ''), height=150, key="amazon_bio")
-            
-            # Tab 5: Email
-            with tab5:
-                st.markdown("### 📧 Email Sequence")
-                emails = edited.get('email_sequence', {})
-                for name, email in emails.items():
-                    with st.expander(f"📨 {name.title()} Email"):
-                        if isinstance(email, dict):
-                            email['subject'] = st.text_input(
-                                "Subject", 
-                                email.get('subject', ''), 
-                                key=f"email_{name}_subject"
-                            )
-                            email['body'] = st.text_area(
-                                "Body", 
-                                email.get('body', ''), 
-                                height=150,
-                                key=f"email_{name}_body"
-                            )
-            
-            # Tab 6: Facebook Ads
+            # Tab 6: Amazon Options (multiple options)
             with tab6:
-                st.markdown("### 📢 Facebook Ads")
+                st.markdown("### 🛒 Amazon Listing Options")
+                st.markdown("Multiple Amazon page approaches:")
+                
+                amazon_options = edited.get('amazon_options', [])
+                if amazon_options and isinstance(amazon_options, list):
+                    for i, amazon in enumerate(amazon_options):
+                        with st.expander(f"Amazon Option {i+1}", expanded=i==0):
+                            if isinstance(amazon, dict):
+                                # A+ Content
+                                if 'a_plus_content' in amazon:
+                                    ap = amazon['a_plus_content']
+                                    ap['title'] = st.text_input("A+ Title", ap.get('title', ''), key=f"amazon_ap_title_{i}")
+                                    ap['description'] = st.text_area("A+ Description", ap.get('description', ''), height=100, key=f"amazon_ap_desc_{i}")
+                                    
+                                    features = ap.get('key_features', [])
+                                    for f_idx, feature in enumerate(features):
+                                        features[f_idx] = st.text_input(f"Feature {f_idx+1}", feature, key=f"amazon_feat_{i}_{f_idx}")
+                                
+                                # Search Terms
+                                terms = amazon.get('search_terms', [])
+                                term_string = ', '.join(terms)
+                                edited_terms = st.text_input("Keywords (comma separated)", term_string, key=f"amazon_terms_{i}")
+                                amazon['search_terms'] = [t.strip() for t in edited_terms.split(',') if t.strip()]
+                                
+                                # Author Bio
+                                amazon['author_bio'] = st.text_area("Author Bio", amazon.get('author_bio', ''), height=150, key=f"amazon_bio_{i}")
+                else:
+                    st.info("No Amazon options generated")
+            
+            # Tab 7: Facebook Ads (multiple options)
+            with tab7:
+                st.markdown("### 📢 Facebook Ad Options")
+                st.markdown("Multiple ad variations for different audiences:")
+                
                 ads = edited.get('facebook_ads', [])
-                if ads:
+                if ads and isinstance(ads, list):
                     for i, ad in enumerate(ads):
-                        with st.expander(f"Ad {i+1}"):
+                        with st.expander(f"Facebook Ad {i+1}", expanded=i==0):
                             if isinstance(ad, dict):
                                 for key, value in ad.items():
                                     ad[key] = st.text_input(
@@ -433,149 +465,180 @@ def show_generator():
                 else:
                     st.info("No Facebook ads generated")
             
-            # Tab 7: Press Kit
-            with tab7:
-                st.markdown("### 📰 Press Kit")
-                press = edited.get('press_kit', {})
-                
-                if 'press_release' in press:
-                    press['press_release'] = st.text_area(
-                        "Press Release", 
-                        press.get('press_release', ''), 
-                        height=200,
-                        key="press_release"
-                    )
-                
-                if 'key_talking_points' in press:
-                    points = press.get('key_talking_points', [])
-                    point_string = '\n'.join(points)
-                    edited_points = st.text_area(
-                        "Key Talking Points (one per line)", 
-                        point_string, 
-                        height=100,
-                        key="press_points"
-                    )
-                    press['key_talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
-                
-                if 'author_qanda' in press:
-                    qas = press.get('author_qanda', [])
-                    for j, qa in enumerate(qas):
-                        with st.expander(f"Q&A {j+1}"):
-                            if isinstance(qa, dict):
-                                qa['question'] = st.text_input(
-                                    "Question", 
-                                    qa.get('question', ''), 
-                                    key=f"press_qa_{j}_q"
-                                )
-                                qa['answer'] = st.text_area(
-                                    "Answer", 
-                                    qa.get('answer', ''), 
-                                    height=80,
-                                    key=f"press_qa_{j}_a"
-                                )
-            
-            # Tab 8: Pinterest
+            # Tab 8: Email Sequences (multiple sequences)
             with tab8:
-                st.markdown("### 📌 Pinterest")
-                pinterest = edited.get('pinterest', {})
+                st.markdown("### 📧 Email Sequence Options")
+                st.markdown("Complete email sequences for different phases:")
                 
-                if 'pin_descriptions' in pinterest:
-                    pins = pinterest.get('pin_descriptions', [])
-                    pin_string = '\n'.join(pins)
-                    edited_pins = st.text_area(
-                        "Pin Descriptions (one per line)", 
-                        pin_string, 
-                        height=100,
-                        key="pinterest_pins"
-                    )
-                    pinterest['pin_descriptions'] = [p.strip() for p in edited_pins.split('\n') if p.strip()]
-                
-                if 'board_ideas' in pinterest:
-                    boards = pinterest.get('board_ideas', [])
-                    board_string = '\n'.join(boards)
-                    edited_boards = st.text_area(
-                        "Board Ideas (one per line)", 
-                        board_string, 
-                        height=100,
-                        key="pinterest_boards"
-                    )
-                    pinterest['board_ideas'] = [b.strip() for b in edited_boards.split('\n') if b.strip()]
+                sequences = edited.get('email_sequences', [])
+                if sequences and isinstance(sequences, list):
+                    for seq_idx, sequence in enumerate(sequences):
+                        with st.expander(f"{sequence.get('name', 'Email Sequence')}", expanded=seq_idx==0):
+                            st.markdown(f"**{sequence.get('name', 'Sequence')}**")
+                            emails = sequence.get('emails', [])
+                            for email_idx, email in enumerate(emails):
+                                st.markdown(f"**Email {email_idx+1}**")
+                                if isinstance(email, dict):
+                                    email['subject'] = st.text_input(
+                                        "Subject", 
+                                        email.get('subject', ''), 
+                                        key=f"email_{seq_idx}_{email_idx}_subject"
+                                    )
+                                    email['body'] = st.text_area(
+                                        "Body", 
+                                        email.get('body', ''), 
+                                        height=150,
+                                        key=f"email_{seq_idx}_{email_idx}_body"
+                                    )
+                else:
+                    st.info("No email sequences generated")
             
-            # Tab 9: Goodreads
+            # Tab 9: Press Kit Options (multiple options)
             with tab9:
-                st.markdown("### 📚 Goodreads")
-                goodreads = edited.get('goodreads', {})
+                st.markdown("### 📰 Press Kit Options")
+                st.markdown("Multiple press kit variations:")
                 
-                if 'giveaway_description' in goodreads:
-                    goodreads['giveaway_description'] = st.text_area(
-                        "Giveaway Description", 
-                        goodreads.get('giveaway_description', ''), 
-                        height=150,
-                        key="goodreads_giveaway"
-                    )
-                
-                if 'discussion_questions' in goodreads:
-                    questions = goodreads.get('discussion_questions', [])
-                    q_string = '\n'.join(questions)
-                    edited_qs = st.text_area(
-                        "Discussion Questions (one per line)", 
-                        q_string, 
-                        height=100,
-                        key="goodreads_questions"
-                    )
-                    goodreads['discussion_questions'] = [q.strip() for q in edited_qs.split('\n') if q.strip()]
-                
-                if 'similar_books' in goodreads:
-                    similar = goodreads.get('similar_books', [])
-                    s_string = '\n'.join(similar)
-                    edited_similar = st.text_area(
-                        "Similar Books (one per line)", 
-                        s_string, 
-                        height=100,
-                        key="goodreads_similar"
-                    )
-                    goodreads['similar_books'] = [s.strip() for s in edited_similar.split('\n') if s.strip()]
+                press_options = edited.get('press_kit_options', [])
+                if press_options and isinstance(press_options, list):
+                    for i, press in enumerate(press_options):
+                        with st.expander(f"Press Kit Option {i+1}", expanded=i==0):
+                            if 'press_release' in press:
+                                press['press_release'] = st.text_area(
+                                    "Press Release", 
+                                    press.get('press_release', ''), 
+                                    height=200,
+                                    key=f"press_release_{i}"
+                                )
+                            
+                            if 'key_talking_points' in press:
+                                points = press.get('key_talking_points', [])
+                                point_string = '\n'.join(points)
+                                edited_points = st.text_area(
+                                    "Key Talking Points (one per line)", 
+                                    point_string, 
+                                    height=100,
+                                    key=f"press_points_{i}"
+                                )
+                                press['key_talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
+                else:
+                    st.info("No press kit options generated")
             
-            # Tab 10: Podcast
+            # Tab 10: Pinterest Options (multiple options)
             with tab10:
-                st.markdown("### 🎙️ Podcast Pitch")
-                podcast = edited.get('podcast_pitch', {})
+                st.markdown("### 📌 Pinterest Options")
+                st.markdown("Multiple pin strategies:")
                 
-                if 'pitch_email' in podcast:
-                    podcast['pitch_email'] = st.text_area(
-                        "Pitch Email", 
-                        podcast.get('pitch_email', ''), 
-                        height=200,
-                        key="podcast_email"
-                    )
-                
-                if 'talking_points' in podcast:
-                    points = podcast.get('talking_points', [])
-                    point_string = '\n'.join(points)
-                    edited_points = st.text_area(
-                        "Talking Points (one per line)", 
-                        point_string, 
-                        height=100,
-                        key="podcast_points"
-                    )
-                    podcast['talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
-                
-                if 'podcast_ideas' in podcast:
-                    ideas = podcast.get('podcast_ideas', [])
-                    idea_string = '\n'.join(ideas)
-                    edited_ideas = st.text_area(
-                        "Podcast Episode Ideas (one per line)", 
-                        idea_string, 
-                        height=100,
-                        key="podcast_ideas"
-                    )
-                    podcast['podcast_ideas'] = [i.strip() for i in edited_ideas.split('\n') if i.strip()]
+                pinterest_options = edited.get('pinterest_options', [])
+                if pinterest_options and isinstance(pinterest_options, list):
+                    for i, pinterest in enumerate(pinterest_options):
+                        with st.expander(f"Pinterest Option {i+1}", expanded=i==0):
+                            if 'pin_descriptions' in pinterest:
+                                pins = pinterest.get('pin_descriptions', [])
+                                pin_string = '\n'.join(pins)
+                                edited_pins = st.text_area(
+                                    "Pin Descriptions (one per line)", 
+                                    pin_string, 
+                                    height=100,
+                                    key=f"pinterest_pins_{i}"
+                                )
+                                pinterest['pin_descriptions'] = [p.strip() for p in edited_pins.split('\n') if p.strip()]
+                else:
+                    st.info("No Pinterest options generated")
             
-            st.success("✅ Edits saved in current session")
+            # Tab 11: Goodreads Options (multiple options)
+            with tab11:
+                st.markdown("### 📚 Goodreads Options")
+                st.markdown("Multiple Goodreads strategies:")
+                
+                goodreads_options = edited.get('goodreads_options', [])
+                if goodreads_options and isinstance(goodreads_options, list):
+                    for i, goodreads in enumerate(goodreads_options):
+                        with st.expander(f"Goodreads Option {i+1}", expanded=i==0):
+                            if 'giveaway_description' in goodreads:
+                                goodreads['giveaway_description'] = st.text_area(
+                                    "Giveaway Description", 
+                                    goodreads.get('giveaway_description', ''), 
+                                    height=150,
+                                    key=f"goodreads_giveaway_{i}"
+                                )
+                            
+                            if 'discussion_questions' in goodreads:
+                                questions = goodreads.get('discussion_questions', [])
+                                q_string = '\n'.join(questions)
+                                edited_qs = st.text_area(
+                                    "Discussion Questions (one per line)", 
+                                    q_string, 
+                                    height=100,
+                                    key=f"goodreads_questions_{i}"
+                                )
+                                goodreads['discussion_questions'] = [q.strip() for q in edited_qs.split('\n') if q.strip()]
+                else:
+                    st.info("No Goodreads options generated")
+            
+            # Tab 12: Podcast Pitches (multiple options)
+            with tab12:
+                st.markdown("### 🎙️ Podcast Pitch Options")
+                st.markdown("Multiple podcast pitch approaches:")
+                
+                podcast_options = edited.get('podcast_pitches', [])
+                if podcast_options and isinstance(podcast_options, list):
+                    for i, podcast in enumerate(podcast_options):
+                        with st.expander(f"Podcast Pitch {i+1}", expanded=i==0):
+                            if 'pitch_email' in podcast:
+                                podcast['pitch_email'] = st.text_area(
+                                    "Pitch Email", 
+                                    podcast.get('pitch_email', ''), 
+                                    height=200,
+                                    key=f"podcast_email_{i}"
+                                )
+                            
+                            if 'talking_points' in podcast:
+                                points = podcast.get('talking_points', [])
+                                point_string = '\n'.join(points)
+                                edited_points = st.text_area(
+                                    "Talking Points (one per line)", 
+                                    point_string, 
+                                    height=100,
+                                    key=f"podcast_points_{i}"
+                                )
+                                podcast['talking_points'] = [p.strip() for p in edited_points.split('\n') if p.strip()]
+                else:
+                    st.info("No podcast pitches generated")
+            
+            # Tab 13: Launch Timeline
+            with tab13:
+                st.markdown("### 📅 Launch Timeline")
+                st.markdown("Complete launch plan with timing:")
+                
+                timeline = edited.get('launch_timeline', {})
+                if timeline:
+                    phases = [
+                        ("6_weeks_before", "6 Weeks Before Launch"),
+                        ("4_weeks_before", "4 Weeks Before Launch"),
+                        ("2_weeks_before", "2 Weeks Before Launch"),
+                        ("launch_week", "Launch Week"),
+                        ("post_launch", "Post-Launch")
+                    ]
+                    
+                    for phase_key, phase_name in phases:
+                        with st.expander(phase_name, expanded=True):
+                            items = timeline.get(phase_key, [])
+                            if items and isinstance(items, list):
+                                for idx, item in enumerate(items):
+                                    edited_item = st.text_input(
+                                        f"Item {idx+1}", 
+                                        item,
+                                        key=f"timeline_{phase_key}_{idx}"
+                                    )
+                                    items[idx] = edited_item
+                else:
+                    st.info("No launch timeline generated")
+            
+            st.success("✅ All edits saved in current session")
 
 
 def generate_marketing_assets(client, analysis_data):
-    """Generate marketing assets from saved analysis"""
+    """Generate LOTS of marketing assets from saved analysis"""
     
     # Extract the actual analysis
     book_analysis = analysis_data.get('book_info', {})
@@ -586,6 +649,8 @@ def generate_marketing_assets(client, analysis_data):
     
     prompt = f"""
     Based on this book analysis, create comprehensive marketing assets for ALL platforms.
+    For EACH platform, generate MULTIPLE options (5-10 each) so the author can choose.
+    Include a COMPLETE LAUNCH TIMELINE with specific actions for each phase.
     
     BOOK ANALYSIS:
     {json.dumps(book_analysis, indent=2)}
@@ -595,11 +660,57 @@ def generate_marketing_assets(client, analysis_data):
     
     Return JSON with:
     
-    1. blurb: "150-word compelling book description"
+    1. blurbs: [
+        "Option 1: Compelling 150-word blurb focusing on plot",
+        "Option 2: Emotional blurb focusing on characters",
+        "Option 3: High-concept blurb focusing on hook",
+        "Option 4: Mystery blurb leaving questions",
+        "Option 5: Comparison-based blurb (For fans of X...)"
+    ]
     
     2. tiktok_scripts: [
         {{
-            "hook": "attention grabber",
+            "hook": "attention grabber option 1",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 2",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 3",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 4",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 5",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 6",
             "visuals": "what to show",
             "voiceover": "full script",
             "music": "music suggestion",
@@ -608,88 +719,334 @@ def generate_marketing_assets(client, analysis_data):
         }}
     ]
     
-    3. instagram: {{
-        "posts": [
-            {{
-                "image_description": "what to post",
-                "caption": "caption text",
-                "hashtags": ["#tag1", "#tag2"]
-            }}
-        ],
-        "reels": [
-            {{
-                "concept": "reel idea",
-                "script": "content",
-                "music": "trending audio"
-            }}
-        ],
-        "stories": ["story idea 1", "story idea 2"]
-    }}
-    
-    4. amazon: {{
-        "a_plus_content": {{
-            "title": "enhanced brand content title",
-            "description": "enhanced description",
-            "key_features": ["feature1", "feature2", "feature3"]
-        }},
-        "search_terms": ["keyword1", "keyword2", "keyword3"],
-        "categories": ["suggested categories"],
-        "author_bio": "compelling author bio for Amazon page"
-    }}
-    
-    5. facebook_ads: [
+    3. youtube_scripts: [
         {{
-            "audience": "target demographic",
-            "headline": "ad headline",
-            "primary_text": "main ad text",
-            "description": "description",
-            "cta": "call to action button"
+            "title": "video title option 1",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 2",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 3",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
         }}
     ]
     
-    6. email_sequence: {{
-        "welcome": {{
-            "subject": "Welcome email subject",
-            "body": "full email content"
+    4. instagram_posts: [
+        {{
+            "image_description": "what to post option 1",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }},
-        "prelaunch": {{
-            "subject": "Pre-launch subject",
-            "body": "email content"
+        {{
+            "image_description": "what to post option 2",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }},
-        "launch": {{
-            "subject": "Launch day subject",
-            "body": "email content"
+        {{
+            "image_description": "what to post option 3",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }},
-        "followup": {{
-            "subject": "Follow-up subject",
-            "body": "email with reviews"
+        {{
+            "image_description": "what to post option 4",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 5",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }}
-    }}
+    ]
     
-    7. press_kit: {{
-        "press_release": "full press release",
-        "author_qanda": [
-            {{"question": "question", "answer": "answer"}}
+    5. instagram_reels: [
+        {{
+            "concept": "reel idea option 1",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 2",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 3",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 4",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 5",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }}
+    ]
+    
+    6. amazon_options: [
+        {{
+            "a_plus_content": {{
+                "title": "enhanced brand content title",
+                "description": "enhanced description",
+                "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
+            }},
+            "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["suggested category 1", "suggested category 2"],
+            "author_bio": "compelling author bio option 1"
+        }},
+        {{
+            "a_plus_content": {{
+                "title": "enhanced brand content title",
+                "description": "enhanced description",
+                "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
+            }},
+            "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["suggested category 1", "suggested category 2"],
+            "author_bio": "compelling author bio option 2"
+        }},
+        {{
+            "a_plus_content": {{
+                "title": "enhanced brand content title",
+                "description": "enhanced description",
+                "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
+            }},
+            "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["suggested category 1", "suggested category 2"],
+            "author_bio": "compelling author bio option 3"
+        }}
+    ]
+    
+    7. facebook_ads: [
+        {{
+            "audience": "target demographic 1",
+            "headline": "ad headline option 1",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Shop Now"
+        }},
+        {{
+            "audience": "target demographic 2",
+            "headline": "ad headline option 2",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Learn More"
+        }},
+        {{
+            "audience": "target demographic 3",
+            "headline": "ad headline option 3",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Sign Up"
+        }},
+        {{
+            "audience": "target demographic 4",
+            "headline": "ad headline option 4",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Buy Now"
+        }},
+        {{
+            "audience": "target demographic 5",
+            "headline": "ad headline option 5",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Pre-order"
+        }}
+    ]
+    
+    8. email_sequences: [
+        {{
+            "name": "Hype/Teaser Sequence (5 emails)",
+            "emails": [
+                {{
+                    "subject": "Subject line 1 - The announcement",
+                    "body": "Email content 1 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 2 - Behind the scenes",
+                    "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Character introduction",
+                    "body": "Email content 3 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 4 - Exclusive excerpt",
+                    "body": "Email content 4 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 5 - Pre-order reminder",
+                    "body": "Email content 5 - full email text"
+                }}
+            ]
+        }},
+        {{
+            "name": "Launch Week Sequence (5 emails)",
+            "emails": [
+                {{
+                    "subject": "Subject line 1 - It's live!",
+                    "body": "Email content 1 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 2 - Reviews coming in",
+                    "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Reader reactions",
+                    "body": "Email content 3 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 4 - Thank you",
+                    "body": "Email content 4 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 5 - What's next",
+                    "body": "Email content 5 - full email text"
+                }}
+            ]
+        }},
+        {{
+            "name": "Review/Engagement Sequence (3 emails)",
+            "emails": [
+                {{
+                    "subject": "Subject line 1 - Loved the book?",
+                    "body": "Email content 1 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 2 - Join the discussion",
+                    "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Stay connected",
+                    "body": "Email content 3 - full email text"
+                }}
+            ]
+        }}
+    ]
+    
+    9. press_kit_options: [
+        {{
+            "press_release": "full press release option 1 - standard format",
+            "author_qanda": [
+                {{"question": "Question 1 about inspiration", "answer": "Answer 1"}},
+                {{"question": "Question 2 about writing process", "answer": "Answer 2"}},
+                {{"question": "Question 3 about future projects", "answer": "Answer 3"}},
+                {{"question": "Question 4 about themes", "answer": "Answer 4"}},
+                {{"question": "Question 5 about research", "answer": "Answer 5"}}
+            ],
+            "key_talking_points": ["point1", "point2", "point3", "point4", "point5"]
+        }},
+        {{
+            "press_release": "full press release option 2 - angle on market trends",
+            "author_qanda": [
+                {{"question": "Question 1 about inspiration", "answer": "Answer 1"}},
+                {{"question": "Question 2 about writing process", "answer": "Answer 2"}},
+                {{"question": "Question 3 about future projects", "answer": "Answer 3"}},
+                {{"question": "Question 4 about themes", "answer": "Answer 4"}},
+                {{"question": "Question 5 about research", "answer": "Answer 5"}}
+            ],
+            "key_talking_points": ["point1", "point2", "point3", "point4", "point5"]
+        }}
+    ]
+    
+    10. pinterest_options: [
+        {{
+            "pin_descriptions": ["Pin 1: Quote from book", "Pin 2: Character aesthetic", "Pin 3: Setting inspiration", "Pin 4: Mood board", "Pin 5: Writing tips"],
+            "board_ideas": ["{Book Title} Inspiration", "Characters", "Settings", "Quotes", "Author Life"],
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+        }},
+        {{
+            "pin_descriptions": ["Pin 1: Book review quote", "Pin 2: Reading playlist", "Pin 3: Fan art inspiration", "Pin 4: Similar books", "Pin 5: Author interview"],
+            "board_ideas": ["{Book Title} Vibes", "Readers Love", "Book Club", "Author Journey", "Writing Process"],
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+        }}
+    ]
+    
+    11. goodreads_options: [
+        {{
+            "giveaway_description": "Option 1 - Standard giveaway: Enter to win a signed copy!",
+            "discussion_questions": ["Q1: What was your favorite moment?", "Q2: Which character did you relate to most?", "Q3: How did the setting affect the story?", "Q4: What themes stood out to you?", "Q5: Would you recommend this book?"],
+            "similar_books": ["Book 1 in similar genre", "Book 2 by similar author", "Book 3 with similar themes"]
+        }},
+        {{
+            "giveaway_description": "Option 2 - Bundle giveaway: Win the book plus swag!",
+            "discussion_questions": ["Q1: How did the ending make you feel?", "Q2: What surprised you most?", "Q3: Who was your favorite side character?", "Q4: What would you ask the author?", "Q5: Rate the pacing"],
+            "similar_books": ["Book 1 readers also enjoyed", "Book 2 if you liked this", "Book 3 in the same vein"]
+        }}
+    ]
+    
+    12. podcast_pitches: [
+        {{
+            "pitch_email": "Email template for book podcasts - angle on author journey",
+            "talking_points": ["point1 about inspiration", "point2 about writing process", "point3 about themes", "point4 about market timing", "point5 about future projects"],
+            "podcast_ideas": ["Episode 1: The story behind the story", "Episode 2: Writing in this genre", "Episode 3: From manuscript to publication"]
+        }},
+        {{
+            "pitch_email": "Email template for genre-specific podcasts - angle on expertise",
+            "talking_points": ["point1 about genre trends", "point2 about research", "point3 about character development", "point4 about worldbuilding", "point5 about reader reactions"],
+            "podcast_ideas": ["Episode 1: Deep dive into the world", "Episode 2: Character creation", "Episode 3: Genre insights"]
+        }},
+        {{
+            "pitch_email": "Email template for author interview shows - personal angle",
+            "talking_points": ["point1 about personal journey", "point2 about challenges", "point3 about successes", "point4 about daily routine", "point5 about advice for writers"],
+            "podcast_ideas": ["Episode 1: My writing journey", "Episode 2: Daily habits of a writer", "Episode 3: Advice for new authors"]
+        }}
+    ]
+    
+    13. launch_timeline: {{
+        "6_weeks_before": [
+            "Action 1: Cover reveal on social media",
+            "Action 2: Set up pre-order links",
+            "Action 3: Create ARC team and send copies",
+            "Action 4: Schedule blog tour",
+            "Action 5: Prepare newsletter announcement"
         ],
-        "key_talking_points": ["point1", "point2"]
-    }}
-    
-    8. pinterest: {{
-        "pin_descriptions": ["pin1", "pin2"],
-        "board_ideas": ["board1", "board2"],
-        "keywords": ["pinterest keywords"]
-    }}
-    
-    9. goodreads: {{
-        "giveaway_description": "text for giveaway",
-        "discussion_questions": ["q1", "q2"],
-        "similar_books": ["book1", "book2"]
-    }}
-    
-    10. podcast_pitch: {{
-        "pitch_email": "email template",
-        "talking_points": ["point1", "point2"],
-        "podcast_ideas": ["episode angle1", "angle2"]
+        "4_weeks_before": [
+            "Action 1: Start posting teasers on TikTok",
+            "Action 2: Share character introductions on Instagram",
+            "Action 3: Send ARC reminder to reviewers",
+            "Action 4: Pitch to podcasters",
+            "Action 5: Create launch graphics"
+        ],
+        "2_weeks_before": [
+            "Action 1: Increase posting frequency",
+            "Action 2: Share early reviews/testimonials",
+            "Action 3: Host Goodreads giveaway",
+            "Action 4: Prepare launch day emails",
+            "Action 5: Coordinate with street team"
+        ],
+        "launch_week": [
+            "Action 1: Launch day posts on ALL platforms",
+            "Action 2: Send launch email to list",
+            "Action 3: Go live on TikTok/Instagram",
+            "Action 4: Monitor reviews and engage",
+            "Action 5: Thank supporters publicly"
+        ],
+        "post_launch": [
+            "Action 1: Follow up with reviewers",
+            "Action 2: Share fan posts/reactions",
+            "Action 3: Plan next phase of content",
+            "Action 4: Analyze what worked best",
+            "Action 5: Start planning next book marketing"
+        ]
     }}
     """
     
@@ -697,11 +1054,11 @@ def generate_marketing_assets(client, analysis_data):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a marketing expert. Return valid JSON only."},
+                {"role": "system", "content": "You are a marketing expert. Return valid JSON only. Generate MULTIPLE options for each platform as requested."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=4000,
+            max_tokens=8000,
             response_format={"type": "json_object"}
         )
         
