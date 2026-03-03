@@ -397,89 +397,33 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-                   # ============================================================================
-                     # SAVE BUTTON WITH LIVE DEBUGGING
-                    # ============================================================================
-                    st.markdown("---")
-                    col_a, col_b, col_c = st.columns([1, 1, 3])
-                    with col_a:
-                        # Create a unique key for this button
-                        button_key = f"save_{advocate['id']}"
-                        
-                        # Check if already saved by looking at session state
-                        is_saved = False
-                        if 'saved_readers' in st.session_state:
-                            is_saved = any(r['id'] == advocate['id'] for r in st.session_state.saved_readers)
-                        
-                        # Create a placeholder for debug messages
-                        debug_placeholder = st.empty()
-                        
-                        if not is_saved:
-                            if st.button("❤️ Save to My List", key=button_key):
-                                with debug_placeholder.container():
-                                    st.write("🔍 **DEBUG INFO:**")
-                                    st.write(f"1. Button clicked for {advocate['username']}")
-                                    st.write(f"2. Authenticated: {st.session_state.get('authenticated', False)}")
-                                    st.write(f"3. User ID: {st.session_state.get('user_id', 'None')}")
-                                    st.write(f"4. Advocate ID: {advocate['id']}")
-                                    
-                                    if st.session_state.get('authenticated', False):
-                                        st.write("5. Attempting database connection...")
-                                        conn = get_db_connection()
-                                        
-                                        if conn:
-                                            st.write("6. ✅ Database connected")
-                                            cur = conn.cursor()
-                                            
-                                            try:
-                                                # Check if already exists
-                                                st.write("7. Checking if already saved...")
-                                                cur.execute("""
-                                                    SELECT 1 FROM user_saved_arc_readers 
-                                                    WHERE user_id = %s AND reader_id = %s
-                                                """, (st.session_state.user_id, advocate['id']))
-                                                exists = cur.fetchone()
-                                                
-                                                if not exists:
-                                                    st.write("8. Not saved yet - inserting...")
-                                                    cur.execute("""
-                                                        INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
-                                                        VALUES (%s, %s, %s)
-                                                    """, (st.session_state.user_id, advocate['id'], datetime.now()))
-                                                    conn.commit()
-                                                    st.write("9. ✅ Insert successful")
-                                                    
-                                                    # Update session state
-                                                    if 'saved_readers' not in st.session_state:
-                                                        st.session_state.saved_readers = []
-                                                    st.session_state.saved_readers.append(advocate)
-                                                    st.write("10. ✅ Session state updated")
-                                                    
-                                                    st.success(f"✅ @{advocate['username']} saved!")
-                                                    st.rerun()
-                                                else:
-                                                    st.write("8. Already exists in database")
-                                                    # Still add to session state if not there
-                                                    if 'saved_readers' not in st.session_state:
-                                                        st.session_state.saved_readers = []
-                                                    if not any(r['id'] == advocate['id'] for r in st.session_state.saved_readers):
-                                                        st.session_state.saved_readers.append(advocate)
-                                                    st.info("Already saved")
-                                                    st.rerun()
-                                                    
-                                            except Exception as e:
-                                                st.error(f"❌ Database error: {str(e)}")
-                                                st.write(f"Error type: {type(e).__name__}")
-                                            finally:
-                                                cur.close()
-                                                conn.close()
-                                                st.write("11. Database connection closed")
-                                        else:
-                                            st.error("❌ Could not connect to database")
-                                    else:
-                                        st.warning("⚠️ Please login to save readers")
-                        else:
-                            st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
+                  # ============================================================================
+# SAVE BUTTON - SIMPLE VERSION
+# ============================================================================
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 3])
+with col1:
+    if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+        if st.session_state.get('authenticated'):
+            conn = get_db_connection()
+            if conn:
+                cur = conn.cursor()
+                try:
+                    cur.execute("""
+                        INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, reader_id) DO NOTHING
+                    """, (st.session_state.user_id, advocate['id'], datetime.now()))
+                    conn.commit()
+                    st.success("Saved!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                finally:
+                    cur.close()
+                    conn.close()
+        else:
+            st.warning("Please login")
 
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
