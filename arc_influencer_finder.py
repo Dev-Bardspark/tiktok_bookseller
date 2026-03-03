@@ -397,36 +397,8 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-# ============================================================================
-# SIMPLIFIED SAVE BUTTON - TEST VERSION
-# ============================================================================
-                    # Create platform links
-                    if advocate.get('username'):
-                        base_username = advocate['username'].replace('@', '')
-                        
-                        # Common platform URLs
-                        platform_links = {
-                            "TikTok": f"https://tiktok.com/@{base_username}",
-                            "Instagram": f"https://instagram.com/{base_username}",
-                            "YouTube": f"https://youtube.com/@{base_username}",
-                            "X (Twitter)": f"https://twitter.com/{base_username}",
-                            "Facebook": f"https://facebook.com/{base_username}",
-                            "Bluesky": f"https://bsky.app/profile/{base_username}",
-                            "Goodreads": f"https://goodreads.com/{base_username}",
-                            "Pinterest": f"https://pinterest.com/{base_username}"
-                        }
-                        
-                        links = []
-                        if advocate.get('platforms'):
-                            for platform in advocate['platforms']:
-                                if platform in platform_links:
-                                    links.append(f"[{platform}]({platform_links[platform]})")
-                        
-                        if links:
-                            st.markdown("🔗 **Quick Links:** " + " | ".join(links))
-                    
                     # ============================================================================
-                    # SIMPLIFIED SAVE BUTTON - TEST VERSION
+                    # SIMPLIFIED SAVE BUTTON - NOW INSIDE THE EXPANDER
                     # ============================================================================
                     st.markdown("---")
                     col_a, col_b, col_c = st.columns([1, 1, 3])
@@ -443,9 +415,48 @@ def render_finder():
                             
                             if st.session_state.get('authenticated'):
                                 st.success("User is authenticated - button works!")
-                                # We'll add the actual save later
+                                
+                                # Actually save to database
+                                conn = get_db_connection()
+                                if conn:
+                                    cur = conn.cursor()
+                                    try:
+                                        cur.execute("""
+                                            INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                                            VALUES (%s, %s, %s)
+                                            ON CONFLICT (user_id, reader_id) DO NOTHING
+                                        """, (st.session_state.user_id, advocate['id'], datetime.now()))
+                                        conn.commit()
+                                        
+                                        # Update session state
+                                        if 'saved_readers' not in st.session_state:
+                                            st.session_state.saved_readers = []
+                                        
+                                        # Check if already in session state
+                                        exists_in_session = any(r['id'] == advocate['id'] for r in st.session_state.saved_readers)
+                                        if not exists_in_session:
+                                            st.session_state.saved_readers.append(advocate)
+                                        
+                                        st.success(f"✅ @{advocate['username']} saved to database!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Database error: {str(e)}")
+                                    finally:
+                                        cur.close()
+                                        conn.close()
                             else:
                                 st.warning("Not authenticated - please login")
+        else:
+            st.warning("No advocates found matching your criteria. Try widening your filters.")
+    
+    # Show saved count in sidebar
+    st.sidebar.markdown("---")
+    saved_count = len(st.session_state.get('saved_readers', []))
+    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
+    if saved_count > 0:
+        if st.sidebar.button("📋 View Saved Readers", use_container_width=True):
+            st.session_state.page = "❤️ Saved Readers"
+            st.rerun()
 
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
