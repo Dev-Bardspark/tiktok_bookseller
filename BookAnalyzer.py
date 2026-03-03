@@ -247,17 +247,18 @@ def show_results():
     
     # Navigation buttons - SIMPLIFIED
     col1, col2 = st.columns(2)
-    # In show_results() function, replace the Marketing Assets button with:
-with col1:
-    if st.button("🎨 Marketing Assets", use_container_width=True):
-        st.session_state.page = "🎨 Marketing Assets"
-        # Pass the CURRENT analysis to marketing assets
-        st.session_state.loaded_analysis = st.session_state.analysis_result
-        # Also pass the cover analysis
-        if st.session_state.cover_analysis:
-            if 'cover_analysis' not in st.session_state.loaded_analysis:
-                st.session_state.loaded_analysis['cover_analysis'] = st.session_state.cover_analysis
-        st.rerun()
+    
+    with col1:
+        if st.button("🎨 Marketing Assets", use_container_width=True):
+            st.session_state.page = "🎨 Marketing Assets"
+            # Pass the CURRENT analysis to marketing assets
+            st.session_state.loaded_analysis = st.session_state.analysis_result
+            # Also pass the cover analysis
+            if st.session_state.cover_analysis:
+                if 'cover_analysis' not in st.session_state.loaded_analysis:
+                    st.session_state.loaded_analysis['cover_analysis'] = st.session_state.cover_analysis
+            st.rerun()
+    
     with col2:
         if st.button("🔄 New Analysis", use_container_width=True):
             # Set flag to prevent auto-load
