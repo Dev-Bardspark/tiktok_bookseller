@@ -33,7 +33,12 @@ def get_db_connection():
 def show_analyzer():
     """Complete book analysis with marketability dashboard"""
     
-    if st.session_state.get('current_page') != "📖 Book Analyzer":
+    # Check login first
+    if not st.session_state.get('authenticated', False):
+        st.warning("🔒 Please login to access the Book Analyzer")
+        if st.button("Go to Login", use_container_width=True):
+            st.session_state.page = "🏠 Dashboard"
+            st.rerun()
         return
     
     # Initialize session state
@@ -56,6 +61,8 @@ def show_analyzer():
     # AUTO-LOAD MOST RECENT ANALYSIS IF LOGGED IN
     # ============================================================================
     if st.session_state.get('authenticated', False) and not st.session_state.analysis_result:
+        conn = None
+        cur = None
         try:
             conn = get_db_connection()
             if conn:
@@ -76,10 +83,13 @@ def show_analyzer():
                     st.session_state.analysis_complete = True
                     st.session_state.current_book_id = f"loaded_{latest['id']}"
                     st.success(f"✅ Loaded your most recent analysis: {latest['book_title']}")
-                cur.close()
-                conn.close()
         except Exception as e:
             st.error(f"Error loading saved analysis: {e}")
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
     
     # Header
     st.title("📖 Book Analyzer with Marketability Dashboard")
@@ -110,7 +120,7 @@ def show_analyzer():
     
     # If analysis is complete, show results
     if st.session_state.analysis_complete and st.session_state.analysis_result:
-        show_results()
+        show_results()  # This calls your original COMPLETE results function
         return
     
     # Otherwise show upload screen
@@ -170,6 +180,8 @@ def show_upload_screen():
                 
                 # AUTO-SAVE to database if logged in
                 if st.session_state.get('authenticated', False):
+                    conn = None
+                    cur = None
                     try:
                         book_title = analysis.get('book_info', {}).get('title', 'Untitled')
                         conn = get_db_connection()
@@ -187,11 +199,14 @@ def show_upload_screen():
                                 datetime.now()
                             ))
                             conn.commit()
-                            cur.close()
-                            conn.close()
                             st.success("✅ Analysis auto-saved to your library!")
                     except Exception as e:
                         st.error(f"Auto-save failed: {e}")
+                    finally:
+                        if cur:
+                            cur.close()
+                        if conn:
+                            conn.close()
                 
                 st.rerun()
     else:
@@ -199,7 +214,7 @@ def show_upload_screen():
 
 
 def show_results():
-    """Display the results dashboard"""
+    """YOUR ORIGINAL COMPLETE results display - FULLY RESTORED"""
     
     st.success("✅ Analysis complete!")
     
@@ -624,20 +639,40 @@ def show_marketability_dashboard(analysis):
 
 
 def show_complete_analysis(analysis, cover):
-    """Display complete literary analysis"""
+    """YOUR ORIGINAL COMPLETE literary analysis display - FULLY RESTORED"""
     
     if cover:
         with st.expander("🎨 Cover Analysis", expanded=False):
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
+                st.markdown("**Visual Elements**")
                 st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
+                st.write(f"**Has Figure:** {cover.get('has_figure', False)}")
+                if cover.get('has_figure'):
+                    st.write(f"**Figure Description:** {cover.get('figure_description', '')}")
                 st.write(f"**Mood:** {cover.get('mood', '')}")
+            
             with col2:
+                st.markdown("**Design Analysis**")
                 st.write(f"**Typography:** {cover.get('typography', '')}")
                 st.write(f"**Composition:** {cover.get('composition', '')}")
+                st.write(f"**Genre Signals:** {cover.get('genre_signals', '')}")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("**Strengths**")
+                for s in cover.get('strengths', []):
+                    st.write(f"✅ {s}")
+            with col2:
+                st.markdown("**Weaknesses**")
+                for w in cover.get('weaknesses', []):
+                    st.write(f"⚠️ {w}")
             with col3:
-                st.write(f"**Genre signals:** {cover.get('genre_signals', '')}")
+                st.markdown("**Suggestions**")
+                for sug in cover.get('suggestions', []):
+                    st.write(f"💡 {sug}")
     
+    # Book Overview
     book_info = analysis.get('book_info', {})
     st.markdown("### 📖 Book Overview")
     
@@ -645,9 +680,199 @@ def show_complete_analysis(analysis, cover):
     with col1:
         st.markdown(f"**Title:** {book_info.get('title', 'Unknown')}")
         st.markdown(f"**Genre:** {book_info.get('genre', 'Unknown')}")
+        st.markdown(f"**Subgenres:** {', '.join(book_info.get('subgenres', []))}")
     with col2:
         st.markdown(f"**Tone:** {book_info.get('tone', 'Unknown')}")
         st.markdown(f"**Writing Style:** {book_info.get('writing_style', 'Unknown')}")
+        st.markdown(f"**Pacing:** {book_info.get('pacing_summary', 'Unknown')}")
+    
+    st.markdown("---")
+    
+    # Writing Quality Detailed
+    if 'writing_quality_detailed' in analysis:
+        writing = analysis['writing_quality_detailed']
+        st.markdown("### ✍️ Writing Quality Analysis")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**Prose Quality:** {writing.get('prose_quality', '')}")
+            st.markdown(f"**Dialogue:** {writing.get('dialogue', '')}")
+            st.markdown(f"**Description:** {writing.get('description', '')}")
+        with col2:
+            st.markdown(f"**Voice:** {writing.get('voice', '')}")
+            st.markdown(f"**Technical Execution:** {writing.get('technical_execution', '')}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Strengths**")
+            for s in writing.get('strengths', []):
+                st.write(f"✅ {s}")
+        with col2:
+            st.markdown("**Areas for Improvement**")
+            for i in writing.get('improvements', []):
+                st.write(f"📝 {i}")
+    
+    st.markdown("---")
+    
+    # Characters
+    if 'characters' in analysis:
+        chars = analysis['characters']
+        st.markdown("### 👥 Characters")
+        
+        # Main Characters
+        st.markdown("#### Main Characters")
+        for char in chars.get('main', []):
+            with st.expander(f"**{char.get('name', 'Unknown')}** - {char.get('role', '')}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**Description:** {char.get('description', '')}")
+                    st.markdown(f"**Motivation:** {char.get('motivation', '')}")
+                with col2:
+                    st.markdown(f"**Arc:** {char.get('arc', '')}")
+                    st.markdown(f"**Conflict:** {char.get('conflict', '')}")
+                st.markdown(f"**Appeal Factor:** {char.get('appeal_factor', '')}")
+        
+        # Supporting Characters
+        if chars.get('supporting'):
+            st.markdown("#### Supporting Characters")
+            st.write(', '.join(chars.get('supporting', [])))
+        
+        # Relationships
+        if chars.get('relationships'):
+            st.markdown("#### Key Relationships")
+            for rel in chars.get('relationships', []):
+                st.write(f"• {rel}")
+    
+    st.markdown("---")
+    
+    # Character Development
+    if 'character_development' in analysis:
+        dev = analysis['character_development']
+        st.markdown("### 📈 Character Development")
+        
+        st.markdown(f"**Protagonist Journey:** {dev.get('protagonist_journey', '')}")
+        st.markdown(f"**Antagonist Motivation:** {dev.get('antagonist_motivation', '')}")
+        
+        if dev.get('supporting_arcs'):
+            st.markdown("**Supporting Character Arcs:**")
+            for arc in dev.get('supporting_arcs', []):
+                st.write(f"• {arc}")
+    
+    st.markdown("---")
+    
+    # Plot Analysis
+    if 'plot' in analysis:
+        plot = analysis['plot']
+        st.markdown("### 📊 Plot Analysis")
+        
+        st.markdown(f"**Opening Hook:** {plot.get('opening_hook', '')}")
+        st.markdown(f"**Inciting Incident:** {plot.get('inciting_incident', '')}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Major Plot Points**")
+            for point in plot.get('major_plot_points', []):
+                st.write(f"• {point}")
+        
+        with col2:
+            if plot.get('plot_twists'):
+                st.markdown("**Plot Twists**")
+                for twist in plot.get('plot_twists', []):
+                    st.write(f"• {twist}")
+        
+        if plot.get('subplots'):
+            st.markdown("**Subplots**")
+            for sub in plot.get('subplots', []):
+                st.write(f"• {sub}")
+    
+    st.markdown("---")
+    
+    # Narrative Arc
+    if 'narrative_arc' in analysis:
+        arc = analysis['narrative_arc']
+        st.markdown("### 📖 Narrative Arc")
+        
+        st.markdown(f"**Exposition:** {arc.get('exposition', '')}")
+        st.markdown(f"**Rising Action:** {arc.get('rising_action', '')}")
+        st.markdown(f"**Climax:** {arc.get('climax', '')}")
+        st.markdown(f"**Falling Action:** {arc.get('falling_action', '')}")
+        st.markdown(f"**Resolution:** {arc.get('resolution', '')}")
+    
+    st.markdown("---")
+    
+    # Themes
+    if 'themes' in analysis:
+        themes = analysis['themes']
+        st.markdown("### 🎯 Themes & Motifs")
+        
+        st.markdown("**Primary Themes:**")
+        for theme in themes.get('primary', []):
+            st.write(f"• {theme}")
+        
+        if themes.get('secondary'):
+            st.markdown("**Secondary Themes:**")
+            for theme in themes.get('secondary', []):
+                st.write(f"• {theme}")
+        
+        if themes.get('motifs'):
+            st.markdown("**Motifs:**")
+            for motif in themes.get('motifs', []):
+                st.write(f"• {motif}")
+    
+    st.markdown("---")
+    
+    # Strengths
+    if 'strengths' in analysis:
+        st.markdown("### 💪 Key Strengths")
+        for s in analysis['strengths']:
+            st.write(f"✅ {s}")
+    
+    st.markdown("---")
+    
+    # Areas for Improvement
+    if 'areas_for_improvement' in analysis:
+        st.markdown("### 🔧 Areas for Improvement")
+        for area in analysis['areas_for_improvement']:
+            st.write(f"📝 {area}")
+    
+    st.markdown("---")
+    
+    # Target Audience
+    if 'target_audience' in analysis:
+        audience = analysis['target_audience']
+        st.markdown("### 🎯 Target Audience")
+        
+        st.markdown(f"**Primary Audience:** {audience.get('primary', '')}")
+        st.markdown(f"**Appeal:** {audience.get('appeal', '')}")
+        
+        if audience.get('demographics'):
+            st.markdown("**Demographics:**")
+            for demo in audience.get('demographics', []):
+                st.write(f"• {demo}")
+    
+    st.markdown("---")
+    
+    # Marketing
+    if 'marketing' in analysis:
+        marketing = analysis['marketing']
+        st.markdown("### 📢 Marketing Insights")
+        
+        st.markdown("**Unique Selling Points:**")
+        for usp in marketing.get('unique_selling_points', []):
+            st.write(f"• {usp}")
+        
+        if marketing.get('keyword_cloud'):
+            st.markdown("**Keywords:**")
+            st.write(', '.join(marketing.get('keyword_cloud', [])))
+        
+        if marketing.get('compelling_quotes'):
+            st.markdown("**Compelling Quotes:**")
+            for quote in marketing.get('compelling_quotes', []):
+                st.write(f"💬 {quote}")
+        
+        if marketing.get('blurb_suggestion'):
+            st.markdown("**Suggested Blurb:**")
+            st.info(marketing['blurb_suggestion'])
 
 
 # For direct testing
