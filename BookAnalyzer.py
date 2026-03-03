@@ -221,22 +221,71 @@ def show_results():
     # Show marketability dashboard
     show_marketability_dashboard(st.session_state.analysis_result)
     
+    # Show cover analysis FIRST (outside the expander)
+    if st.session_state.cover_analysis:
+        st.markdown("### 🎨 Cover Analysis")
+        show_cover_analysis(st.session_state.cover_analysis)
+        st.markdown("---")
+    
     # Then show complete literary analysis in expander
     with st.expander("📚 View Complete Literary Analysis", expanded=False):
-        show_complete_analysis(st.session_state.analysis_result, st.session_state.cover_analysis)
+        show_complete_analysis(st.session_state.analysis_result)
     
     # Navigation buttons
     col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("🏠 Dashboard", use_container_width=True):
+            st.session_state.page = "🏠 Dashboard"
+            st.rerun()
     with col2:
         if st.button("🎨 Marketing Assets", use_container_width=True):
             st.session_state.page = "🎨 Marketing Assets"
             st.rerun()
     with col3:
         if st.button("🔄 New Analysis", use_container_width=True):
+            # Clear analysis state
             st.session_state.analysis_complete = False
             st.session_state.analysis_result = None
             st.session_state.cover_analysis = None
+            st.session_state.current_book_id = None
             st.rerun()
+    with col4:
+        if st.button("📚 My Library", use_container_width=True):
+            st.session_state.page = "📚 My Library"
+            st.rerun()
+
+
+def show_cover_analysis(cover):
+    """Display cover analysis results"""
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Visual Elements**")
+        st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
+        st.write(f"**Has Figure:** {cover.get('has_figure', False)}")
+        if cover.get('has_figure'):
+            st.write(f"**Figure Description:** {cover.get('figure_description', '')}")
+        st.write(f"**Mood:** {cover.get('mood', '')}")
+    
+    with col2:
+        st.markdown("**Design Analysis**")
+        st.write(f"**Typography:** {cover.get('typography', '')}")
+        st.write(f"**Composition:** {cover.get('composition', '')}")
+        st.write(f"**Genre Signals:** {cover.get('genre_signals', '')}")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**Strengths**")
+        for s in cover.get('strengths', []):
+            st.write(f"✅ {s}")
+    with col2:
+        st.markdown("**Weaknesses**")
+        for w in cover.get('weaknesses', []):
+            st.write(f"⚠️ {w}")
+    with col3:
+        st.markdown("**Suggestions**")
+        for sug in cover.get('suggestions', []):
+            st.write(f"💡 {sug}")
 
 
 def analyze_cover(client, cover_base64):
@@ -638,39 +687,8 @@ def show_marketability_dashboard(analysis):
             st.markdown(f"**Price Point**  \n{salability.get('estimated_price_point', 'Unknown')}")
 
 
-def show_complete_analysis(analysis, cover):
+def show_complete_analysis(analysis):
     """YOUR ORIGINAL COMPLETE literary analysis display - FULLY RESTORED"""
-    
-    if cover:
-        with st.expander("🎨 Cover Analysis", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Visual Elements**")
-                st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
-                st.write(f"**Has Figure:** {cover.get('has_figure', False)}")
-                if cover.get('has_figure'):
-                    st.write(f"**Figure Description:** {cover.get('figure_description', '')}")
-                st.write(f"**Mood:** {cover.get('mood', '')}")
-            
-            with col2:
-                st.markdown("**Design Analysis**")
-                st.write(f"**Typography:** {cover.get('typography', '')}")
-                st.write(f"**Composition:** {cover.get('composition', '')}")
-                st.write(f"**Genre Signals:** {cover.get('genre_signals', '')}")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**Strengths**")
-                for s in cover.get('strengths', []):
-                    st.write(f"✅ {s}")
-            with col2:
-                st.markdown("**Weaknesses**")
-                for w in cover.get('weaknesses', []):
-                    st.write(f"⚠️ {w}")
-            with col3:
-                st.markdown("**Suggestions**")
-                for sug in cover.get('suggestions', []):
-                    st.write(f"💡 {sug}")
     
     # Book Overview
     book_info = analysis.get('book_info', {})
