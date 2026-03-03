@@ -9,6 +9,13 @@ import base64
 from datetime import datetime
 import os
 
+# ============================================================================
+# MAIN FUNCTION (this is what BardSpark calls)
+# ============================================================================
+def show_website_builder():
+    """Main entry point for the website builder"""
+    show_website_questionnaire()
+
 def show_website_questionnaire():
     st.title("📚 Complete Author Website Generator")
     st.markdown("### Build your professional author site in 5 minutes")
@@ -213,16 +220,19 @@ def show_website_questionnaire():
                     links = {}
                     if buy_links:
                         for link in buy_links.split('\n'):
+                            link = link.strip()
+                            if not link:
+                                continue
                             if 'amazon' in link.lower():
-                                links['amazon'] = link.strip()
+                                links['amazon'] = link
                             elif 'goodreads' in link.lower():
-                                links['goodreads'] = link.strip()
+                                links['goodreads'] = link
                             elif 'apple' in link.lower() or 'books' in link.lower():
-                                links['apple'] = link.strip()
+                                links['apple'] = link
                             elif 'barnes' in link.lower() or 'noble' in link.lower():
-                                links['barnes'] = link.strip()
+                                links['barnes'] = link
                             else:
-                                links['other'] = link.strip()
+                                links['other'] = link
                 
                 if title:
                     books.append({
@@ -312,25 +322,24 @@ def show_website_questionnaire():
         
         # Pull from saved advocates
         saved_advocates = st.session_state.get('saved_readers', [])
+        advocates_to_show = []
         
         if saved_advocates:
             st.success(f"You have {len(saved_advocates)} saved advocates!")
             show_advocates = st.checkbox("Showcase advocates on my site", value=True)
             
             if show_advocates:
-                advocates_to_show = []
                 for adv in saved_advocates[:6]:
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        st.write(f"**@{adv.get('username')}** - {adv.get('platform')} ({adv.get('follower_count')} followers)")
+                        st.write(f"**@{adv.get('username')}** - {adv.get('platform', '')} ({adv.get('follower_count', 0)} followers)")
                     with col2:
-                        include = st.checkbox("Include", value=True, key=f"adv_{adv.get('username')}")
+                        include = st.checkbox("Include", value=True, key=f"adv_{adv.get('username', i)}")
                         if include:
                             advocates_to_show.append(adv)
         else:
             st.info("No advocates saved yet. You can add them manually:")
             num_advocates = st.number_input("How many advocates to showcase?", 0, 10, 0)
-            advocates_to_show = []
             for i in range(int(num_advocates)):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -370,7 +379,7 @@ def show_website_questionnaire():
                         "lead_magnet": lead_magnet,
                         "lead_magnet_desc": lead_magnet_description
                     },
-                    "advocates": advocates_to_show if 'advocates_to_show' in locals() else []
+                    "advocates": advocates_to_show
                 }
                 st.session_state.website_step = 4
                 st.rerun()
@@ -647,11 +656,7 @@ def generate_complete_author_site(data, design):
         }}
         
         body {{
-            font-family: {{
-                "Professional & Clean": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                "Classic Serif": "Georgia, 'Times New Roman', serif",
-                "Modern Sans": "Helvetica, Arial, sans-serif"
-            }.get(design['color_theme'], "-apple-system, sans-serif")};
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.6;
             color: #333;
         }}
@@ -697,7 +702,7 @@ def generate_complete_author_site(data, design):
             color: #667eea;
         }}
         
-        {f'.social-header { display: flex; gap: 10px; }' if design['social_header'] else ''}
+        {f'.social-header {{ display: flex; gap: 10px; }}' if design.get('social_header') else ''}
         
         /* Hero Section */
         .hero {{
@@ -1049,7 +1054,7 @@ def generate_complete_author_site(data, design):
                 <a href="#about">About</a>
                 <a href="#contact">Contact</a>
             </div>
-            {f'<div class="social-header">{social_html}</div>' if design['social_header'] and social_html else ''}
+            {f'<div class="social-header">{social_html}</div>' if design.get('social_header') and social_html else ''}
         </div>
     </nav>
     
@@ -1150,8 +1155,3 @@ def generate_complete_author_site(data, design):
 </html>"""
     
     return html
-
-
-# Main function to call from BardSpark
-def show_website_builder():
-    show_website_questionnaire()
