@@ -224,9 +224,9 @@ def init_connection():
             cur.execute("SELECT count(*) FROM arc_readers_central")
             count = cur.fetchone()[0]
             cur.close()
-            st.sidebar.success(f"✅ Connected to DB ({count} ARC readers)")
+            st..success(f"✅ Connected to DB ({count} ARC readers)")
         except Exception as e:
-            st.sidebar.error(f"DB error: {e}")
+            st..error(f"DB error: {e}")
         finally:
             conn.close()
     return True
@@ -422,7 +422,41 @@ if selected != st.session_state.page:
     st.rerun()
 
 st.session_state.current_page = st.session_state.page
+# ============================================================================
+# PAGE ROUTING - ADD THIS RIGHT BEFORE YOUR PAGE CHECKS
+# ============================================================================
 
+# If not logged in, show ONLY the login/register screen
+if not st.session_state.authenticated:
+    st.title("✨ BardSpark")
+    st.markdown("### Write. Not Marketing.")
+    st.markdown("---")
+    st.info("👆 Please login or register using the sidebar to access all features")
+    
+    # Show a nice welcome message
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        st.image("https://via.placeholder.com/300x200?text=BardSpark", use_container_width=True)
+    st.markdown("""
+    ### Welcome to BardSpark
+    
+    Your complete book marketing platform:
+    
+    - 📚 **ARC Reader/Influencer Finder** - Connect with book reviewers
+    - 📖 **Book Analyzer** - Deep literary analysis with marketability scoring  
+    - 🎨 **Marketing Assets** - Generate content for all platforms
+    - 🎬 **Video Generator** - Create BookTok videos
+    - 📊 **Competitor Tracker** - Monitor similar books
+    - 🧠 **Author Persona** - Discover your brand voice
+    - 🌐 **Website Builder** - Create your author site
+    """)
+    
+    # Stop execution - don't show any other pages
+    st.stop()
+
+# ============================================================================
+# ORIGINAL PAGE ROUTING CONTINUES HERE
+# ============================================================================
 # ============================================================================
 # PROFILE PAGE
 # ============================================================================
