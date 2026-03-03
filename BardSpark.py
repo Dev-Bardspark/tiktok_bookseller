@@ -224,7 +224,7 @@ def init_connection():
             cur.execute("SELECT count(*) FROM arc_readers_central")
             count = cur.fetchone()[0]
             cur.close()
-            st..success(f"✅ Connected to DB ({count} ARC readers)")
+            st.sidebar.success(f"✅ Connected to DB ({count} ARC readers)")
         except Exception as e:
             st..error(f"DB error: {e}")
         finally:
