@@ -16,6 +16,7 @@ import MarketingGenerator
 import author_persona_discovery
 import arc_influencer_finder
 import author_website_builder
+import SimpleCRM  # <--- ADDED CRM IMPORT
 
 # ============================================================================
 # PAGE CONFIG
@@ -398,11 +399,12 @@ else:
 st.sidebar.markdown("---")
 
 # ============================================================================
-# NAVIGATION MENU
+# NAVIGATION MENU - ADDED CRM HERE
 # ============================================================================
 menu_options = [
     "🏠 Dashboard", 
     "❤️ Saved Readers", 
+    "📇 CRM",  # <--- ADDED CRM TO MENU
     "🔍 ARC Readers/Influencers",
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
@@ -422,6 +424,7 @@ if selected != st.session_state.page:
     st.rerun()
 
 st.session_state.current_page = st.session_state.page
+
 # ============================================================================
 # PAGE ROUTING - ADD THIS RIGHT BEFORE YOUR PAGE CHECKS
 # ============================================================================
@@ -449,6 +452,7 @@ if not st.session_state.authenticated:
     - 📊 **Competitor Tracker** - Monitor similar books
     - 🧠 **Author Persona** - Discover your brand voice
     - 🌐 **Website Builder** - Create your author site
+    - 📇 **CRM** - Manage contacts and email campaigns
     """)
     
     # Stop execution - don't show any other pages
@@ -457,6 +461,7 @@ if not st.session_state.authenticated:
 # ============================================================================
 # ORIGINAL PAGE ROUTING CONTINUES HERE
 # ============================================================================
+
 # ============================================================================
 # PROFILE PAGE
 # ============================================================================
@@ -502,7 +507,7 @@ if st.session_state.page == "👤 My Profile":
             )
 
 # ============================================================================
-# DASHBOARD PAGE
+# DASHBOARD PAGE - ADDED CRM BUTTONS
 # ============================================================================
 
 elif st.session_state.page == "🏠 Dashboard":
@@ -516,6 +521,7 @@ elif st.session_state.page == "🏠 Dashboard":
     
     st.markdown("### 🚀 Quick Actions")
     
+    # First row
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -534,10 +540,11 @@ elif st.session_state.page == "🏠 Dashboard":
             st.rerun()
     
     with col4:
-        if st.button("🎬 Video Generator", use_container_width=True):
-            st.session_state.page = "🎬 Video Generator"
+        if st.button("📇 CRM", use_container_width=True):  # <--- ADDED CRM BUTTON
+            st.session_state.page = "📇 CRM"
             st.rerun()
     
+    # Second row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("📊 Competitor Tracker", use_container_width=True):
@@ -552,17 +559,20 @@ elif st.session_state.page == "🏠 Dashboard":
             st.session_state.page = "🌐 Website Builder"
             st.rerun()
     with col4:
-        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
+        if st.button("🎬 Video Generator", use_container_width=True):  # <--- MOVED VIDEO GENERATOR HERE
+            st.session_state.page = "🎬 Video Generator"
+            st.rerun()
     
+    # Third row (disabled features)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
+        st.button("📧 Email Campaigns", use_container_width=True, disabled=True)
     with col2:
-        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
+        st.button("📱 Social Scheduler", use_container_width=True, disabled=True)
     with col3:
-        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
+        st.button("📈 Sales Tracker", use_container_width=True, disabled=True)
     with col4:
-        st.button("📚 Book Preview", use_container_width=True, disabled=True)
+        st.button("🤖 AI Assistant", use_container_width=True, disabled=True)
     
     st.markdown("---")
     
@@ -578,21 +588,26 @@ elif st.session_state.page == "🏠 Dashboard":
         cur.execute("SELECT COUNT(*) FROM users")
         total_users = cur.fetchone()[0]
         
+        # Get CRM contact count
+        cur.execute("SELECT COUNT(*) FROM crm_contacts WHERE user_id = %s", (st.session_state.user_id,))
+        total_contacts = cur.fetchone()[0]
+        
         cur.close()
         conn.close()
     else:
         total_readers = "?"
         total_influencers = "?"
         total_users = "?"
+        total_contacts = "0"
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("ARC Readers", total_readers)
     col2.metric("Influencers", total_influencers)
     col3.metric("Total Users", total_users)
-    col4.metric("Your Saved Readers", len(st.session_state.saved_readers))
+    col4.metric("Your Contacts", total_contacts)
 
 # ============================================================================
-# SAVED READERS PAGE (FIXED - no auth reference)
+# SAVED READERS PAGE
 # ============================================================================
 
 elif st.session_state.page == "❤️ Saved Readers":
@@ -663,6 +678,26 @@ elif st.session_state.page == "❤️ Saved Readers":
                     if reader.get('email'):
                         st.success(f"📧 {reader['email']}")
                     
+                    # Add to CRM button
+                    if reader.get('email'):
+                        if st.button("➕ Add to CRM", key=f"add_to_crm_{reader['id']}"):
+                            # Save to CRM
+                            contact_data = {
+                                'contact_type': 'arc_reader',
+                                'first_name': reader.get('display_name', '').split()[0] if reader.get('display_name') else '',
+                                'last_name': ' '.join(reader.get('display_name', '').split()[1:]) if reader.get('display_name') and len(reader.get('display_name', '').split()) > 1 else '',
+                                'email': reader.get('email'),
+                                'social_handle': reader.get('username'),
+                                'source': f"ARC Finder - {reader.get('username')}",
+                                'notes': f"Bio: {reader.get('bio', '')[:200]}"
+                            }
+                            from SimpleCRM import save_contact
+                            contact_id = save_contact(st.session_state.user_id, contact_data)
+                            if contact_id:
+                                st.success(f"✅ Added to CRM!")
+                            else:
+                                st.error("Failed to add to CRM")
+                    
                     if reader.get('username'):
                         base_username = reader['username'].replace('@', '')
                         
@@ -706,6 +741,13 @@ elif st.session_state.page == "❤️ Saved Readers":
                         else:
                             st.session_state.saved_readers.pop(i)
                             st.rerun()
+
+# ============================================================================
+# CRM PAGE - ADDED HERE
+# ============================================================================
+
+elif st.session_state.page == "📇 CRM":
+    SimpleCRM.render_crm()
 
 # ============================================================================
 # OTHER PAGES
