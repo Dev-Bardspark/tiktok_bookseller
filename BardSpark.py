@@ -226,7 +226,7 @@ def init_connection():
             cur.close()
             st.sidebar.success(f"✅ Connected to DB ({count} ARC readers)")
         except Exception as e:
-            st..error(f"DB error: {e}")
+            st.sidebar.error(f"DB error: {e}")
         finally:
             conn.close()
     return True
