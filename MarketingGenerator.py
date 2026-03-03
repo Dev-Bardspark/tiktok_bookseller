@@ -95,22 +95,23 @@ def extract_book_info(book_data):
         return {}
     
     # Try different possible structures
-    if 'book_info' in book_data:
-        book_info = book_data['book_info']
-        # Handle case where book_info might contain another book_info
-        if isinstance(book_info, dict) and 'book_info' in book_info:
-            return book_info['book_info']
-        return book_info
-    elif 'analysis_result' in book_data:
-        # Handle database stored format
-        analysis = book_data['analysis_result']
-        if isinstance(analysis, str):
-            try:
-                analysis = json.loads(analysis)
-            except:
-                pass
-        if isinstance(analysis, dict) and 'book_info' in analysis:
-            return extract_book_info(analysis)
+    if isinstance(book_data, dict):
+        if 'book_info' in book_data:
+            book_info = book_data['book_info']
+            # Handle case where book_info might contain another book_info
+            if isinstance(book_info, dict) and 'book_info' in book_info:
+                return book_info['book_info']
+            return book_info
+        elif 'analysis_result' in book_data:
+            # Handle database stored format
+            analysis = book_data['analysis_result']
+            if isinstance(analysis, str):
+                try:
+                    analysis = json.loads(analysis)
+                except:
+                    pass
+            if isinstance(analysis, dict) and 'book_info' in analysis:
+                return extract_book_info(analysis)
     
     return book_data
 
@@ -166,6 +167,18 @@ def show_generator():
         with st.container():
             st.markdown("### 🔑 OpenAI API Key")
             api_key = st.text_input("Enter your API key", type="password", key="api_key_input")
+            
+            with st.expander("📋 How to get an OpenAI API Key", expanded=True):
+                st.markdown("""
+                <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #667eea;">
+                <h4>To get an OpenAI API key, follow these steps:</h4>
+                <div style="margin: 8px 0; padding: 5px;">1️⃣ <strong>Go to the OpenAI Platform</strong><br>👉 https://platform.openai.com/</div>
+                <div style="margin: 8px 0; padding: 5px;">2️⃣ <strong>Sign in or Create an Account</strong><br>Log in with your existing account or create a new one.</div>
+                <div style="margin: 8px 0; padding: 5px;">3️⃣ <strong>Open the API Keys Page</strong><br>Click your profile icon (top right) → Select "View API keys"</div>
+                <div style="margin: 8px 0; padding: 5px;">4️⃣ <strong>Create a New Key</strong><br>Click "Create new secret key" → Give it a name → Copy the key immediately</div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             if api_key:
                 st.session_state.openai_api_key = api_key
                 st.rerun()
@@ -176,6 +189,11 @@ def show_generator():
     # ============================================================================
     
     st.markdown("### 📚 Select a Book to Market")
+    
+    # Check for loaded analysis from Book Analyzer
+    if st.session_state.get('loaded_analysis') and not st.session_state.get('_assets_generated', False):
+        st.session_state.loaded_analysis = st.session_state.loaded_analysis
+        st.success(f"✅ Book loaded from analyzer: {extract_book_info(st.session_state.loaded_analysis).get('title', 'Unknown')}")
     
     # Check for saved analyses in session and database
     if 'analysis_library' not in st.session_state:
@@ -204,6 +222,17 @@ def show_generator():
     with col1:
         # Combine session and database analyses for selection
         all_books = []
+        
+        # Add current loaded analysis if it exists
+        if st.session_state.loaded_analysis and not any(b.get('data') == st.session_state.loaded_analysis for b in all_books):
+            book_info = extract_book_info(st.session_state.loaded_analysis)
+            title = book_info.get('title', 'Unknown')
+            all_books.append({
+                'display': f"📌 CURRENT: {title} (From Analyzer)",
+                'source': 'current',
+                'data': st.session_state.loaded_analysis,
+                'filename': 'current'
+            })
         
         # Add session analyses
         for filename, data in st.session_state.analysis_library.items():
@@ -238,7 +267,7 @@ def show_generator():
             selected_book = all_books[selected_index]
         else:
             st.info("No books found. Please analyze a book first in the Book Analyzer.")
-            if st.button("📖 Go to Book Analyzer"):
+            if st.button("📖 Go to Book Analyzer", use_container_width=True):
                 st.session_state.page = "📖 Book Analyzer"
                 st.rerun()
             return
@@ -248,6 +277,7 @@ def show_generator():
             st.session_state.loaded_analysis = selected_book['data']
             st.session_state.generated_assets = None
             st.session_state.edited_assets = None
+            st.session_state._assets_generated = False
             st.rerun()
     
     with col3:
@@ -280,6 +310,7 @@ def show_generator():
                         if assets:
                             st.session_state.generated_assets = assets
                             st.session_state.edited_assets = assets.copy()
+                            st.session_state._assets_generated = True
                             st.rerun()
                     except Exception as e:
                         st.error(f"Generation failed: {str(e)}")
@@ -289,6 +320,7 @@ def show_generator():
                 if st.button("🔄 Regenerate Assets", use_container_width=True):
                     st.session_state.generated_assets = None
                     st.session_state.edited_assets = None
+                    st.session_state._assets_generated = False
                     st.rerun()
         
         with col3:
@@ -790,6 +822,7 @@ def show_generator():
             
             st.success("✅ All edits saved in current session")
 
+
 def generate_marketing_assets(client, analysis_data):
     """Generate LOTS of marketing assets from saved analysis"""
     
@@ -803,7 +836,7 @@ def generate_marketing_assets(client, analysis_data):
     
     prompt = f"""
     Based on this book analysis, create comprehensive marketing assets for ALL platforms.
-    For EACH platform, generate MULTIPLE options (5-10 each) so the author can choose.
+    For EACH platform, generate MULTIPLE options (at least 5-8 each) so the author can choose.
     Include a COMPLETE LAUNCH TIMELINE with specific actions for each phase.
     
     BOOK ANALYSIS:
@@ -819,12 +852,15 @@ def generate_marketing_assets(client, analysis_data):
         "Option 2: Emotional blurb focusing on characters",
         "Option 3: High-concept blurb focusing on hook",
         "Option 4: Mystery blurb leaving questions",
-        "Option 5: Comparison-based blurb (For fans of X...)"
+        "Option 5: Comparison-based blurb (For fans of X...)",
+        "Option 6: Short punchy version for social media",
+        "Option 7: Question-based blurb that hooks readers",
+        "Option 8: Atmosphere-focused blurb"
     ]
     
     2. tiktok_scripts: [
         {{
-            "hook": "attention grabber option 1",
+            "hook": "attention grabber option 1 - dramatic reading",
             "visuals": "what to show",
             "voiceover": "full script",
             "music": "music suggestion",
@@ -832,7 +868,55 @@ def generate_marketing_assets(client, analysis_data):
             "hashtags": ["#BookTok", "#relevant"]
         }},
         {{
-            "hook": "attention grabber option 2",
+            "hook": "attention grabber option 2 - emotional angle",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 3 - plot twist reveal",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 4 - character focus",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 5 - aesthetic vibes",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 6 - behind the scenes",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 7 - reader reaction",
+            "visuals": "what to show",
+            "voiceover": "full script",
+            "music": "music suggestion",
+            "cta": "call to action",
+            "hashtags": ["#BookTok", "#relevant"]
+        }},
+        {{
+            "hook": "attention grabber option 8 - writing process",
             "visuals": "what to show",
             "voiceover": "full script",
             "music": "music suggestion",
@@ -843,13 +927,37 @@ def generate_marketing_assets(client, analysis_data):
     
     3. youtube_scripts: [
         {{
-            "title": "video title option 1",
+            "title": "video title option 1 - Book Review/Reaction",
             "script": "full video script with intro, main content, and outro",
             "length": "estimated minutes",
             "cta": "call to action"
         }},
         {{
-            "title": "video title option 2",
+            "title": "video title option 2 - Deep Dive Analysis",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 3 - Author Interview Style",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 4 - Themes & Symbolism",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 5 - Character Study",
+            "script": "full video script with intro, main content, and outro",
+            "length": "estimated minutes",
+            "cta": "call to action"
+        }},
+        {{
+            "title": "video title option 6 - Writing Craft Analysis",
             "script": "full video script with intro, main content, and outro",
             "length": "estimated minutes",
             "cta": "call to action"
@@ -858,12 +966,42 @@ def generate_marketing_assets(client, analysis_data):
     
     4. instagram_posts: [
         {{
-            "image_description": "what to post option 1",
+            "image_description": "what to post option 1 - quote graphic",
             "caption": "caption text",
             "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }},
         {{
-            "image_description": "what to post option 2",
+            "image_description": "what to post option 2 - character aesthetic",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 3 - setting mood board",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 4 - book stack/flatlay",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 5 - behind the scenes",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 6 - reader questions",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 7 - writing tips",
+            "caption": "caption text",
+            "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
+        }},
+        {{
+            "image_description": "what to post option 8 - release countdown",
             "caption": "caption text",
             "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
         }}
@@ -871,13 +1009,43 @@ def generate_marketing_assets(client, analysis_data):
     
     5. instagram_reels: [
         {{
-            "concept": "reel idea option 1",
+            "concept": "reel idea option 1 - book trailer style",
             "script": "content",
             "music": "trending audio",
             "duration": "15-30 seconds"
         }},
         {{
-            "concept": "reel idea option 2",
+            "concept": "reel idea option 2 - POV character",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 3 - aesthetic montage",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 4 - reaction to plot twist",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 5 - writing process timelapse",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 6 - character introduction",
+            "script": "content",
+            "music": "trending audio",
+            "duration": "15-30 seconds"
+        }},
+        {{
+            "concept": "reel idea option 7 - book haul/collection",
             "script": "content",
             "music": "trending audio",
             "duration": "15-30 seconds"
@@ -887,7 +1055,7 @@ def generate_marketing_assets(client, analysis_data):
     6. amazon_options: [
         {{
             "a_plus_content": {{
-                "title": "enhanced brand content title",
+                "title": "enhanced brand content title option 1",
                 "description": "enhanced description",
                 "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
             }},
@@ -897,30 +1065,78 @@ def generate_marketing_assets(client, analysis_data):
         }},
         {{
             "a_plus_content": {{
-                "title": "enhanced brand content title",
+                "title": "enhanced brand content title option 2",
                 "description": "enhanced description",
                 "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
             }},
             "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
             "categories": ["suggested category 1", "suggested category 2"],
             "author_bio": "compelling author bio option 2"
+        }},
+        {{
+            "a_plus_content": {{
+                "title": "enhanced brand content title option 3",
+                "description": "enhanced description",
+                "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
+            }},
+            "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["suggested category 1", "suggested category 2"],
+            "author_bio": "compelling author bio option 3"
+        }},
+        {{
+            "a_plus_content": {{
+                "title": "enhanced brand content title option 4",
+                "description": "enhanced description",
+                "key_features": ["feature1", "feature2", "feature3", "feature4", "feature5"]
+            }},
+            "search_terms": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["suggested category 1", "suggested category 2"],
+            "author_bio": "compelling author bio option 4"
         }}
     ]
     
     7. facebook_ads: [
         {{
-            "audience": "target demographic 1",
+            "audience": "target demographic 1 - similar authors",
             "headline": "ad headline option 1",
             "primary_text": "main ad text",
             "description": "description",
             "cta": "Shop Now"
         }},
         {{
-            "audience": "target demographic 2",
+            "audience": "target demographic 2 - genre readers",
             "headline": "ad headline option 2",
             "primary_text": "main ad text",
             "description": "description",
             "cta": "Learn More"
+        }},
+        {{
+            "audience": "target demographic 3 - book club members",
+            "headline": "ad headline option 3",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Sign Up"
+        }},
+        {{
+            "audience": "target demographic 4 - bargain hunters",
+            "headline": "ad headline option 4",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Buy Now"
+        }},
+        {{
+            "audience": "target demographic 5 - series readers",
+            "headline": "ad headline option 5",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Pre-order"
+        }},
+        {{
+            "audience": "target demographic 6 - gift shoppers",
+            "headline": "ad headline option 6",
+            "primary_text": "main ad text",
+            "description": "description",
+            "cta": "Shop Now"
         }}
     ]
     
@@ -935,6 +1151,18 @@ def generate_marketing_assets(client, analysis_data):
                 {{
                     "subject": "Subject line 2 - Behind the scenes",
                     "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Character introduction",
+                    "body": "Email content 3 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 4 - Exclusive excerpt",
+                    "body": "Email content 4 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 5 - Pre-order reminder",
+                    "body": "Email content 5 - full email text"
                 }}
             ]
         }},
@@ -948,6 +1176,56 @@ def generate_marketing_assets(client, analysis_data):
                 {{
                     "subject": "Subject line 2 - Reviews coming in",
                     "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Reader reactions",
+                    "body": "Email content 3 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 4 - Thank you",
+                    "body": "Email content 4 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 5 - What's next",
+                    "body": "Email content 5 - full email text"
+                }}
+            ]
+        }},
+        {{
+            "name": "Review/Engagement Sequence (3 emails)",
+            "emails": [
+                {{
+                    "subject": "Subject line 1 - Loved the book?",
+                    "body": "Email content 1 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 2 - Join the discussion",
+                    "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Stay connected",
+                    "body": "Email content 3 - full email text"
+                }}
+            ]
+        }},
+        {{
+            "name": "Series Announcement Sequence (4 emails)",
+            "emails": [
+                {{
+                    "subject": "Subject line 1 - What's coming next",
+                    "body": "Email content 1 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 2 - Exclusive sneak peek",
+                    "body": "Email content 2 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 3 - Pre-order next book",
+                    "body": "Email content 3 - full email text"
+                }},
+                {{
+                    "subject": "Subject line 4 - Bonus content",
+                    "body": "Email content 4 - full email text"
                 }}
             ]
         }}
@@ -958,7 +1236,8 @@ def generate_marketing_assets(client, analysis_data):
             "press_release": "full press release option 1 - standard format",
             "author_qanda": [
                 {{"question": "Question 1 about inspiration", "answer": "Answer 1"}},
-                {{"question": "Question 2 about writing process", "answer": "Answer 2"}}
+                {{"question": "Question 2 about writing process", "answer": "Answer 2"}},
+                {{"question": "Question 3 about future projects", "answer": "Answer 3"}}
             ],
             "key_talking_points": ["point1", "point2", "point3", "point4", "point5"]
         }},
@@ -966,7 +1245,17 @@ def generate_marketing_assets(client, analysis_data):
             "press_release": "full press release option 2 - angle on market trends",
             "author_qanda": [
                 {{"question": "Question 1 about inspiration", "answer": "Answer 1"}},
-                {{"question": "Question 2 about writing process", "answer": "Answer 2"}}
+                {{"question": "Question 2 about writing process", "answer": "Answer 2"}},
+                {{"question": "Question 3 about future projects", "answer": "Answer 3"}}
+            ],
+            "key_talking_points": ["point1", "point2", "point3", "point4", "point5"]
+        }},
+        {{
+            "press_release": "full press release option 3 - personal journey angle",
+            "author_qanda": [
+                {{"question": "Question 1 about inspiration", "answer": "Answer 1"}},
+                {{"question": "Question 2 about writing process", "answer": "Answer 2"}},
+                {{"question": "Question 3 about future projects", "answer": "Answer 3"}}
             ],
             "key_talking_points": ["point1", "point2", "point3", "point4", "point5"]
         }}
@@ -974,40 +1263,60 @@ def generate_marketing_assets(client, analysis_data):
     
     10. pinterest_options: [
         {{
-            "pin_descriptions": ["Pin 1: Quote from book", "Pin 2: Character aesthetic", "Pin 3: Setting inspiration"],
-            "board_ideas": ["{{Book Title}} Inspiration", "Characters", "Settings"],
-            "keywords": ["keyword1", "keyword2", "keyword3"]
+            "pin_descriptions": ["Pin 1: Quote from book", "Pin 2: Character aesthetic", "Pin 3: Setting inspiration", "Pin 4: Mood board", "Pin 5: Writing tips", "Pin 6: Reading playlist"],
+            "board_ideas": ["{{Book Title}} Inspiration", "Characters", "Settings", "Quotes", "Author Life", "Book Club"],
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
         }},
         {{
-            "pin_descriptions": ["Pin 1: Book review quote", "Pin 2: Reading playlist", "Pin 3: Fan art inspiration"],
-            "board_ideas": ["{{Book Title}} Vibes", "Readers Love", "Book Club"],
-            "keywords": ["keyword1", "keyword2", "keyword3"]
+            "pin_descriptions": ["Pin 1: Book review quote", "Pin 2: Reading playlist", "Pin 3: Fan art inspiration", "Pin 4: Similar books", "Pin 5: Author interview", "Pin 6: Behind the scenes"],
+            "board_ideas": ["{{Book Title}} Vibes", "Readers Love", "Book Club", "Author Journey", "Writing Process", "Book Aesthetics"],
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+        }},
+        {{
+            "pin_descriptions": ["Pin 1: Character quotes", "Pin 2: Scene illustrations", "Pin 3: Bookish recipes", "Pin 4: Writing inspiration", "Pin 5: Author recommendations", "Pin 6: Themed playlists"],
+            "board_ideas": ["{{Book Title}} World", "Character Art", "Bookish Lifestyle", "Creative Writing", "Author Picks", "Reader Resources"],
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
         }}
     ]
     
     11. goodreads_options: [
         {{
             "giveaway_description": "Option 1 - Standard giveaway: Enter to win a signed copy!",
-            "discussion_questions": ["Q1: What was your favorite moment?", "Q2: Which character did you relate to most?"],
-            "similar_books": ["Book 1 in similar genre", "Book 2 by similar author"]
+            "discussion_questions": ["Q1: What was your favorite moment?", "Q2: Which character did you relate to most?", "Q3: How did the setting affect the story?", "Q4: What themes stood out to you?", "Q5: Would you recommend this book?"],
+            "similar_books": ["Book 1 in similar genre", "Book 2 by similar author", "Book 3 with similar themes"]
         }},
         {{
             "giveaway_description": "Option 2 - Bundle giveaway: Win the book plus swag!",
-            "discussion_questions": ["Q1: How did the ending make you feel?", "Q2: What surprised you most?"],
-            "similar_books": ["Book 1 readers also enjoyed", "Book 2 if you liked this"]
+            "discussion_questions": ["Q1: How did the ending make you feel?", "Q2: What surprised you most?", "Q3: Who was your favorite side character?", "Q4: What would you ask the author?", "Q5: Rate the pacing"],
+            "similar_books": ["Book 1 readers also enjoyed", "Book 2 if you liked this", "Book 3 in the same vein"]
+        }},
+        {{
+            "giveaway_description": "Option 3 - ARC giveaway: Be among the first to read!",
+            "discussion_questions": ["Q1: What do you think will happen next?", "Q2: Which character intrigues you most?", "Q3: What theories do you have?", "Q4: How does this compare to other books?", "Q5: What would you change?"],
+            "similar_books": ["Book 1 for fans of", "Book 2 similar vibes", "Book 3 recommended reads"]
         }}
     ]
     
     12. podcast_pitches: [
         {{
             "pitch_email": "Email template for book podcasts - angle on author journey",
-            "talking_points": ["point1 about inspiration", "point2 about writing process"],
-            "podcast_ideas": ["Episode 1: The story behind the story", "Episode 2: Writing in this genre"]
+            "talking_points": ["point1 about inspiration", "point2 about writing process", "point3 about themes", "point4 about market timing", "point5 about future projects"],
+            "podcast_ideas": ["Episode 1: The story behind the story", "Episode 2: Writing in this genre", "Episode 3: From manuscript to publication"]
         }},
         {{
             "pitch_email": "Email template for genre-specific podcasts - angle on expertise",
-            "talking_points": ["point1 about genre trends", "point2 about research"],
-            "podcast_ideas": ["Episode 1: Deep dive into the world", "Episode 2: Character creation"]
+            "talking_points": ["point1 about genre trends", "point2 about research", "point3 about character development", "point4 about worldbuilding", "point5 about reader reactions"],
+            "podcast_ideas": ["Episode 1: Deep dive into the world", "Episode 2: Character creation", "Episode 3: Genre insights"]
+        }},
+        {{
+            "pitch_email": "Email template for author interview shows - personal angle",
+            "talking_points": ["point1 about personal journey", "point2 about challenges", "point3 about successes", "point4 about daily routine", "point5 about advice for writers"],
+            "podcast_ideas": ["Episode 1: My writing journey", "Episode 2: Daily habits of a writer", "Episode 3: Advice for new authors"]
+        }},
+        {{
+            "pitch_email": "Email template for writing craft podcasts - technical angle",
+            "talking_points": ["point1 about craft choices", "point2 about revisions", "point3 about overcoming blocks", "point4 about editing process", "point5 about publishing journey"],
+            "podcast_ideas": ["Episode 1: Crafting compelling characters", "Episode 2: Plot structure secrets", "Episode 3: Revision strategies"]
         }}
     ]
     
@@ -1015,27 +1324,47 @@ def generate_marketing_assets(client, analysis_data):
         "6_weeks_before": [
             "Action 1: Cover reveal on social media",
             "Action 2: Set up pre-order links",
-            "Action 3: Create ARC team and send copies"
+            "Action 3: Create ARC team and send copies",
+            "Action 4: Schedule blog tour",
+            "Action 5: Prepare newsletter announcement",
+            "Action 6: Create media kit",
+            "Action 7: Reach out to early reviewers"
         ],
         "4_weeks_before": [
             "Action 1: Start posting teasers on TikTok",
             "Action 2: Share character introductions on Instagram",
-            "Action 3: Send ARC reminder to reviewers"
+            "Action 3: Send ARC reminder to reviewers",
+            "Action 4: Pitch to podcasters",
+            "Action 5: Create launch graphics",
+            "Action 6: Schedule social media posts",
+            "Action 7: Prepare giveaway items"
         ],
         "2_weeks_before": [
             "Action 1: Increase posting frequency",
             "Action 2: Share early reviews/testimonials",
-            "Action 3: Host Goodreads giveaway"
+            "Action 3: Host Goodreads giveaway",
+            "Action 4: Prepare launch day emails",
+            "Action 5: Coordinate with street team",
+            "Action 6: Create countdown posts",
+            "Action 7: Finalize Amazon listing"
         ],
         "launch_week": [
             "Action 1: Launch day posts on ALL platforms",
             "Action 2: Send launch email to list",
-            "Action 3: Go live on TikTok/Instagram"
+            "Action 3: Go live on TikTok/Instagram",
+            "Action 4: Monitor reviews and engage",
+            "Action 5: Thank supporters publicly",
+            "Action 6: Run launch day ads",
+            "Action 7: Host launch party (virtual)"
         ],
         "post_launch": [
             "Action 1: Follow up with reviewers",
             "Action 2: Share fan posts/reactions",
-            "Action 3: Plan next phase of content"
+            "Action 3: Plan next phase of content",
+            "Action 4: Analyze what worked best",
+            "Action 5: Start planning next book marketing",
+            "Action 6: Collect testimonials",
+            "Action 7: Update website/socials"
         ]
     }}
     """
@@ -1044,7 +1373,7 @@ def generate_marketing_assets(client, analysis_data):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a marketing expert. Return valid JSON only. Generate MULTIPLE options for each platform as requested."},
+                {"role": "system", "content": "You are a marketing expert. Return valid JSON only. Generate MULTIPLE options (at least 5-8) for each platform as requested."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
