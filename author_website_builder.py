@@ -1,6 +1,7 @@
 """
 Author Website Builder Module for BardSpark
 Creates COMPLETE website content using book analysis and marketing assets
+WITH MANUAL QUESTIONNAIRE AND WORKING IMAGES
 """
 
 import streamlit as st
@@ -253,10 +254,10 @@ def generate_website_content(client, author_data):
         return None
 
 # ============================================================================
-# COMPLETE HTML GENERATOR (WITH REAL CONTENT)
+# COMPLETE HTML GENERATOR (WITH ACTUAL IMAGES)
 # ============================================================================
-def generate_complete_website(author_data, ai_content=None):
-    """Generate a complete HTML website with real content"""
+def generate_complete_website(author_data, ai_content=None, author_photo=None, book_cover=None):
+    """Generate a complete HTML website with ACTUAL images"""
     
     book = author_data.get('book_analysis', {})
     profile = author_data.get('profile', {})
@@ -357,7 +358,20 @@ def generate_complete_website(author_data, ai_content=None):
     for fact in about.get('fun_facts', [])[:3]:
         facts_html += f'<li class="fact-item">✨ {fact}</li>'
     
-    # Complete HTML template with real content
+    # ========================================================================
+    # FIX: Convert images to base64 so they ACTUALLY SHOW
+    # ========================================================================
+    author_img_html = ""
+    if author_photo:
+        img_data = base64.b64encode(author_photo.getvalue()).decode()
+        author_img_html = f'<img src="data:image/jpeg;base64,{img_data}" class="author-photo" style="width:150px;height:150px;border-radius:50%;object-fit:cover;margin:0 auto 20px;display:block;">'
+    
+    book_cover_html = ""
+    if book_cover:
+        cover_data = base64.b64encode(book_cover.getvalue()).decode()
+        book_cover_html = f'<img src="data:image/jpeg;base64,{cover_data}" class="book-cover" style="max-width:300px;width:100%;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.2);">'
+    
+    # Complete HTML template with REAL images
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -495,19 +509,6 @@ def generate_complete_website(author_data, ai_content=None):
             flex: 1;
             min-width: 300px;
             text-align: center;
-        }}
-        
-        .cover-placeholder {{
-            width: 300px;
-            height: 450px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }}
         
         .book-details {{
@@ -780,9 +781,10 @@ def generate_complete_website(author_data, ai_content=None):
     <!-- Hero Section -->
     <section id="home" class="hero">
         <div class="container">
-            <h1>{home.get('hero_title', book.get('title', 'My Book'))}</h1>
+            {author_img_html if author_img_html else f'<div style="width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.2);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:3rem;">📸</div>'}
+            <h1>{profile.get('name', home.get('hero_title', book.get('title', 'My Book')))}</h1>
             <h2>{home.get('hero_subtitle', f"A {book.get('genre', '')} Novel")}</h2>
-            <a href="#" class="cta-button">{home.get('hero_cta', 'Buy Now')}</a>
+            <a href="#book" class="cta-button">{home.get('hero_cta', 'Explore the Book')}</a>
             {f'<div class="featured-quote">"{home.get("featured_quote", "")}"</div>' if home.get('featured_quote') else ''}
         </div>
     </section>
@@ -793,7 +795,7 @@ def generate_complete_website(author_data, ai_content=None):
             <h2 class="section-title">{book_page.get('title', 'The Book')}</h2>
             <div class="book-content">
                 <div class="book-cover">
-                    <div class="cover-placeholder">{book.get('title', 'Book Cover')[:20]}</div>
+                    {book_cover_html if book_cover_html else f'<div class="cover-placeholder" style="width:300px;height:450px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;margin:0 auto;">{book.get("title", "Book Cover")[:20]}</div>'}
                 </div>
                 <div class="book-details">
                     <h3 class="book-title">{book.get('title', '')}</h3>
@@ -876,7 +878,7 @@ def generate_complete_website(author_data, ai_content=None):
     return html
 
 # ============================================================================
-# MAIN WEBSITE BUILDER UI
+# MAIN WEBSITE BUILDER UI - WITH MANUAL QUESTIONNAIRE
 # ============================================================================
 def show_website_builder():
     """Main function to display the website builder"""
@@ -888,9 +890,13 @@ def show_website_builder():
     - ✅ Marketing Assets (blurbs, reviews, press kit)
     - ✅ Saved Advocates (ARC readers and influencers)
     - ✅ Author Profile (bio, social media)
+    
+    **YOUR BOOK COVER WILL SHOW IN THE WEBSITE!**
     """)
     
-    # API Key for AI generation
+    # ========================================================================
+    # API Key for AI generation (ALREADY HERE - NOT CHANGED)
+    # ========================================================================
     if 'openai_api_key' not in st.session_state:
         st.session_state.openai_api_key = None
     
@@ -903,12 +909,91 @@ def show_website_builder():
                 st.rerun()
         return
     
+    # ========================================================================
     # Load all data
+    # ========================================================================
     with st.spinner("Loading your data..."):
         author_data = get_complete_author_data()
         client = OpenAI(api_key=st.session_state.openai_api_key)
     
-    # Show data summary
+    # ========================================================================
+    # MANUAL IMAGE UPLOAD SECTION - ADDED
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("### 📸 Upload Your Images (They WILL appear in the website)")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        author_photo = st.file_uploader(
+            "Your Photo (optional)", 
+            type=['jpg', 'jpeg', 'png'],
+            help="Upload a professional headshot"
+        )
+        if author_photo:
+            st.image(author_photo, width=150, caption="Preview")
+    
+    with col2:
+        book_cover = st.file_uploader(
+            "Book Cover *", 
+            type=['jpg', 'jpeg', 'png'],
+            help="Upload your book cover image"
+        )
+        if book_cover:
+            st.image(book_cover, width=150, caption="Preview")
+    
+    # ========================================================================
+    # MANUAL QUESTIONNAIRE SECTION - ADDED
+    # ========================================================================
+    st.markdown("---")
+    st.markdown("### 📝 Manual Override - Fill in What's Missing")
+    
+    with st.expander("✏️ Edit Your Data Manually", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Author Information**")
+            manual_name = st.text_input("Your Name", value=author_data['profile'].get('name', ''))
+            manual_bio = st.text_area("Your Bio", value=author_data['profile'].get('bio', ''), height=100)
+            
+            if manual_name:
+                author_data['profile']['name'] = manual_name
+            if manual_bio:
+                author_data['profile']['bio'] = manual_bio
+        
+        with col2:
+            st.markdown("**Book Information**")
+            manual_title = st.text_input("Book Title", value=author_data['book_analysis'].get('title', ''))
+            manual_genre = st.text_input("Genre", value=author_data['book_analysis'].get('genre', ''))
+            manual_desc = st.text_area("Description", value=author_data['book_analysis'].get('description', ''), height=100)
+            
+            if manual_title:
+                author_data['book_analysis']['title'] = manual_title
+            if manual_genre:
+                author_data['book_analysis']['genre'] = manual_genre
+            if manual_desc:
+                author_data['book_analysis']['description'] = manual_desc
+        
+        st.markdown("**Social Media Links**")
+        soc = author_data['profile'].get('social_media', {})
+        col1, col2 = st.columns(2)
+        with col1:
+            twitter = st.text_input("Twitter/X", value=soc.get('twitter', ''))
+            instagram = st.text_input("Instagram", value=soc.get('instagram', ''))
+        with col2:
+            facebook = st.text_input("Facebook", value=soc.get('facebook', ''))
+            tiktok = st.text_input("TikTok", value=soc.get('tiktok', ''))
+        
+        # Update social media
+        author_data['profile']['social_media'] = {
+            'twitter': twitter,
+            'instagram': instagram,
+            'facebook': facebook,
+            'tiktok': tiktok
+        }
+    
+    # ========================================================================
+    # Show data summary (KEEPING YOUR EXISTING CODE)
+    # ========================================================================
     with st.expander("📊 View Data Being Used", expanded=True):
         col1, col2, col3 = st.columns(3)
         
@@ -935,21 +1020,31 @@ def show_website_builder():
     
     st.markdown("---")
     
-    # Generate button
+    # ========================================================================
+    # Generate button (YOUR EXISTING CODE)
+    # ========================================================================
     if st.button("🚀 GENERATE COMPLETE WEBSITE", type="primary", use_container_width=True):
+        if not book_cover:
+            st.warning("Book cover is optional but recommended")
+            
         with st.spinner("AI is creating your website content... (30-45 seconds)"):
             try:
                 # Step 1: Generate AI content from all data
                 ai_content = generate_website_content(client, author_data)
                 
                 if ai_content:
-                    # Step 2: Generate complete HTML with real content
-                    html_content = generate_complete_website(author_data, ai_content)
+                    # Step 2: Generate complete HTML with REAL images
+                    html_content = generate_complete_website(
+                        author_data, 
+                        ai_content, 
+                        author_photo, 
+                        book_cover
+                    )
                     
-                    st.success("✅ Website generated successfully!")
+                    st.success("✅ Website generated successfully! Your book cover is now visible.")
                     
                     # Display preview
-                    st.markdown("### 👁️ Preview")
+                    st.markdown("### 👁️ Preview - Your Images Are Here!")
                     st.components.v1.html(html_content, height=600, scrolling=True)
                     
                     # Download button
@@ -964,9 +1059,8 @@ def show_website_builder():
                     st.info("""
                     **📋 Next Steps:**
                     1. Download the HTML file
-                    2. Upload to your web host (or open locally)
-                    3. Customize colors and add real images
-                    4. Replace placeholder links with your actual purchase links
+                    2. Upload to Netlify Drop (or your web host)
+                    3. Your book cover is already in the file!
                     """)
                 else:
                     st.error("Failed to generate website content")
