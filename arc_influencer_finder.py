@@ -398,32 +398,32 @@ def render_finder():
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
                   # ============================================================================
-# SAVE BUTTON - SIMPLE VERSION
-# ============================================================================
-st.markdown("---")
-col1, col2, col3 = st.columns([1, 1, 3])
-with col1:
-    if st.button("❤️ Save", key=f"save_{advocate['id']}"):
-        if st.session_state.get('authenticated'):
-            conn = get_db_connection()
-            if conn:
-                cur = conn.cursor()
-                try:
-                    cur.execute("""
-                        INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (user_id, reader_id) DO NOTHING
-                    """, (st.session_state.user_id, advocate['id'], datetime.now()))
-                    conn.commit()
-                    st.success("Saved!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                finally:
-                    cur.close()
-                    conn.close()
-        else:
-            st.warning("Please login")
+                    # SAVE BUTTON - SIMPLE VERSION
+                    # ============================================================================
+                    st.markdown("---")
+                    col1, col2, col3 = st.columns([1, 1, 3])
+                    with col1:
+                        if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+                            if st.session_state.get('authenticated'):
+                                conn = get_db_connection()
+                                if conn:
+                                    cur = conn.cursor()
+                                    try:
+                                        cur.execute("""
+                                            INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                                            VALUES (%s, %s, %s)
+                                            ON CONFLICT (user_id, reader_id) DO NOTHING
+                                        """, (st.session_state.user_id, advocate['id'], datetime.now()))
+                                        conn.commit()
+                                        st.success("Saved!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                                    finally:
+                                        cur.close()
+                                        conn.close()
+                            else:
+                                st.warning("Please login")
 
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
