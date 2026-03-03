@@ -1,4 +1,4 @@
-# MarketingGenerator.py
+# MarketingGenerator.py - FIXED VERSION
 import streamlit as st
 from openai import OpenAI
 import json
@@ -1264,17 +1264,17 @@ def generate_marketing_assets(client, analysis_data):
     10. pinterest_options: [
         {{
             "pin_descriptions": ["Pin 1: Quote from book", "Pin 2: Character aesthetic", "Pin 3: Setting inspiration", "Pin 4: Mood board", "Pin 5: Writing tips", "Pin 6: Reading playlist"],
-            "board_ideas": ["{{Book Title}} Inspiration", "Characters", "Settings", "Quotes", "Author Life", "Book Club"],
+            "board_ideas": ["Book Title Inspiration", "Characters", "Settings", "Quotes", "Author Life", "Book Club"],
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
         }},
         {{
             "pin_descriptions": ["Pin 1: Book review quote", "Pin 2: Reading playlist", "Pin 3: Fan art inspiration", "Pin 4: Similar books", "Pin 5: Author interview", "Pin 6: Behind the scenes"],
-            "board_ideas": ["{{Book Title}} Vibes", "Readers Love", "Book Club", "Author Journey", "Writing Process", "Book Aesthetics"],
+            "board_ideas": ["Book Title Vibes", "Readers Love", "Book Club", "Author Journey", "Writing Process", "Book Aesthetics"],
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
         }},
         {{
             "pin_descriptions": ["Pin 1: Character quotes", "Pin 2: Scene illustrations", "Pin 3: Bookish recipes", "Pin 4: Writing inspiration", "Pin 5: Author recommendations", "Pin 6: Themed playlists"],
-            "board_ideas": ["{{Book Title}} World", "Character Art", "Bookish Lifestyle", "Creative Writing", "Author Picks", "Reader Resources"],
+            "board_ideas": ["Book Title World", "Character Art", "Bookish Lifestyle", "Creative Writing", "Author Picks", "Reader Resources"],
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
         }}
     ]
