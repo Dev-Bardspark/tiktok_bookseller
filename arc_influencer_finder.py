@@ -435,9 +435,10 @@ def render_finder():
                                         cur.execute("""
                                             INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
                                             VALUES (%s, %s, %s)
-                                            ON CONFLICT (user_id, reader_id) DO NOTHING
-                                        """, (st.session_state.user_id, advocate['id'], datetime.now()))
-                                        conn.commit()
+# Simple INSERT without any complex conflict handling
+INSERT INTO crm_contacts 
+(user_id, contact_type, first_name, last_name, email, social_handle, source, notes, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                         
                                         # Update session state
                                         if 'saved_readers' not in st.session_state:
