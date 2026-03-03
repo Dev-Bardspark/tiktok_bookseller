@@ -11,6 +11,11 @@ import json
 from datetime import datetime
 
 # ============================================================================
+# DEBUG: Print when file loads
+# ============================================================================
+st.write("🔥 arc_influencer_finder.py loaded at", datetime.now())
+
+# ============================================================================
 # DATABASE CONNECTION (reused from BardSpark.py)
 # ============================================================================
 def get_db_connection():
@@ -392,102 +397,27 @@ def render_finder():
                         if links:
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
-                    # ============================================================================
-                    # SAVE BUTTON - FIXED VERSION
-                    # ============================================================================
-                    st.markdown("---")
-                    
-                    col_a, col_b, col_c = st.columns([1, 1, 3])
-                    with col_a:
-                        # Check if already saved by checking session state
-                        is_saved = False
-                        if 'saved_readers' in st.session_state:
-                            is_saved = any(r['id'] == advocate['id'] for r in st.session_state.saved_readers)
-                        
-                        if not is_saved:
-                            if st.button("❤️ Save to My List", key=f"save_{advocate['id']}"):
-                                if st.session_state.get('authenticated', False):
-                                    conn = get_db_connection()
-                                    if conn:
-                                        cur = conn.cursor()
-                                        try:
-                                            # Insert into database
-                                            cur.execute("""
-                                                INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
-                                                VALUES (%s, %s, %s)
-                                                ON CONFLICT (user_id, reader_id) DO NOTHING
-                                            """, (st.session_state.user_id, advocate['id'], datetime.now()))
-                                            conn.commit()
-                                            
-                                            # Update session state
-                                            if 'saved_readers' not in st.session_state:
-                                                st.session_state.saved_readers = []
-                                            
-                                            # Check if already in session state
-                                            exists_in_session = any(r['id'] == advocate['id'] for r in st.session_state.saved_readers)
-                                            if not exists_in_session:
-                                                st.session_state.saved_readers.append(advocate)
-                                            
-                                            st.success(f"✅ @{advocate['username']} saved to your list!")
-                                            st.rerun()
-                                            
-                                        except Exception as e:
-                                            st.error(f"Error saving: {str(e)}")
-                                        finally:
-                                            cur.close()
-                                            conn.close()
-                                    else:
-                                        st.error("Could not connect to database")
-                                else:
-                                    st.warning("Please login to save readers")
-                        else:
-                            st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
-                            
-                            # Add to CRM button for saved readers
-                            if advocate.get('email'):
-                                st.markdown("---")
-                                if st.button("📇 Add to CRM", key=f"crm_{advocate['id']}"):
-                                    try:
-                                        # Import here to avoid circular imports
-                                        from SimpleCRM import save_contact
-                                        
-                                        # Parse name
-                                        first_name = ''
-                                        last_name = ''
-                                        if advocate.get('display_name'):
-                                            name_parts = advocate['display_name'].split()
-                                            first_name = name_parts[0] if name_parts else ''
-                                            last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
-                                        
-                                        contact_data = {
-                                            'contact_type': 'arc_reader',
-                                            'first_name': first_name,
-                                            'last_name': last_name,
-                                            'email': advocate.get('email'),
-                                            'social_handle': advocate.get('username'),
-                                            'source': f"ARC Finder - {advocate.get('username', '')}",
-                                            'notes': f"Bio: {advocate.get('bio', '')[:200]}"
-                                        }
-                                        
-                                        contact_id = save_contact(st.session_state.user_id, contact_data)
-                                        if contact_id:
-                                            st.success(f"✅ @{advocate['username']} added to CRM!")
-                                            st.rerun()
-                                        else:
-                                            st.error("Failed to add to CRM")
-                                    except Exception as e:
-                                        st.error(f"CRM error: {str(e)}")
-        else:
-            st.warning("No advocates found matching your criteria. Try widening your filters.")
+# ============================================================================
+# SIMPLIFIED SAVE BUTTON - TEST VERSION
+# ============================================================================
+st.markdown("---")
+col_a, col_b, col_c = st.columns([1, 1, 3])
+with col_a:
+    # Simple debug
+    st.caption(f"Debug - Advocate ID: {advocate['id']}")
     
-    # Show saved count in sidebar
-    st.sidebar.markdown("---")
-    saved_count = len(st.session_state.get('saved_readers', []))
-    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
-    if saved_count > 0:
-        if st.sidebar.button("📋 View Saved Readers", use_container_width=True):
-            st.session_state.page = "❤️ Saved Readers"
-            st.rerun()
+    if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+        st.write("✅ BUTTON CLICKED!")
+        st.write(f"User ID: {st.session_state.get('user_id')}")
+        st.write(f"Authenticated: {st.session_state.get('authenticated')}")
+        st.write(f"Advocate ID: {advocate['id']}")
+        st.write(f"Advocate Username: {advocate['username']}")
+        
+        if st.session_state.get('authenticated'):
+            st.success("User is authenticated - button works!")
+            # We'll add the actual save later
+        else:
+            st.warning("Not authenticated - please login")
 
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
