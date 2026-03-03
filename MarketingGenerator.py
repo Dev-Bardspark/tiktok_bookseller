@@ -987,7 +987,6 @@ def generate_marketing_assets(client, analysis_data):
             "similar_books": ["Book 1 in similar genre", "Book 2 by similar author", "Book 3 with similar themes"]
         }},
         {{
-            "giveaway_description": "Option 2 - Bundle giveaway: Win the book plus swag!",
             "discussion_questions": ["Q1: How did the ending make you feel?", "Q2: What surprised you most?", "Q3: Who was your favorite side character?", "Q4: What would you ask the author?", "Q5: Rate the pacing"],
             "similar_books": ["Book 1 readers also enjoyed", "Book 2 if you liked this", "Book 3 in the same vein"]
         }}
