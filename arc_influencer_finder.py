@@ -393,96 +393,164 @@ def render_finder():
                             st.markdown("🔗 **Quick Links:** " + " | ".join(links))
                     
                     # ============================================================================
-                    # SAVE BUTTON WITH MAXIMUM DEBUGGING
-                    # ============================================================================
-                    st.markdown("---")
-                    st.markdown("**🔍 DEBUG INFORMATION:**")
-                    
-                    col_a, col_b, col_c = st.columns([1, 1, 3])
-                    with col_a:
-                        is_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
-                        
-                        if not is_saved:
-                            if st.button("❤️ Save", key=f"save_{advocate['id']}"):
-                                st.write("=== SAVE BUTTON CLICKED ===")
-                                st.write(f"**Step 1:** Button clicked for @{advocate['username']}")
-                                st.write(f"**Step 2:** Authenticated = {st.session_state.get('authenticated', False)}")
-                                st.write(f"**Step 3:** User ID = {st.session_state.get('user_id', 'None')}")
-                                st.write(f"**Step 4:** Advocate ID = {advocate['id']}")
-                                
-                                if st.session_state.get('authenticated', False):
-                                    st.write("**Step 5:** User is authenticated - attempting database connection")
-                                    conn = get_db_connection()
-                                    st.write(f"**Step 6:** Database connection = {'SUCCESS' if conn else 'FAILED'}")
-                                    
-                                    if conn:
-                                        st.write("**Step 7:** Connection successful - creating cursor")
-                                        cur = conn.cursor()
-                                        try:
-                                            st.write("**Step 8:** Executing INSERT query...")
-                                            st.code(f"""
-                                            INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
-                                            VALUES ({st.session_state.user_id}, {advocate['id']}, {datetime.now()})
-                                            ON CONFLICT (user_id, reader_id) DO NOTHING
-                                            """)
-                                            
-                                            cur.execute("""
-                                                INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
-                                                VALUES (%s, %s, %s)
-                                                ON CONFLICT (user_id, reader_id) DO NOTHING
-                                            """, (st.session_state.user_id, advocate['id'], datetime.now()))
-                                            
-                                            st.write("**Step 9:** INSERT executed - attempting commit")
-                                            conn.commit()
-                                            st.write("**Step 10:** COMMIT successful")
-                                            
-                                            # Update session state
-                                            st.write("**Step 11:** Updating session state")
-                                            if 'saved_readers' not in st.session_state:
-                                                st.session_state.saved_readers = []
-                                            st.session_state.saved_readers.append(advocate)
-                                            
-                                            st.write("**Step 12:** Save complete - showing success message")
-                                            st.success(f"✅ @{advocate['username']} saved to database!")
-                                            
-                                            # Verify by checking database
-                                            st.write("**Step 13:** Verifying save...")
-                                            verify_cur = conn.cursor()
-                                            verify_cur.execute("""
-                                                SELECT * FROM user_saved_arc_readers 
-                                                WHERE user_id = %s AND reader_id = %s
-                                            """, (st.session_state.user_id, advocate['id']))
-                                            verify_result = verify_cur.fetchone()
-                                            st.write(f"**Step 14:** Verification result = {verify_result}")
-                                            verify_cur.close()
-                                            
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Database error: {str(e)}")
-                                            st.write(f"**Error type:** {type(e).__name__}")
-                                            st.write(f"**Error details:** {e}")
-                                        finally:
-                                            cur.close()
-                                            conn.close()
-                                            st.write("**Step 15:** Database connection closed")
-                                    else:
-                                        st.error("❌ Could not connect to database")
-                                else:
-                                    st.warning("⚠️ Please login to save readers")
-                        else:
-                            st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
-        else:
-            st.warning("No advocates found matching your criteria. Try widening your filters.")
-    
-    # Show saved count in sidebar
-    st.sidebar.markdown("---")
-    saved_count = len(st.session_state.get('saved_readers', []))
-    st.sidebar.markdown(f"### ❤️ Saved: {saved_count}")
-    if saved_count > 0:
-        if st.sidebar.button("📋 View Saved Readers", use_container_width=True):
-            st.session_state.page = "❤️ Saved Readers"
-            st.rerun()
+                   # ============================================================================
+# SAVE BUTTON WITH ULTRA DEBUGGING
+# ============================================================================
+st.markdown("---")
+st.markdown("**🔍 DEBUG INFORMATION:**")
 
+col_a, col_b, col_c = st.columns([1, 1, 3])
+with col_a:
+    # Check if already saved
+    is_saved = False
+    # First check session state
+    session_saved = any(r['id'] == advocate['id'] for r in st.session_state.get('saved_readers', []))
+    
+    # Also verify from database to be sure
+    db_saved = False
+    if st.session_state.get('authenticated', False):
+        try:
+            conn = get_db_connection()
+            if conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT 1 FROM user_saved_arc_readers 
+                    WHERE user_id = %s AND reader_id = %s
+                """, (st.session_state.user_id, advocate['id']))
+                db_saved = cur.fetchone() is not None
+                cur.close()
+                conn.close()
+        except Exception as e:
+            st.error(f"DB check error: {e}")
+    
+    is_saved = session_saved or db_saved
+    
+    # Display status
+    st.caption(f"Session saved: {session_saved} | DB saved: {db_saved}")
+    
+    if not is_saved:
+        if st.button("❤️ Save", key=f"save_{advocate['id']}"):
+            st.write("=== SAVE BUTTON CLICKED ===")
+            st.write(f"**Step 1:** Button clicked for @{advocate['username']}")
+            st.write(f"**Step 2:** Authenticated = {st.session_state.get('authenticated', False)}")
+            st.write(f"**Step 3:** User ID = {st.session_state.get('user_id', 'None')}")
+            st.write(f"**Step 4:** Advocate ID = {advocate['id']}")
+            st.write(f"**Step 5:** Advocate type = {type(advocate['id'])}")
+            
+            if st.session_state.get('authenticated', False):
+                st.write("**Step 6:** User is authenticated - attempting database connection")
+                conn = get_db_connection()
+                st.write(f"**Step 7:** Database connection = {'SUCCESS' if conn else 'FAILED'}")
+                
+                if conn:
+                    st.write("**Step 8:** Connection successful - creating cursor")
+                    cur = conn.cursor()
+                    try:
+                        # Check if already exists first
+                        st.write("**Step 9:** Checking if already exists...")
+                        cur.execute("""
+                            SELECT 1 FROM user_saved_arc_readers 
+                            WHERE user_id = %s AND reader_id = %s
+                        """, (st.session_state.user_id, advocate['id']))
+                        exists = cur.fetchone()
+                        st.write(f"**Step 10:** Already exists = {exists is not None}")
+                        
+                        if not exists:
+                            st.write("**Step 11:** Executing INSERT query...")
+                            st.code(f"""
+                            INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                            VALUES ({st.session_state.user_id}, {advocate['id']}, NOW())
+                            """)
+                            
+                            cur.execute("""
+                                INSERT INTO user_saved_arc_readers (user_id, reader_id, saved_at)
+                                VALUES (%s, %s, NOW())
+                            """, (st.session_state.user_id, advocate['id']))
+                            
+                            st.write("**Step 12:** INSERT executed - rows affected: {cur.rowcount}")
+                            st.write("**Step 13:** Attempting commit...")
+                            conn.commit()
+                            st.write("**Step 14:** COMMIT successful")
+                            
+                            # Update session state
+                            st.write("**Step 15:** Updating session state")
+                            if 'saved_readers' not in st.session_state:
+                                st.session_state.saved_readers = []
+                            
+                            # Check if already in session state
+                            exists_in_session = any(r['id'] == advocate['id'] for r in st.session_state.saved_readers)
+                            if not exists_in_session:
+                                st.session_state.saved_readers.append(advocate)
+                                st.write("**Step 16:** Added to session state")
+                            else:
+                                st.write("**Step 16:** Already in session state")
+                            
+                            # Verify by checking database
+                            st.write("**Step 17:** Verifying save...")
+                            verify_cur = conn.cursor()
+                            verify_cur.execute("""
+                                SELECT * FROM user_saved_arc_readers 
+                                WHERE user_id = %s AND reader_id = %s
+                            """, (st.session_state.user_id, advocate['id']))
+                            verify_result = verify_cur.fetchone()
+                            st.write(f"**Step 18:** Verification result = {verify_result}")
+                            verify_cur.close()
+                            
+                            if verify_result:
+                                st.success(f"✅ SUCCESS! @{advocate['username']} saved to database!")
+                                st.write("**Step 19:** Will rerun in 2 seconds...")
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("❌ Verification failed - record not found after insert")
+                        else:
+                            st.info("Already exists in database")
+                            # Still add to session state if not there
+                            if 'saved_readers' not in st.session_state:
+                                st.session_state.saved_readers = []
+                            if not any(r['id'] == advocate['id'] for r in st.session_state.saved_readers):
+                                st.session_state.saved_readers.append(advocate)
+                                st.write("Added to session state from existing DB record")
+                            st.rerun()
+                            
+                    except Exception as e:
+                        st.error(f"❌ Database error: {str(e)}")
+                        st.write(f"**Error type:** {type(e).__name__}")
+                        st.write(f"**Error details:** {e}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                    finally:
+                        cur.close()
+                        conn.close()
+                        st.write("**Step 20:** Database connection closed")
+                else:
+                    st.error("❌ Could not connect to database")
+            else:
+                st.warning("⚠️ Please login to save readers")
+    else:
+        st.button("✅ Saved", key=f"saved_{advocate['id']}", disabled=True)
+        # Add CRM button for saved readers
+        if advocate.get('email'):
+            if st.button("📇 Add to CRM", key=f"crm_{advocate['id']}"):
+                try:
+                    from SimpleCRM import save_contact
+                    contact_data = {
+                        'contact_type': 'arc_reader',
+                        'first_name': advocate.get('display_name', '').split()[0] if advocate.get('display_name') else '',
+                        'last_name': ' '.join(advocate.get('display_name', '').split()[1:]) if advocate.get('display_name') and len(advocate.get('display_name', '').split()) > 1 else '',
+                        'email': advocate.get('email'),
+                        'social_handle': advocate.get('username'),
+                        'source': f"ARC Finder - {advocate.get('username', '')}",
+                        'notes': f"Bio: {advocate.get('bio', '')[:200]}"
+                    }
+                    contact_id = save_contact(st.session_state.user_id, contact_data)
+                    if contact_id:
+                        st.success(f"✅ @{advocate['username']} added to CRM!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to add to CRM")
+                except Exception as e:
+                    st.error(f"CRM error: {str(e)}")
 # ============================================================================
 # EXPORT FUNCTION (to be called from BardSpark.py)
 # ============================================================================
