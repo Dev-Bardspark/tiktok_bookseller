@@ -24,7 +24,7 @@ def show_audiobook_module():
     st.title("🎧 Audiobook Marketing")
     st.markdown("### Tools for audiobook authors")
     
-    # Simple sample data - no database needed for this part
+    # Sample data
     narrators = [
         {"name": "Julia Whelan", "gender": "Female", "genres": "Romance, Fiction", "rating": 4.9},
         {"name": "Steven Pacey", "gender": "Male", "genres": "Fantasy, Sci-Fi", "rating": 4.8},
@@ -36,7 +36,7 @@ def show_audiobook_module():
         {"name": "Listening Stories", "platform": "Podcast", "followers": 25000},
     ]
     
-    tab1, tab2 = st.tabs(["Find Narrators", "Find Reviewers"])
+    tab1, tab2, tab3 = st.tabs(["Find Narrators", "Find Reviewers", "My Audiobooks"])
     
     with tab1:
         st.subheader("🎙️ Narrators")
@@ -47,3 +47,20 @@ def show_audiobook_module():
         st.subheader("🔍 Reviewers")
         for r in reviewers:
             st.write(f"**{r['name']}** - {r['platform']} - {r['followers']} followers")
+    
+    with tab3:
+        st.subheader("📚 My Audiobook Projects")
+        
+        if not st.session_state.authenticated:
+            st.warning("Please login to manage your audiobooks")
+            return
+        
+        # Simple form
+        with st.form("new_audiobook"):
+            title = st.text_input("Book Title")
+            genre = st.selectbox("Genre", ["Romance", "Fantasy", "Sci-Fi", "Mystery", "Thriller", "Fiction"])
+            status = st.selectbox("Status", ["Planning", "Looking for narrator", "Recording", "Released"])
+            
+            if st.form_submit_button("Save Project"):
+                st.success(f"✅ Would save: {title} - {genre} - {status}")
+                st.info("Database connection coming soon!")
