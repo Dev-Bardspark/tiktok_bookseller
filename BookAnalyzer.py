@@ -60,7 +60,7 @@ def show_analyzer():
     # ============================================================================
     # AUTO-LOAD MOST RECENT ANALYSIS IF LOGGED IN
     # ============================================================================
-    if st.session_state.get('authenticated', False) and not st.session_state.analysis_result:
+    if st.session_state.get('authenticated', False) and not st.session_state.analysis_result and not st.session_state.get('_new_analysis_triggered', False):
         conn = None
         cur = None
         try:
@@ -80,6 +80,11 @@ def show_analyzer():
                     if isinstance(analysis_result, str):
                         analysis_result = json.loads(analysis_result)
                     st.session_state.analysis_result = analysis_result
+                    
+                    # Also load cover analysis if it exists in the result
+                    if 'cover_analysis' in analysis_result:
+                        st.session_state.cover_analysis = analysis_result['cover_analysis']
+                    
                     st.session_state.analysis_complete = True
                     st.session_state.current_book_id = f"loaded_{latest['id']}"
                     st.success(f"✅ Loaded your most recent analysis: {latest['book_title']}")
@@ -175,6 +180,10 @@ def show_upload_screen():
                 st.session_state.cover_analysis = cover_analysis
                 
                 analysis = analyze_manuscript_complete(client, manuscript_text, cover_analysis)
+                
+                # Add cover analysis to the main analysis result
+                analysis['cover_analysis'] = cover_analysis
+                
                 st.session_state.analysis_result = analysis
                 st.session_state.analysis_complete = True
                 
@@ -226,42 +235,52 @@ def show_results():
         st.markdown("### 🎨 Cover Analysis")
         show_cover_analysis(st.session_state.cover_analysis)
         st.markdown("---")
+    elif 'cover_analysis' in st.session_state.analysis_result:
+        # Try to get it from the analysis result
+        st.markdown("### 🎨 Cover Analysis")
+        show_cover_analysis(st.session_state.analysis_result['cover_analysis'])
+        st.markdown("---")
     
     # Then show complete literary analysis in expander
     with st.expander("📚 View Complete Literary Analysis", expanded=False):
         show_complete_analysis(st.session_state.analysis_result)
     
-    # Navigation buttons
-    col1, col2, col3, col4 = st.columns(4)
+    # Navigation buttons - SIMPLIFIED
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("🏠 Dashboard", use_container_width=True):
-            st.session_state.page = "🏠 Dashboard"
-            st.rerun()
-    with col2:
         if st.button("🎨 Marketing Assets", use_container_width=True):
             st.session_state.page = "🎨 Marketing Assets"
+            # Pass the analysis to marketing assets
+            st.session_state.loaded_analysis = st.session_state.analysis_result
             st.rerun()
-    with col3:
+    with col2:
         if st.button("🔄 New Analysis", use_container_width=True):
-            # Clear analysis state
+            # Set flag to prevent auto-load
+            st.session_state._new_analysis_triggered = True
+            # Clear ALL analysis state
             st.session_state.analysis_complete = False
             st.session_state.analysis_result = None
             st.session_state.cover_analysis = None
             st.session_state.current_book_id = None
-            st.rerun()
-    with col4:
-        if st.button("📚 My Library", use_container_width=True):
-            st.session_state.page = "📚 My Library"
+            # Clear file uploaders by removing them from session state
+            if 'manuscript_file' in st.session_state:
+                del st.session_state['manuscript_file']
+            if 'cover_file' in st.session_state:
+                del st.session_state['cover_file']
             st.rerun()
 
 
 def show_cover_analysis(cover):
     """Display cover analysis results"""
     
+    if not cover:
+        st.warning("No cover analysis available")
+        return
+    
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**Visual Elements**")
-        st.write(f"**Colors:** {', '.join(cover.get('colors', []))}")
+        st.write(f"**Colors:** {', '.join(cover.get('colors', ['None']))}")
         st.write(f"**Has Figure:** {cover.get('has_figure', False)}")
         if cover.get('has_figure'):
             st.write(f"**Figure Description:** {cover.get('figure_description', '')}")
