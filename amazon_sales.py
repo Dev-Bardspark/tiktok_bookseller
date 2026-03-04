@@ -420,18 +420,26 @@ def show_sales_analytics():
     # Initialize tables
     init_sales_tables()
     
-    # AUTO-GENERATE DEMO DATA if no books exist
+    # AUTO-GENERATE DEMO DATA if no books exist OR no sales data
     conn = get_db_connection()
     if conn:
         cur = conn.cursor()
+        
+        # Check for books
         cur.execute("SELECT COUNT(*) FROM author_books WHERE user_id = %s", (user_id,))
         book_count = cur.fetchone()[0]
+        
+        # Check for sales data
+        cur.execute("SELECT COUNT(*) FROM daily_sales WHERE user_id = %s", (user_id,))
+        sales_count = cur.fetchone()[0]
+        
         cur.close()
         conn.close()
         
+        # If no books, create them AND generate sales
         if book_count == 0:
-            with st.spinner("📊 Generating demo data for you..."):
-                # First create mock books
+            with st.spinner("📊 Creating your demo books and sales data..."):
+                # Create mock books
                 mock_books = [
                     ("B08XYZ1234", "The Lost Kingdom", "Fantasy", 9.99),
                     ("B09ABC5678", "Midnight Secrets", "Mystery", 12.99),
@@ -451,9 +459,17 @@ def show_sales_analytics():
                 cur.close()
                 conn.close()
                 
-                # Then generate 60 days of sales data
+                # Generate 60 days of sales data
                 generate_mock_sales_data(user_id, days=60)
-                st.success("✅ Demo data created! Check the Dashboard tab.")
+                st.success("✅ Demo books AND sales data created! Check the Dashboard tab.")
+                st.rerun()
+        
+        # If books exist but NO sales data, generate sales
+        elif book_count > 0 and sales_count == 0:
+            with st.spinner("📊 Generating sales data for your books..."):
+                generate_mock_sales_data(user_id, days=60)
+                st.success("✅ Sales data generated! Check the Dashboard tab.")
+                st.rerun()
     
     # Check if user has Amazon credentials
     creds = get_amazon_credentials(user_id)
