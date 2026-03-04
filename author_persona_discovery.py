@@ -1,4 +1,4 @@
-# author_persona_discovery.py
+# author_persona_discovery.py - FIXED with AUTO-SAVE
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -8,7 +8,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 
-# Add database connection function (same as in BardSpark.py)
+# Add database connection function
 def get_db_connection():
     try:
         conn = psycopg2.connect(
@@ -22,6 +22,54 @@ def get_db_connection():
     except Exception as e:
         st.error(f"Database connection failed: {e}")
         return None
+
+def auto_save_persona(user_id, author_type, persona_data):
+    """AUTO-SAVE persona to database - NO BUTTON NEEDED"""
+    if not user_id:
+        return False
+    
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+        
+        cur = conn.cursor()
+        
+        # First, mark existing personas as inactive (keep history but only one active)
+        cur.execute("""
+            UPDATE user_author_personas 
+            SET is_active = FALSE 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        # Save new persona
+        cur.execute("""
+            INSERT INTO user_author_personas 
+            (user_id, persona_name, persona_data, created_at, is_active)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            user_id,
+            f"My {author_type} Persona",
+            json.dumps(persona_data),
+            datetime.now(),
+            True
+        ))
+        
+        conn.commit()
+        return True
+        
+    except Exception as e:
+        st.error(f"Auto-save failed: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 class AuthorType(Enum):
     SHADOW = "The Shadow"
@@ -266,17 +314,6 @@ def get_quick_win(author_type, interaction_style, genre):
 def render_quiz():
     """Main function to render the Streamlit quiz interface"""
     
-    # Check if this is being run as standalone or within BardSpark
-    if __name__ != "__main__":
-        # We're inside BardSpark, no need for page config
-        pass
-    else:
-        st.set_page_config(
-            page_title="Author Persona Discovery",
-            page_icon="📚",
-            layout="wide"
-        )
-    
     # Initialize session state for quiz progress
     if 'quiz_started' not in st.session_state:
         st.session_state.quiz_started = False
@@ -284,15 +321,19 @@ def render_quiz():
         st.session_state.quiz_complete = False
     if 'answers' not in st.session_state:
         st.session_state.answers = {}
+    if '_persona_auto_saved' not in st.session_state:
+        st.session_state._persona_auto_saved = False
     
     # Sidebar with progress
     with st.sidebar:
         st.markdown("### 📚 Author Persona Discovery")
         st.markdown("---")
+        st.markdown("**✨ AUTO-SAVE ENABLED**")
+        st.markdown("Results save automatically to your account")
+        st.markdown("---")
         
         if not st.session_state.get('quiz_started', False):
             st.info("✨ Ready to discover your author type?")
-            st.markdown("Take the 5-minute quiz to get personalized platform recommendations.")
         elif st.session_state.get('quiz_complete', False):
             st.success("✅ Quiz Complete!")
             st.progress(1.0)
@@ -300,12 +341,6 @@ def render_quiz():
         else:
             st.warning("📝 Quiz in progress...")
             st.progress(0.5)
-        
-        st.markdown("---")
-        st.markdown("**Why take this quiz?**")
-        st.markdown("- Find platforms that match your comfort level")
-        st.markdown("- Save months of trial and error")
-        st.markdown("- Market in a way that feels natural")
     
     # Main content
     if not st.session_state.quiz_started:
@@ -484,7 +519,7 @@ def render_quiz():
 
 
 def render_results():
-    """Display quiz results with author type and recommendations"""
+    """Display quiz results with author type and recommendations - AUTO-SAVE VERSION"""
     
     # Create persona and calculate results
     persona = AuthorPersona()
@@ -521,6 +556,29 @@ def render_results():
     # Results header
     st.title("✨ Your Author Persona Results")
     
+    # AUTO-SAVE when results are shown (NO BUTTON NEEDED)
+    if st.session_state.get('authenticated', False) and not st.session_state.get('_persona_auto_saved', False):
+        quick_win = get_quick_win(author_type, interaction_style, st.session_state.answers['q6'])
+        budget = calculate_energy_budget(social_battery)
+        platform_scores = calculate_platform_scores(author_type, interaction_style, st.session_state.answers['q6'])
+        
+        # Prepare data for saving
+        persona_data = {
+            "author_type": author_type.value,
+            "visibility_score": visibility_score,
+            "interaction_style": interaction_style.value,
+            "social_battery": social_battery.value,
+            "quick_win": quick_win,
+            "energy_budget": budget,
+            "answers": st.session_state.answers,
+            "platform_scores": platform_scores
+        }
+        
+        # Auto-save to database
+        if auto_save_persona(st.session_state.get('user_id', 1), author_type.value, persona_data):
+            st.session_state._persona_auto_saved = True
+            st.toast("💾 Persona auto-saved to your account!", icon="✅")
+    
     # Hero section
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -543,48 +601,7 @@ def render_results():
         st.success(f"⚡ **Your Quick Win:** {quick_win}")
     
     st.markdown("---")
-    
-    # ADD SAVE BUTTON HERE - RIGHT AFTER RESULTS
-    if st.session_state.get('authenticated', False):
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("💾 Save This Persona to My Account", type="primary", use_container_width=True):
-                try:
-                    # Prepare data for saving
-                    persona_data = {
-                        "author_type": author_type.value,
-                        "visibility_score": visibility_score,
-                        "interaction_style": interaction_style.value,
-                        "social_battery": social_battery.value,
-                        "quick_win": quick_win,
-                        "answers": st.session_state.answers,
-                        "platform_scores": calculate_platform_scores(author_type, interaction_style, st.session_state.answers['q6'])
-                    }
-                    
-                    # Save to database
-                    conn = get_db_connection()
-                    cur = conn.cursor()
-                    cur.execute("""
-                        INSERT INTO user_author_personas 
-                        (user_id, persona_name, persona_data, created_at, is_active)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (
-                        st.session_state.user_id,
-                        f"My {author_type.value} Persona",
-                        json.dumps(persona_data),
-                        datetime.now(),
-                        True
-                    ))
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                    
-                    st.success("✅ Persona saved to your account!")
-                except Exception as e:
-                    st.error(f"Error saving: {e}")
-    else:
-        st.info("👤 Login to save this persona to your account")
-    
+    st.caption("✨ Auto-saved to your account - no save button needed")
     st.markdown("---")
     
     # Three-tab layout
@@ -736,7 +753,7 @@ Tip: {budget['tip']}
         """
         
         st.download_button(
-            label="📥 Download PDF Summary",
+            label="📥 Download Summary",
             data=summary,
             file_name=f"author_persona_{author_type.value.replace(' ', '_')}.txt",
             mime="text/plain",
@@ -746,7 +763,7 @@ Tip: {budget['tip']}
     # Reset option
     st.markdown("---")
     if st.button("← Take Quiz Again", use_container_width=True):
-        for key in ['quiz_started', 'quiz_complete', 'answers', 'show_strategy']:
+        for key in ['quiz_started', 'quiz_complete', 'answers', '_persona_auto_saved']:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
