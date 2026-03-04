@@ -446,7 +446,7 @@ def show_marketing_plan_wizard():
     if marketing_assets:
         st.success(f"✅ Assets loaded: {len(marketing_assets)} types available")
         with st.expander("VIEW ASSETS JSON", expanded=True):
-            st.json(list(marketing_assets.keys()))
+            st.json(marketing_assets)  # <-- RIGHT, shows actual content
     else:
         st.info("ℹ️ No marketing assets found - optional")
         with st.expander("VIEW ASSETS DATA", expanded=True):
