@@ -409,6 +409,7 @@ menu_options = [
     "📇 CRM",  # <--- CRM IN MENU
     "🎧 Audiobooks",  # <--- LINE 2: AUDIOBOOKS IN MENU
     "📊 Sales Analytics",  # <--- ADD THIS
+    "📋 Marketing Plan",  # <-- ADD THIS
     "🔍 ARC Readers/Influencers",
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
