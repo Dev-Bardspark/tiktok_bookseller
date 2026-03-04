@@ -19,6 +19,7 @@ import author_website_builder
 import SimpleCRM  # <--- ADDED CRM IMPORT
 import audiobook_module  # <--- LINE 1: ADD AUDIOBOOK IMPORT
 import amazon_sales
+import marketing_plan_wizard
 
 # ============================================================================
 # PAGE CONFIG
