@@ -1,4 +1,4 @@
-# marketing_plan.py - FIXED to use REAL data
+# marketing_plan.py - COMPLETE FIXED VERSION
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -119,7 +119,6 @@ def extract_book_info(analysis_data):
         return {}
     
     if isinstance(analysis_data, dict):
-        # Try different possible structures
         if 'analysis_result' in analysis_data:
             result = analysis_data['analysis_result']
             if isinstance(result, str):
@@ -149,7 +148,7 @@ def extract_persona_data(persona_record):
             return {}
     return persona_data or {}
 
-def show_plan():
+def show_marketing_plan_wizard():
     """Display the integrated marketing plan"""
     
     # Check login
@@ -179,6 +178,7 @@ def show_plan():
     # Extract persona info
     persona_data = extract_persona_data(author_persona) if author_persona else {}
     author_type = persona_data.get('author_type', 'No persona yet')
+    interaction_style = persona_data.get('interaction_style', '')
     
     # Header with REAL data
     col1, col2, col3 = st.columns(3)
@@ -198,17 +198,18 @@ def show_plan():
         <div style="padding: 1rem; background: #f0f2f6; border-radius: 10px; text-align: center;">
             <h3 style="margin: 0;">🎭 Author Persona</h3>
             <p style="font-size: 1.2rem; font-weight: bold; margin: 0;">{persona_display}</p>
-            <p style="color: #666;">{persona_data.get('interaction_style', '')}</p>
+            <p style="color: #666;">{interaction_style}</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         asset_status = "✅ Ready" if marketing_assets else "⚠️ Not generated"
+        asset_count = len(marketing_assets) if marketing_assets else 0
         st.markdown(f"""
         <div style="padding: 1rem; background: #f0f2f6; border-radius: 10px; text-align: center;">
             <h3 style="margin: 0;">🎨 Marketing Assets</h3>
             <p style="font-size: 1.2rem; font-weight: bold; margin: 0;">{asset_status}</p>
-            <p style="color: #666;">{len(marketing_assets) if marketing_assets else 0} assets available</p>
+            <p style="color: #666;">{asset_count} assets available</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -217,19 +218,19 @@ def show_plan():
     # Show missing data warnings
     if not book_analysis:
         st.warning("⚠️ No book analysis found. Please analyze a book first.")
-        if st.button("📖 Go to Book Analyzer"):
+        if st.button("📖 Go to Book Analyzer", use_container_width=True):
             st.session_state.page = "📖 Book Analyzer"
             st.rerun()
     
     if not author_persona:
         st.warning("⚠️ No author persona found. Please take the persona quiz.")
-        if st.button("🎭 Discover Your Persona"):
+        if st.button("🎭 Discover Your Persona", use_container_width=True):
             st.session_state.page = "🎭 Author Persona"
             st.rerun()
     
     if not marketing_assets:
         st.warning("⚠️ No marketing assets generated. Please generate assets for your book.")
-        if st.button("🎨 Generate Marketing Assets"):
+        if st.button("🎨 Generate Marketing Assets", use_container_width=True):
             st.session_state.page = "🎨 Marketing Assets"
             st.rerun()
     
@@ -314,13 +315,36 @@ def show_plan():
             cols = st.columns(3)
             for i, asset_type in enumerate(asset_types):
                 key = asset_type.lower().replace(' ', '_')
-                if key == 'blurbs':
-                    exists = 'blurbs' in marketing_assets
-                elif key == 'tiktok_scripts':
-                    exists = 'tiktok_scripts' in marketing_assets
-                # ... add all mappings
+                if key == 'press_kits':
+                    exists = 'press_kit_options' in marketing_assets
+                elif key == 'launch_timeline':
+                    exists = 'launch_timeline' in marketing_assets
                 else:
-                    exists = key in marketing_assets
+                    # Handle plural/singular mappings
+                    if key == 'blurbs':
+                        exists = 'blurbs' in marketing_assets
+                    elif key == 'tiktok_scripts':
+                        exists = 'tiktok_scripts' in marketing_assets
+                    elif key == 'youtube_scripts':
+                        exists = 'youtube_scripts' in marketing_assets
+                    elif key == 'instagram_posts':
+                        exists = 'instagram_posts' in marketing_assets
+                    elif key == 'instagram_reels':
+                        exists = 'instagram_reels' in marketing_assets
+                    elif key == 'amazon_options':
+                        exists = 'amazon_options' in marketing_assets
+                    elif key == 'facebook_ads':
+                        exists = 'facebook_ads' in marketing_assets
+                    elif key == 'email_sequences':
+                        exists = 'email_sequences' in marketing_assets
+                    elif key == 'pinterest_options':
+                        exists = 'pinterest_options' in marketing_assets
+                    elif key == 'goodreads_options':
+                        exists = 'goodreads_options' in marketing_assets
+                    elif key == 'podcast_pitches':
+                        exists = 'podcast_pitches' in marketing_assets
+                    else:
+                        exists = key in marketing_assets
                 
                 with cols[i % 3]:
                     if exists:
@@ -340,6 +364,12 @@ def show_plan():
         
         Once all three are complete, this page will show your personalized plan!
         """)
+    
+    st.markdown("---")
+    if st.button("← Back to Dashboard", use_container_width=True):
+        st.session_state.page = "🏠 Dashboard"
+        st.rerun()
 
+# For direct testing
 if __name__ == "__main__":
-    show_plan()
+    show_marketing_plan_wizard()
