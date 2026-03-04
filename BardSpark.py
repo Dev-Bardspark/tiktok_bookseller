@@ -792,6 +792,9 @@ elif st.session_state.page == "🌐 Website Builder":
 elif st.session_state.page == "📊 Sales Analytics":
     amazon_sales.show_sales_analytics()
 
+elif st.session_state.page == "📋 Marketing Plan":
+    marketing_plan_wizard.show_marketing_plan_wizard()
+
 # ============================================================================
 # FOOTER
 # ============================================================================
