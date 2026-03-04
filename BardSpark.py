@@ -18,6 +18,7 @@ import arc_influencer_finder
 import author_website_builder
 import SimpleCRM  # <--- ADDED CRM IMPORT
 import audiobook_module  # <--- LINE 1: ADD AUDIOBOOK IMPORT
+import amazon_sales
 
 # ============================================================================
 # PAGE CONFIG
@@ -407,6 +408,7 @@ menu_options = [
     "❤️ Saved Readers", 
     "📇 CRM",  # <--- CRM IN MENU
     "🎧 Audiobooks",  # <--- LINE 2: AUDIOBOOKS IN MENU
+    "📊 Sales Analytics",  # <--- ADD THIS
     "🔍 ARC Readers/Influencers",
     "📖 Book Analyzer",
     "🎨 Marketing Assets",
@@ -785,6 +787,9 @@ elif st.session_state.page == "🧠 Author Persona":
 
 elif st.session_state.page == "🌐 Website Builder":
     author_website_builder.show_website_builder()
+
+elif st.session_state.page == "📊 Sales Analytics":
+    amazon_sales.show_sales_analytics()
 
 # ============================================================================
 # FOOTER
