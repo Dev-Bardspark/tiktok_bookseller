@@ -420,6 +420,41 @@ def show_sales_analytics():
     # Initialize tables
     init_sales_tables()
     
+    # AUTO-GENERATE DEMO DATA if no books exist
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM author_books WHERE user_id = %s", (user_id,))
+        book_count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        
+        if book_count == 0:
+            with st.spinner("📊 Generating demo data for you..."):
+                # First create mock books
+                mock_books = [
+                    ("B08XYZ1234", "The Lost Kingdom", "Fantasy", 9.99),
+                    ("B09ABC5678", "Midnight Secrets", "Mystery", 12.99),
+                    ("B10DEF9012", "Love in Paris", "Romance", 8.99),
+                    ("B11GHI3456", "Beyond the Stars", "Sci-Fi", 11.99),
+                ]
+                
+                conn = get_db_connection()
+                cur = conn.cursor()
+                for asin, title, genre, price in mock_books:
+                    cur.execute("""
+                        INSERT INTO author_books (user_id, asin, title, format, genre, list_price)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    """, (user_id, asin, title, "ebook", genre, price))
+                conn.commit()
+                cur.close()
+                conn.close()
+                
+                # Then generate 60 days of sales data
+                generate_mock_sales_data(user_id, days=60)
+                st.success("✅ Demo data created! Check the Dashboard tab.")
+    
     # Check if user has Amazon credentials
     creds = get_amazon_credentials(user_id)
     
