@@ -1,4 +1,4 @@
-# marketing_plan_wizard.py - AI-POWERED VERSION
+# marketing_plan_wizard.py - FIXED with DATA DISPLAY and REAL REASONS
 import streamlit as st
 import json
 import psycopg2
@@ -189,10 +189,15 @@ def extract_persona_data(persona_record):
     return persona_data or {}
 
 def generate_marketing_plan(client, book_info, persona_data, assets):
-    """Call OpenAI to generate a marketing plan"""
+    """Call OpenAI to generate a marketing plan with REAL reasoning"""
     
     prompt = f"""
-    Create a comprehensive 90-day marketing plan for this book based on the author's persona and existing assets.
+    Create a comprehensive 90-day marketing plan for this book.
+    
+    You MUST base ALL decisions on the actual data provided below.
+    For EVERY recommendation, explain WHY based on the book genre, author persona, and available assets.
+    
+    ========== YOUR DATA ==========
     
     BOOK INFORMATION:
     {json.dumps(book_info, indent=2)}
@@ -200,93 +205,142 @@ def generate_marketing_plan(client, book_info, persona_data, assets):
     AUTHOR PERSONA:
     {json.dumps(persona_data, indent=2)}
     
-    EXISTING MARKETING ASSETS (use these in the plan):
+    EXISTING ASSETS (use these specifically):
     {json.dumps(assets, indent=2)}
+    
+    ========== REQUIREMENTS ==========
     
     Return a JSON with:
     
-    1. overview: {{
-        "book_title": "title",
-        "author_type": "persona type",
-        "target_audience": "primary reader demographic",
-        "unique_selling_points": ["point1", "point2", "point3"],
-        "campaign_theme": "overarching theme"
+    1. data_summary: {{
+        "book_title": "from data",
+        "book_genre": "from data",
+        "author_type": "from persona",
+        "interaction_style": "from persona",
+        "social_battery": "from persona",
+        "available_assets": ["list what exists"]
     }}
     
-    2. monthly_breakdown: [
-        {{
-            "month": 1,
-            "theme": "month theme",
-            "focus": "primary focus",
-            "weekly_actions": [
-                "Week 1: action",
-                "Week 2: action",
-                "Week 3: action", 
-                "Week 4: action"
-            ],
-            "key_platforms": ["platform1", "platform2"],
-            "content_milestones": ["milestone1", "milestone2"]
-        }},
-        ... (months 2 and 3)
-    ]
+    2. arc_reader_strategy: {{
+        "recruitment": "HOW to find ARC readers specifically for THIS genre",
+        "timeline": "WHEN to send ARCs",
+        "communication": "HOW to communicate with ARC readers",
+        "incentives": "WHAT incentives work for THIS audience",
+        "review_followup": "HOW to get reviews after reading"
+    }}
     
-    3. platform_strategy: [
+    3. review_generation_plan: {{
+        "pre_launch": ["specific actions to get early reviews"],
+        "launch_week": ["specific actions during launch"],
+        "post_launch": ["specific followup actions"],
+        "target_sites": ["Goodreads", "Amazon", "BookBub", etc WITH REASONS"]
+    }}
+    
+    4. platform_recommendations: [
         {{
             "platform": "name",
-            "frequency": "how often to post",
-            "content_types": ["type1", "type2"],
-            "goals": ["goal1", "goal2"],
-            "best_times": "when to post"
+            "match_score": 0-100,
+            "reason_for_match": "EXPLAIN based on genre + persona + social battery",
+            "content_strategy": "WHAT to post",
+            "frequency": "HOW often based on energy budget",
+            "arc_promotion": "HOW to use this platform for ARC recruitment",
+            "review_leveraging": "HOW to share reviews on this platform"
         }}
     ]
     
-    4. asset_utilization: {{
-        "blurbs": "how to use blurbs in the plan",
-        "tiktok_scripts": "when to use which scripts",
-        "email_sequences": "timing for email campaigns",
-        "launch_timeline": "how to adapt the timeline"
-    }}
-    
-    5. budget_recommendations: {{
-        "minimum": "$ amount",
-        "recommended": "$ amount",
-        "allocation": {{
-            "ads": "percentage",
-            "promotions": "percentage",
-            "tools": "percentage",
-            "events": "percentage"
+    5. email_sequence_timeline: {{
+        "arc_invitation": {{
+            "timing": "when to send",
+            "subject": "subject line",
+            "content": "email content",
+            "why_this_works": "reason based on persona"
+        }},
+        "arc_reminder": {{
+            "timing": "when to send",
+            "subject": "subject line",
+            "content": "email content"
+        }},
+        "review_request": {{
+            "timing": "when to send",
+            "subject": "subject line",
+            "content": "email content"
+        }},
+        "launch_announcement": {{
+            "timing": "when to send",
+            "subject": "subject line",
+            "content": "email content"
+        }},
+        "post_launch_followup": {{
+            "timing": "when to send",
+            "subject": "subject line",
+            "content": "email content"
         }}
     }}
     
-    6. success_metrics: {{
-        "week_1": ["metric1", "metric2"],
-        "month_1": ["metric1", "metric2"],
-        "month_3": ["metric1", "metric2"]
-    }}
-    
-    7. risks_and_mitigations: [
+    6. weekly_breakdown: [
         {{
-            "risk": "description",
-            "mitigation": "strategy"
+            "week": 1,
+            "theme": "theme",
+            "arc_focus": "what ARC-related task",
+            "review_focus": "what review-related task",
+            "platform_focus": "main platform to use",
+            "specific_action": "exactly what to do",
+            "asset_to_use": "which of their existing assets to use"
         }}
-    ]
+    ] (12 weeks)
     
-    8. weekly_checklist: [
-        "Week 1 task",
-        "Week 2 task",
-        ... (through week 12)
-    ]
+    7. budget_allocation: {{
+        "arc_copies": {{
+            "amount": "$",
+            "how_many": "number",
+            "reason": "why this many for this genre"
+        }},
+        "review_sites": {{
+            "amount": "$",
+            "which_sites": ["names"],
+            "reason": "why these sites"
+        }},
+        "email_tools": {{
+            "amount": "$",
+            "reason": "why needed"
+        }},
+        "ads": {{
+            "amount": "$",
+            "timing": "when to start",
+            "reason": "why this timing"
+        }}
+    }}
+    
+    8. success_metrics: {{
+        "arc_goals": {{
+            "target": "number",
+            "timeline": "by when",
+            "why_realistic": "reason based on genre"
+        }},
+        "review_goals": {{
+            "amazon": "target by launch",
+            "goodreads": "target by launch",
+            "why_realistic": "reason based on genre"
+        }}
+    }}
+    
+    9. decision_rationale: {{
+        "platform_choices": "EXPLAIN why these platforms match this specific author",
+        "arc_timing": "EXPLAIN why this timing works for this genre",
+        "email_strategy": "EXPLAIN how this fits their interaction style",
+        "budget_decisions": "EXPLAIN why this allocation makes sense"
+    }}
     """
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a professional book marketing strategist. Create detailed, actionable marketing plans based on the book and author data provided."},
+                {"role": "system", "content": "You are a professional book marketing strategist. EVERY recommendation must include a specific reason based on the provided data. Never give generic advice - always tie it to the book's genre, the author's persona, or their existing assets."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=4000,
+            max_tokens=5000,
             response_format={"type": "json_object"}
         )
         
@@ -297,7 +351,7 @@ def generate_marketing_plan(client, book_info, persona_data, assets):
         return None
 
 def show_marketing_plan_wizard():
-    """AI-POWERED Marketing Plan Generator"""
+    """AI-POWERED Marketing Plan Generator with DATA DISPLAY"""
     
     # Check login
     if not st.session_state.get('authenticated', False):
@@ -312,7 +366,7 @@ def show_marketing_plan_wizard():
         st.session_state.openai_api_key = None
     
     st.title("🤖 AI Marketing Plan Wizard")
-    st.markdown("Generate a customized 90-day marketing plan based on your book and author persona")
+    st.markdown("Generate a customized 90-day marketing plan based on YOUR actual data")
     st.markdown("---")
     
     # API Key input
@@ -338,48 +392,53 @@ def show_marketing_plan_wizard():
     book_info = extract_book_info(book_analysis) if book_analysis else None
     persona_data = extract_persona_data(author_persona) if author_persona else None
     
-    # Show status
-    col1, col2, col3 = st.columns(3)
+    # ========== SHOW THE DATA ==========
+    st.markdown("## 🔍 YOUR DATA (verify this is correct)")
     
-    with col1:
+    tab1, tab2, tab3 = st.tabs(["📚 Book Data", "🎭 Persona Data", "🎨 Asset Data"])
+    
+    with tab1:
         if book_info:
-            st.success(f"✅ Book: {book_info.get('title', 'Unknown')}")
+            st.json(book_info)
+            st.success(f"✅ Book loaded: {book_info.get('title', 'Unknown')}")
         else:
-            st.error("❌ No book analysis found")
+            st.error("❌ NO BOOK DATA FOUND - Please analyze a book first")
+            if st.button("📖 Go to Book Analyzer"):
+                st.session_state.page = "📖 Book Analyzer"
+                st.rerun()
     
-    with col2:
+    with tab2:
         if persona_data:
-            st.success(f"✅ Persona: {persona_data.get('author_type', 'Unknown')}")
+            st.json(persona_data)
+            st.success(f"✅ Persona loaded: {persona_data.get('author_type', 'Unknown')}")
         else:
-            st.error("❌ No author persona found")
+            st.error("❌ NO PERSONA DATA FOUND - Please take the persona quiz")
+            if st.button("🎭 Discover Your Persona"):
+                st.session_state.page = "🎭 Author Persona"
+                st.rerun()
     
-    with col3:
+    with tab3:
         if marketing_assets:
-            st.success(f"✅ Assets: {len(marketing_assets)} types available")
+            st.json(marketing_assets)
+            asset_types = list(marketing_assets.keys())
+            st.success(f"✅ Assets loaded: {len(asset_types)} types available")
+            st.markdown("**Asset types:** " + ", ".join(asset_types))
         else:
-            st.warning("⚠️ No marketing assets found (optional)")
+            st.warning("⚠️ No marketing assets found - optional but recommended")
+            if st.button("🎨 Generate Marketing Assets"):
+                st.session_state.page = "🎨 Marketing Assets"
+                st.rerun()
     
     st.markdown("---")
     
     # Check if we have minimum required data
     if not book_info or not persona_data:
         st.warning("⚠️ You need both a book analysis and author persona to generate a plan.")
-        
-        if not book_info:
-            if st.button("📖 Go to Book Analyzer"):
-                st.session_state.page = "📖 Book Analyzer"
-                st.rerun()
-        
-        if not persona_data:
-            if st.button("🎭 Discover Your Persona"):
-                st.session_state.page = "🎭 Author Persona"
-                st.rerun()
-        
         return
     
     # Generate plan button
     if st.button("🚀 GENERATE AI MARKETING PLAN", type="primary", use_container_width=True):
-        with st.spinner("🧠 AI is creating your custom 90-day marketing plan... (30-45 seconds)"):
+        with st.spinner("🧠 AI is analyzing YOUR data and creating a custom plan... (45-60 seconds)"):
             try:
                 client = OpenAI(api_key=st.session_state.openai_api_key)
                 
@@ -412,156 +471,133 @@ def show_marketing_plan_wizard():
         plan = st.session_state.generated_plan
         
         st.markdown("---")
-        st.markdown(f"## 📋 Your 90-Day Marketing Plan")
+        st.markdown(f"## 📋 Your Custom Marketing Plan")
         
-        # Overview section
-        with st.container():
-            st.markdown("### 📊 Campaign Overview")
-            
-            overview = plan.get('overview', {})
+        # Show data summary first
+        with st.expander("📊 PLAN BASED ON THIS DATA", expanded=True):
+            st.json(plan.get('data_summary', {}))
+        
+        # ARC Reader Strategy
+        with st.expander("📚 ARC READER STRATEGY (CRITICAL)", expanded=True):
+            arc = plan.get('arc_reader_strategy', {})
+            if arc:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**Recruitment:** {arc.get('recruitment', '')}")
+                    st.markdown(f"**Timeline:** {arc.get('timeline', '')}")
+                with col2:
+                    st.markdown(f"**Incentives:** {arc.get('incentives', '')}")
+                    st.markdown(f"**Review Follow-up:** {arc.get('review_followup', '')}")
+                st.markdown(f"**Communication:** {arc.get('communication', '')}")
+        
+        # Review Generation Plan
+        with st.expander("⭐ REVIEW GENERATION PLAN", expanded=True):
+            reviews = plan.get('review_generation_plan', {})
+            if reviews:
+                st.markdown(f"**Target Sites:** {', '.join(reviews.get('target_sites', []))}")
+                
+                cols = st.columns(3)
+                with cols[0]:
+                    st.markdown("**Pre-Launch**")
+                    for action in reviews.get('pre_launch', []):
+                        st.markdown(f"- {action}")
+                with cols[1]:
+                    st.markdown("**Launch Week**")
+                    for action in reviews.get('launch_week', []):
+                        st.markdown(f"- {action}")
+                with cols[2]:
+                    st.markdown("**Post-Launch**")
+                    for action in reviews.get('post_launch', []):
+                        st.markdown(f"- {action}")
+        
+        # Platform Recommendations WITH REASONS
+        with st.expander("📱 PLATFORM RECOMMENDATIONS (with reasons)", expanded=True):
+            platforms = plan.get('platform_recommendations', [])
+            for p in platforms:
+                with st.container():
+                    st.markdown(f"### {p.get('platform', 'Unknown')} - {p.get('match_score', 0)}% Match")
+                    st.info(f"**WHY this platform:** {p.get('reason_for_match', '')}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Content Strategy:** {p.get('content_strategy', '')}")
+                        st.markdown(f"**Frequency:** {p.get('frequency', '')}")
+                    with col2:
+                        st.markdown(f"**ARC Promotion:** {p.get('arc_promotion', '')}")
+                        st.markdown(f"**Review Leveraging:** {p.get('review_leveraging', '')}")
+                    st.markdown("---")
+        
+        # Email Sequence
+        with st.expander("📧 EMAIL SEQUENCE", expanded=True):
+            email = plan.get('email_sequence_timeline', {})
+            for key, value in email.items():
+                with st.container():
+                    st.markdown(f"**{key.replace('_', ' ').title()}**")
+                    if isinstance(value, dict):
+                        st.markdown(f"- Timing: {value.get('timing', '')}")
+                        st.markdown(f"- Subject: {value.get('subject', '')}")
+                        if 'why_this_works' in value:
+                            st.markdown(f"- **Why:** {value['why_this_works']}")
+        
+        # Budget with reasons
+        with st.expander("💰 BUDGET ALLOCATION", expanded=True):
+            budget = plan.get('budget_allocation', {})
+            for key, value in budget.items():
+                if isinstance(value, dict):
+                    st.markdown(f"**{key.replace('_', ' ').title()}**")
+                    st.markdown(f"- Amount: {value.get('amount', '')}")
+                    if 'how_many' in value:
+                        st.markdown(f"- Quantity: {value['how_many']}")
+                    if 'which_sites' in value:
+                        st.markdown(f"- Sites: {', '.join(value['which_sites'])}")
+                    st.markdown(f"- **Why:** {value.get('reason', '')}")
+                    st.markdown("---")
+        
+        # Decision Rationale (shows WHY)
+        with st.expander("🤔 WHY THESE DECISIONS?", expanded=True):
+            rationale = plan.get('decision_rationale', {})
+            for key, value in rationale.items():
+                st.markdown(f"**{key.replace('_', ' ').title()}**")
+                st.markdown(value)
+                st.markdown("---")
+        
+        # Weekly Breakdown
+        with st.expander("📅 12-WEEK ACTION PLAN", expanded=False):
+            weeks = plan.get('weekly_breakdown', [])
+            for week in weeks:
+                with st.container():
+                    st.markdown(f"### Week {week.get('week', '')}: {week.get('theme', '')}")
+                    cols = st.columns(2)
+                    with cols[0]:
+                        st.markdown(f"**ARC Focus:** {week.get('arc_focus', '')}")
+                        st.markdown(f"**Review Focus:** {week.get('review_focus', '')}")
+                    with cols[1]:
+                        st.markdown(f"**Platform Focus:** {week.get('platform_focus', '')}")
+                        st.markdown(f"**Asset to Use:** {week.get('asset_to_use', '')}")
+                    st.markdown(f"**Action:** {week.get('specific_action', '')}")
+                    st.markdown("---")
+        
+        # Success Metrics
+        with st.expander("🎯 SUCCESS METRICS", expanded=True):
+            metrics = plan.get('success_metrics', {})
+            arc_goals = metrics.get('arc_goals', {})
+            review_goals = metrics.get('review_goals', {})
             
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown(f"**Book:** {overview.get('book_title', 'Unknown')}")
-                st.markdown(f"**Author Type:** {overview.get('author_type', 'Unknown')}")
-                st.markdown(f"**Target Audience:** {overview.get('target_audience', 'Unknown')}")
+                st.markdown("**ARC Goals**")
+                st.markdown(f"Target: {arc_goals.get('target', '')}")
+                st.markdown(f"Timeline: {arc_goals.get('timeline', '')}")
+                st.info(f"Why: {arc_goals.get('why_realistic', '')}")
             
             with col2:
-                st.markdown(f"**Campaign Theme:** {overview.get('campaign_theme', 'Unknown')}")
-                st.markdown("**Unique Selling Points:**")
-                for usp in overview.get('unique_selling_points', []):
-                    st.markdown(f"- {usp}")
+                st.markdown("**Review Goals**")
+                st.markdown(f"Amazon: {review_goals.get('amazon', '')}")
+                st.markdown(f"Goodreads: {review_goals.get('goodreads', '')}")
+                st.info(f"Why: {review_goals.get('why_realistic', '')}")
         
-        st.markdown("---")
-        
-        # Monthly breakdown
-        st.markdown("### 📅 Monthly Breakdown")
-        
-        months = plan.get('monthly_breakdown', [])
-        month_tabs = st.tabs([f"Month {m.get('month', i+1)}: {m.get('theme', '')}" for i, m in enumerate(months)])
-        
-        for i, (tab, month) in enumerate(zip(month_tabs, months)):
-            with tab:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**Focus:** {month.get('focus', '')}")
-                    st.markdown("**Weekly Actions:**")
-                    for action in month.get('weekly_actions', []):
-                        st.markdown(f"- {action}")
-                
-                with col2:
-                    st.markdown(f"**Key Platforms:** {', '.join(month.get('key_platforms', []))}")
-                    st.markdown("**Content Milestones:**")
-                    for milestone in month.get('content_milestones', []):
-                        st.markdown(f"- {milestone}")
-        
-        st.markdown("---")
-        
-        # Platform Strategy
-        st.markdown("### 📱 Platform Strategy")
-        
-        platforms = plan.get('platform_strategy', [])
-        for platform in platforms:
-            with st.expander(f"**{platform.get('platform', 'Unknown')}**"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"**Frequency:** {platform.get('frequency', '')}")
-                    st.markdown(f"**Best Times:** {platform.get('best_times', '')}")
-                with col2:
-                    st.markdown("**Content Types:**")
-                    for ct in platform.get('content_types', []):
-                        st.markdown(f"- {ct}")
-                    st.markdown("**Goals:**")
-                    for goal in platform.get('goals', []):
-                        st.markdown(f"- {goal}")
-        
-        st.markdown("---")
-        
-        # Asset Utilization
-        st.markdown("### 🎯 How to Use Your Existing Assets")
-        
-        asset_util = plan.get('asset_utilization', {})
-        cols = st.columns(2)
-        with cols[0]:
-            if asset_util.get('blurbs'):
-                st.info(f"📝 **Blurbs:** {asset_util['blurbs']}")
-            if asset_util.get('tiktok_scripts'):
-                st.info(f"🎬 **TikTok:** {asset_util['tiktok_scripts']}")
-        with cols[1]:
-            if asset_util.get('email_sequences'):
-                st.info(f"📧 **Email:** {asset_util['email_sequences']}")
-            if asset_util.get('launch_timeline'):
-                st.info(f"📅 **Launch:** {asset_util['launch_timeline']}")
-        
-        st.markdown("---")
-        
-        # Budget
-        st.markdown("### 💰 Budget Recommendations")
-        
-        budget = plan.get('budget_recommendations', {})
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Minimum Budget", budget.get('minimum', '$0'))
-        with col2:
-            st.metric("Recommended Budget", budget.get('recommended', '$0'))
-        with col3:
-            st.markdown("**Allocation:**")
-            alloc = budget.get('allocation', {})
-            for k, v in alloc.items():
-                st.markdown(f"- {k}: {v}")
-        
-        st.markdown("---")
-        
-        # Success Metrics
-        st.markdown("### 📊 Success Metrics")
-        
-        metrics = plan.get('success_metrics', {})
-        cols = st.columns(3)
-        
-        with cols[0]:
-            st.markdown("**Week 1**")
-            for m in metrics.get('week_1', []):
-                st.markdown(f"- {m}")
-        
-        with cols[1]:
-            st.markdown("**Month 1**")
-            for m in metrics.get('month_1', []):
-                st.markdown(f"- {m}")
-        
-        with cols[2]:
-            st.markdown("**Month 3**")
-            for m in metrics.get('month_3', []):
-                st.markdown(f"- {m}")
-        
-        st.markdown("---")
-        
-        # Risks
-        st.markdown("### ⚠️ Risks & Mitigations")
-        
-        risks = plan.get('risks_and_mitigations', [])
-        for risk in risks:
-            with st.container():
-                st.warning(f"**Risk:** {risk.get('risk', '')}")
-                st.info(f"**Mitigation:** {risk.get('mitigation', '')}")
-        
-        st.markdown("---")
-        
-        # Weekly Checklist
-        st.markdown("### ✅ 12-Week Checklist")
-        
-        checklist = plan.get('weekly_checklist', [])
-        cols = st.columns(3)
-        for i, task in enumerate(checklist):
-            with cols[i % 3]:
-                st.checkbox(f"Week {i+1}: {task}", key=f"week_{i}")
-        
-        st.markdown("---")
-        
-        # Save/Export options
+        # Export
         col1, col2 = st.columns(2)
-        
         with col1:
             if st.button("🔄 Generate New Plan", use_container_width=True):
                 st.session_state.generated_plan = None
@@ -569,7 +605,6 @@ def show_marketing_plan_wizard():
                 st.rerun()
         
         with col2:
-            # Export as JSON
             export_data = json.dumps(plan, indent=2)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"marketing_plan_{timestamp}.json"
