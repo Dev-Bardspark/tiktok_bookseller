@@ -250,10 +250,7 @@ def generate_marketing_plan(client, full_analysis, persona_data, assets):
             "platform": "name",
             "priority": "High/Medium/Low",
             "exact_reason": "BECAUSE [tie directly to book content/audience/persona]",
-            "content_ideas": [
-                "specific idea 1 using their actual quotes/themes",
-                "specific idea 2 using their actual quotes/themes"
-            ],
+
             "posting_frequency": "based on their social battery",
             "arc_promotion_plan": "how to use this platform for ARC recruitment"
         }}
